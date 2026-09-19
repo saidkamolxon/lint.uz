@@ -1,51 +1,94 @@
-# lint.uz — Fast, Private, Beautiful Developer Viewers
+# lint.uz
 
-> A lightweight suite of 100% client-side, zero-server developer visualizers, formatters, and linters hosted on subdomains of [lint.uz](https://lint.uz).
+> Client-side viewers, formatters and validators for the formats you actually
+> paste at 2 a.m. — production manifests, API payloads, exported spreadsheets.
+> Nothing you paste ever leaves the browser.
+
+| | Subdomain | What it does |
+| :-- | :-- | :-- |
+| `{}` | **[json.lint.uz](https://json.lint.uz)** | Collapsible tree, path copying, minify, unescape, errors pinned to the line |
+| `<>` | **[xml.lint.uz](https://xml.lint.uz)** | Element/attribute/text tree, XPath for any node, XML → JSON |
+| `—` | **[yaml.lint.uz](https://yaml.lint.uz)** | Indentation validation, multi-document manifests, YAML ↔ JSON |
+| `⌸` | **[csv.lint.uz](https://csv.lint.uz)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
+
+The landing page at **[lint.uz](https://lint.uz)** links all four.
 
 ---
 
-## 🔒 Security & Privacy Guarantee
+## Privacy
 
 **Your data never leaves your browser.**
 
-- **100% Client-Side Processing**: All parsing, syntax validation, formatting, minification, and conversion run entirely in your local browser runtime via native Web APIs (`DOMParser`, `JSON.parse`) and bundled zero-telemetry libraries.
-- **Zero Remote Storage / Zero Databases**: There are no backend API endpoints, no logs, and no external trackers.
-- **Inspectable & Verifiable**: You can open your browser's Developer Tools (`Network` tab) at any time while pasting private keys, production configs, or sensitive JSON/XML/YAML. You will see **0 outbound HTTP requests**.
+- **Entirely client-side.** Parsing, validation, formatting and conversion run
+  in the page via `JSON.parse`, `DOMParser` and bundled zero-telemetry
+  libraries. There is no backend, no API, no database, no analytics.
+- **No third-party requests at all.** Fonts are self-hosted, so opening any
+  tool makes zero outbound connections. The landing page counts its own
+  cross-origin requests and shows you the number.
+- **Verify it yourself.** Open DevTools → Network, paste a production secret,
+  and watch nothing happen.
+
+The only thing stored is your theme choice: a `lintuz_theme` cookie on
+`.lint.uz`, so the four tools agree on the theme you picked. No other cookies.
 
 ---
 
-## 🛠️ The Suite
+## Design system
 
-| Subdomain | Description | Features |
-| :--- | :--- | :--- |
-| **[json.lint.uz](https://json.lint.uz)** | JSON Viewer & Formatter | Collapsible JSON tree, search, format, minify, path copy |
-| **[xml.lint.uz](https://xml.lint.uz)** | XML Viewer & Formatter | XML node tree, XPath extractor, XML ↔ JSON, line/column error locator |
-| **[yaml.lint.uz](https://yaml.lint.uz)** | YAML Viewer & Formatter | Indentation validator, YAML ↔ JSON two-way conversion, visual hierarchy |
+All five properties share one system in [`shared/`](shared/):
+
+| File | Role |
+| :-- | :-- |
+| `theme.css` | Design tokens and all six themes |
+| `app.css` | Every shared component |
+| `app.js` | Tree rendering, search, editor, themes, file I/O |
+| `shell.js` | The toolbar/split/status frame, rendered identically everywhere |
+| `theme-boot.js` | Applies the saved theme before first paint |
+| `fonts/` | Inter + JetBrains Mono, variable woff2 (SIL OFL) |
+
+**Each format owns one hue**, appearing only in the editor gutter, the logo
+mark and the favicon — so a tab is identifiable at a glance while the suite
+still reads as one product:
+
+| JSON | XML | YAML | CSV |
+| :-- | :-- | :-- | :-- |
+| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#9333EA` plum |
+
+**Themes:** System, Daylight, Slate, Paper, Midnight, Contrast (WCAG AAA).
+To add one, copy a block in `theme.css`, rename the selector, and register it
+in `THEMES[]` in `app.js`.
+
+A tool's own `index.html` holds only what is genuinely format-specific: its
+parser, syntax highlighter, tree adapter, sample document and toolbar actions.
 
 ---
 
-## 🚀 Deployment & CI/CD Architecture
-
-Every tool is deployed to **Cloudflare Workers with Static Assets** across subdomains of `lint.uz`.
-
-Whenever changes are pushed to the `main` branch, **GitHub Actions** automatically deploys the updated directory to Cloudflare Edge in seconds.
-
----
-
-## 💻 Local Development
+## Local development
 
 ```bash
-# Clone the repository
 git clone https://github.com/saidkamolxon/lint.uz.git
 cd lint.uz
 
-# Test locally with Wrangler
-cd yaml
-npx wrangler dev
+npm run build          # copy shared/ into every public/
+npm run dev:json       # or dev:xml, dev:yaml, dev:csv, dev:site
 ```
 
----
+`build.mjs` copies `shared/` into each tool's `public/` so Wrangler can serve
+it as a static asset. Nothing is bundled or transpiled — the files land as-is
+and stay readable in view-source. The generated `*/public/shared/` directories
+are gitignored.
 
-## 📄 License
+## Deployment
 
-MIT License. Free and open source.
+Each property is a Cloudflare Worker with static assets. Pushing to `main`
+runs `.github/workflows/deploy.yml`, which deploys only what changed — and
+redeploys everything when `shared/` changes, since all five embed it.
+
+```bash
+npm run deploy:json    # or deploy:xml, deploy:yaml, deploy:csv, deploy:site
+```
+
+## License
+
+MIT. Bundled fonts are used under the SIL Open Font License 1.1 — see
+[`shared/fonts/LICENSE.txt`](shared/fonts/LICENSE.txt).

@@ -1,17 +1,23 @@
 {
   "name": "lint-uz-suite",
-  "version": "1.0.0",
-  "description": "Suite of client-side web format viewers under lint.uz",
+  "version": "2.0.0",
+  "description": "Suite of client-side format viewers under lint.uz",
   "private": true,
+  "type": "module",
   "scripts": {
-    "deploy:json": "cd json && npx wrangler deploy",
-    "deploy:xml": "cd xml && npx wrangler deploy",
-    "deploy:yaml": "cd yaml && npx wrangler deploy",
-    "dev:json": "cd json && npx wrangler dev",
-    "dev:xml": "cd xml && npx wrangler dev",
-    "dev:yaml": "cd yaml && npx wrangler dev"
+    "build": "node build.mjs",
+    "deploy:site": "node build.mjs site && cd site && npx wrangler deploy",
+    "deploy:json": "node build.mjs json && cd json && npx wrangler deploy",
+    "deploy:xml": "node build.mjs xml && cd xml && npx wrangler deploy",
+    "deploy:yaml": "node build.mjs yaml && cd yaml && npx wrangler deploy",
+    "deploy:csv": "node build.mjs csv && cd csv && npx wrangler deploy",
+    "dev:site": "node build.mjs site && cd site && npx wrangler dev",
+    "dev:json": "node build.mjs json && cd json && npx wrangler dev",
+    "dev:xml": "node build.mjs xml && cd xml && npx wrangler dev",
+    "dev:yaml": "node build.mjs yaml && cd yaml && npx wrangler dev",
+    "dev:csv": "node build.mjs csv && cd csv && npx wrangler dev"
   },
-  "keywords": ["json", "xml", "yaml", "linter", "viewer", "formatter"],
+  "keywords": ["json", "xml", "yaml", "csv", "linter", "viewer", "formatter"],
   "author": "saidkamolxon",
   "license": "MIT"
 }

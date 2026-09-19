@@ -1,0 +1,909 @@
+/* ==========================================================================
+   lint.uz — shared runtime
+   Every tool calls LintApp.init() with format-specific hooks; everything
+   below (themes, tree, search, editor, file I/O, clipboard) is generic.
+   ========================================================================== */
+(function (global) {
+'use strict';
+
+/* ---------- theme registry — mirrors the blocks in theme.css ---------- */
+var THEMES = [
+  { id: '',          name: 'System',   bg: 'var(--surface)', fg: 'var(--hue)' },
+  { id: 'daylight',  name: 'Daylight', bg: '#FBFBFC',        fg: '#1A1D23' },
+  { id: 'slate',     name: 'Slate',    bg: '#1B1E25',        fg: '#82B5F0' },
+  { id: 'paper',     name: 'Paper',    bg: '#F5F1E8',        fg: '#8A6114' },
+  { id: 'midnight',  name: 'Midnight', bg: '#08090B',        fg: '#4FD68F' },
+  { id: 'contrast',  name: 'Contrast', bg: '#FFFFFF',        fg: '#000000' }
+];
+
+/* Themes persist across subdomains via a cookie on .lint.uz — localStorage
+   is origin-scoped, so json. and yaml. would otherwise not agree. */
+var THEME_COOKIE = 'lintuz_theme';
+var THEME_LS = 'lintuz-theme';
+
+function readTheme() {
+  var m = document.cookie.match(/(?:^|;\s*)lintuz_theme=([^;]*)/);
+  if (m) return decodeURIComponent(m[1]);
+  try { return localStorage.getItem(THEME_LS) || ''; } catch (e) { return ''; }
+}
+
+function writeTheme(id) {
+  var host = location.hostname;
+  var domain = /(^|\.)lint\.uz$/.test(host) ? '; domain=.lint.uz' : '';
+  var secure = location.protocol === 'https:' ? '; secure' : '';
+  try {
+    document.cookie = THEME_COOKIE + '=' + encodeURIComponent(id) +
+      '; path=/; max-age=31536000; samesite=lax' + domain + secure;
+  } catch (e) {}
+  try { localStorage.setItem(THEME_LS, id); } catch (e) {}
+}
+
+function applyTheme(id) {
+  if (id) document.documentElement.setAttribute('data-theme', id);
+  else document.documentElement.removeAttribute('data-theme');
+}
+
+/* Apply before first paint to avoid a flash of the wrong theme. */
+applyTheme(readTheme());
+
+/* ---------- the four tools, for the suite switcher ---------- */
+var SUITE = [
+  { id: 'json', name: 'JSON', host: 'https://json.lint.uz' },
+  { id: 'xml',  name: 'XML',  host: 'https://xml.lint.uz'  },
+  { id: 'yaml', name: 'YAML', host: 'https://yaml.lint.uz' },
+  { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.uz'  }
+];
+
+/* ---------- small helpers ---------- */
+var $ = function (id) { return document.getElementById(id); };
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+function fmtNum(n) { return n.toLocaleString('en-US'); }
+
+function svg(paths, size) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+    'aria-hidden="true">' + paths + '</svg>';
+}
+
+var ICONS = {
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  expand: '<path d="M12 5v14M5 12h14"/>',
+  collapse: '<path d="M5 12h14"/>',
+  wrap: '<path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-4m0 0 2.5-2.5M12 18l2.5 2.5M3 18h5"/>',
+  theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  more: '<circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/>'
+};
+
+/* ---------- clipboard ---------- */
+var toastTimer;
+function showToast(msg) {
+  var t = $('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1700);
+}
+
+function copyText(text, label) {
+  var done = function () { showToast(label + ' copied'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+  } else fallbackCopy(text, done);
+}
+
+function fallbackCopy(text, done) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); }
+  catch (e) { showToast('Copy failed'); }
+  ta.remove();
+}
+
+function highlightInto(el, text, q) {
+  if (!q) { el.appendChild(document.createTextNode(text)); return; }
+  var lower = text.toLowerCase(), i = 0, idx;
+  while ((idx = lower.indexOf(q, i)) !== -1) {
+    if (idx > i) el.appendChild(document.createTextNode(text.slice(i, idx)));
+    var m = document.createElement('mark');
+    m.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(m);
+    i = idx + q.length;
+  }
+  if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
+}
+
+/* ---------- menus ---------- */
+function closeAllMenus(except) {
+  var menus = document.querySelectorAll('.menu.open');
+  for (var i = 0; i < menus.length; i++) {
+    if (menus[i] !== except) {
+      menus[i].classList.remove('open');
+      var btn = menus[i].parentElement.querySelector('[aria-expanded]');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+  }
+}
+
+function wireMenu(btn, menu) {
+  btn.setAttribute('aria-expanded', 'false');
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = menu.classList.contains('open');
+    closeAllMenus();
+    if (!open) {
+      menu.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+  menu.addEventListener('click', function (e) { e.stopPropagation(); });
+}
+
+document.addEventListener('click', function () { closeAllMenus(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeAllMenus();
+});
+
+/* ==========================================================================
+   Chrome construction — toolbar menus shared by all tools
+   ========================================================================== */
+function buildThemeMenu(container) {
+  var wrap = document.createElement('div');
+  wrap.className = 'menu-wrap';
+
+  var btn = document.createElement('button');
+  btn.className = 'icon-btn';
+  btn.title = 'Theme';
+  btn.setAttribute('aria-label', 'Choose theme');
+  btn.setAttribute('aria-haspopup', 'true');
+  btn.innerHTML = svg(ICONS.theme);
+
+  var menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.setAttribute('role', 'menu');
+  var label = document.createElement('div');
+  label.className = 'menu-label';
+  label.textContent = 'Theme';
+  menu.appendChild(label);
+
+  var current = readTheme();
+  THEMES.forEach(function (t) {
+    var item = document.createElement('button');
+    item.className = 'menu-item';
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', String(t.id === current));
+    item.innerHTML =
+      '<span class="swatch" style="--sw-bg:' + t.bg + ';--sw-fg:' + t.fg + '"></span>' +
+      '<span>' + t.name + '</span><span class="tick">✓</span>';
+    item.addEventListener('click', function () {
+      applyTheme(t.id);
+      writeTheme(t.id);
+      var items = menu.querySelectorAll('.menu-item');
+      for (var i = 0; i < items.length; i++) items[i].setAttribute('aria-checked', 'false');
+      item.setAttribute('aria-checked', 'true');
+      closeAllMenus();
+      showToast(t.name + ' theme');
+    });
+    menu.appendChild(item);
+  });
+
+  wrap.appendChild(btn);
+  wrap.appendChild(menu);
+  container.appendChild(wrap);
+  wireMenu(btn, menu);
+}
+
+function buildSuiteMenu(container, activeId) {
+  var wrap = document.createElement('div');
+  wrap.className = 'menu-wrap';
+
+  var btn = document.createElement('button');
+  btn.className = 'icon-btn';
+  btn.title = 'Other lint.uz tools';
+  btn.setAttribute('aria-label', 'Switch tool');
+  btn.setAttribute('aria-haspopup', 'true');
+  btn.innerHTML = svg(ICONS.grid);
+
+  var menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.setAttribute('role', 'menu');
+  var label = document.createElement('div');
+  label.className = 'menu-label';
+  label.textContent = 'Tools';
+  menu.appendChild(label);
+
+  SUITE.forEach(function (t) {
+    var a = document.createElement('a');
+    a.className = 'menu-item';
+    a.setAttribute('role', 'menuitem');
+    a.href = t.host;
+    a.innerHTML =
+      '<span class="fmt-dot dot-' + t.id + '"></span>' +
+      '<span>' + t.name + '</span>' +
+      (t.id === activeId
+        ? '<span class="tick" style="opacity:1">✓</span>'
+        : '<span class="ext">↗</span>');
+    if (t.id === activeId) {
+      a.setAttribute('aria-current', 'page');
+      a.style.fontWeight = '600';
+    }
+    menu.appendChild(a);
+  });
+
+  menu.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
+  var home = document.createElement('a');
+  home.className = 'menu-item';
+  home.href = 'https://lint.uz';
+  home.innerHTML = '<span>All tools</span><span class="ext">↗</span>';
+  menu.appendChild(home);
+
+  wrap.appendChild(btn);
+  wrap.appendChild(menu);
+  container.appendChild(wrap);
+  wireMenu(btn, menu);
+}
+
+
+/* ---------- overflow menu ----------
+   Narrow screens hide toolbar actions; rather than make them unreachable,
+   mirror every hidden control into a menu. Rebuilt on resize so it always
+   matches what is actually hidden. */
+function buildOverflowMenu(container) {
+  var wrap = document.createElement('div');
+  wrap.className = 'menu-wrap overflow-only';
+
+  var btn = document.createElement('button');
+  btn.className = 'icon-btn';
+  btn.title = 'More actions';
+  btn.setAttribute('aria-label', 'More actions');
+  btn.setAttribute('aria-haspopup', 'true');
+  btn.innerHTML = svg(ICONS.more);
+
+  var menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.setAttribute('role', 'menu');
+
+  wrap.appendChild(btn);
+  wrap.appendChild(menu);
+  container.insertBefore(wrap, container.firstChild);
+  wireMenu(btn, menu);
+
+  function rebuild() {
+    menu.innerHTML = '';
+    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md, #fileGroup.hide-sm button');
+    var added = 0;
+    for (var i = 0; i < hidden.length; i++) {
+      var src = hidden[i];
+      if (src.offsetParent !== null) continue;   /* still visible — skip */
+      (function (source) {
+        var item = document.createElement('button');
+        item.className = 'menu-item';
+        item.setAttribute('role', 'menuitem');
+        item.textContent = source.textContent || source.title;
+        item.title = source.title || '';
+        item.addEventListener('click', function () {
+          closeAllMenus();
+          source.click();
+        });
+        menu.appendChild(item);
+      })(src);
+      added++;
+    }
+    wrap.style.display = added ? '' : 'none';
+  }
+
+  rebuild();
+  var t;
+  window.addEventListener('resize', function () {
+    clearTimeout(t);
+    t = setTimeout(rebuild, 150);
+  });
+  return rebuild;
+}
+
+/* ==========================================================================
+   Editor — gutter, syntax overlay, scroll sync
+   ========================================================================== */
+function Editor(opts) {
+  var input = $('input');
+  var highlight = $('highlight');
+  var gutter = $('gutterInner');
+  var self = this;
+
+  this.input = input;
+  this.onChange = opts.onChange;
+  this.highlighter = opts.highlighter;
+  this._errLine = null;
+  this._lineCount = 0;
+  this._curLine = 1;
+
+  /* Repaint the syntax layer and the line numbers. Skipped above a size
+     ceiling, where re-highlighting on every keystroke costs more than it
+     gives — the textarea text becomes visible instead. */
+  var HL_CEILING = 300000;
+
+  this.paint = function () {
+    var text = input.value;
+    var lines = text.split('\n');
+
+    if (text.length > HL_CEILING) {
+      highlight.innerHTML = '';
+      input.style.webkitTextFillColor = 'var(--ink)';
+      input.style.color = 'var(--ink)';
+    } else {
+      input.style.webkitTextFillColor = '';
+      input.style.color = '';
+      var html = self.highlighter ? self.highlighter(text) : esc(text);
+      /* trailing newline keeps the last line scrollable into view */
+      highlight.innerHTML = html + '\n';
+    }
+    self.paintGutter(lines.length);
+    self.syncScroll();
+  };
+
+  this.paintGutter = function (count) {
+    if (count === self._lineCount && self._paintedErr === self._errLine &&
+        self._paintedCur === self._curLine) return;
+    self._lineCount = count;
+    self._paintedErr = self._errLine;
+    self._paintedCur = self._curLine;
+    var out = '';
+    for (var i = 1; i <= count; i++) {
+      var cls = 'ln';
+      if (i === self._errLine) cls += ' err';
+      else if (i === self._curLine) cls += ' cur';
+      out += '<span class="' + cls + '">' + i + '</span>';
+    }
+    gutter.innerHTML = out;
+  };
+
+  this.setErrorLine = function (line) {
+    self._errLine = line;
+    self.paintGutter(self._lineCount);
+  };
+
+  this.syncScroll = function () {
+    highlight.scrollTop = input.scrollTop;
+    highlight.scrollLeft = input.scrollLeft;
+    gutter.style.transform = 'translateY(' + (-input.scrollTop) + 'px)';
+  };
+
+  this.trackCaret = function () {
+    var upto = input.value.slice(0, input.selectionStart);
+    var line = upto.split('\n').length;
+    if (line !== self._curLine) {
+      self._curLine = line;
+      self.paintGutter(self._lineCount);
+    }
+  };
+
+  this.setValue = function (text) {
+    input.value = text;
+    self.paint();
+    if (self.onChange) self.onChange();
+  };
+
+  this.getValue = function () { return input.value; };
+
+  this.jumpTo = function (pos) {
+    input.focus();
+    input.setSelectionRange(pos, Math.min(pos + 1, input.value.length));
+    var lines = input.value.slice(0, pos).split('\n').length;
+    var lh = parseFloat(getComputedStyle(input).lineHeight) || 21;
+    input.scrollTop = Math.max(0, (lines - 5) * lh);
+    self.syncScroll();
+    self.trackCaret();
+  };
+
+  input.addEventListener('scroll', this.syncScroll, { passive: true });
+  input.addEventListener('input', function () {
+    self.paint();
+    self.trackCaret();
+    if (self.onChange) self.onChange();
+  });
+  ['keyup', 'click', 'focus'].forEach(function (ev) {
+    input.addEventListener(ev, self.trackCaret);
+  });
+
+  /* Tab inserts two spaces; Shift+Tab outdents. */
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    var start = input.selectionStart, end = input.selectionEnd;
+    if (e.shiftKey) {
+      var ls = input.value.lastIndexOf('\n', start - 1) + 1;
+      if (input.value.slice(ls, ls + 2) === '  ') {
+        input.value = input.value.slice(0, ls) + input.value.slice(ls + 2);
+        input.selectionStart = Math.max(ls, start - 2);
+        input.selectionEnd = Math.max(ls, end - 2);
+      }
+    } else {
+      input.value = input.value.slice(0, start) + '  ' + input.value.slice(end);
+      input.selectionStart = input.selectionEnd = start + 2;
+    }
+    self.paint();
+    self.trackCaret();
+    if (self.onChange) self.onChange();
+  });
+}
+
+/* ==========================================================================
+   Tree — generic renderer over a {key, value} model
+   ========================================================================== */
+var CHUNK = 100;
+var ROW_BUDGET = 4000;
+var STR_TRUNC = 200;
+
+function Tree(opts) {
+  var el = $('tree');
+  var searchBox = $('search');
+  var matchCount = $('matchCount');
+  var pathBox = $('pathBox');
+  var self = this;
+
+  var adapter = opts.adapter;     // format-specific node access
+  var emptyHTML = opts.emptyHTML;
+  var autoDepth = opts.autoDepth || 3;
+
+  var info = new WeakMap();
+  var selected = null;
+  var root = null;
+  this.hasData = false;
+
+  this.setData = function (value, has) {
+    root = value;
+    self.hasData = has;
+    self.render();
+  };
+
+  this.query = function () { return searchBox.value.trim().toLowerCase(); };
+
+  this.render = function () {
+    el.innerHTML = '';
+    el.classList.remove('stale');
+    selected = null;
+    pathBox.textContent = '';
+    if (!self.hasData) {
+      el.innerHTML = emptyHTML;
+      matchCount.textContent = '';
+      return;
+    }
+    var q = self.query();
+    if (q) { renderFiltered(q); return; }
+    matchCount.textContent = '';
+    var node = makeNode(adapter.rootEntry(root), q);
+    el.appendChild(node);
+    autoExpand(node, autoDepth);
+  };
+
+  this.markStale = function () { el.classList.add('stale'); };
+
+  function makeNode(entry, q) {
+    var node = document.createElement('div');
+    node.className = 'node';
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.tabIndex = 0;
+    info.set(row, entry);
+
+    var kids = adapter.childCount(entry);
+    var caret = document.createElement('span');
+    caret.className = 'caret' + (kids > 0 ? '' : ' leaf');
+    row.appendChild(caret);
+
+    adapter.decorate(row, entry, q, { highlightInto: highlightInto, STR_TRUNC: STR_TRUNC });
+
+    var actions = document.createElement('span');
+    actions.className = 'row-actions';
+    adapter.actions(entry).forEach(function (a) {
+      var b = document.createElement('button');
+      b.textContent = a.label;
+      b.title = a.title;
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        copyText(a.get(), a.toastLabel || a.label);
+      });
+      actions.appendChild(b);
+    });
+    row.appendChild(actions);
+
+    node.appendChild(row);
+    return node;
+  }
+
+  function renderChildren(node, entry, q, from) {
+    var box = node.querySelector(':scope > .children');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'children';
+      node.appendChild(box);
+    }
+    var entries = adapter.children(entry);
+    var start = from || 0;
+    var end = Math.min(start + CHUNK, entries.length);
+    for (var i = start; i < end; i++) box.appendChild(makeNode(entries[i], q));
+    if (end < entries.length) {
+      var more = document.createElement('button');
+      more.className = 'more-btn';
+      var next = Math.min(CHUNK, entries.length - end);
+      more.textContent = 'Show ' + next + ' more · ' + (entries.length - end) + ' left';
+      more.addEventListener('click', function () {
+        more.remove();
+        renderChildren(node, entry, q, end);
+      });
+      box.appendChild(more);
+    }
+    node.dataset.loaded = '1';
+  }
+
+  function toggle(node, force) {
+    var row = node.querySelector(':scope > .row');
+    var entry = info.get(row);
+    if (!entry || adapter.childCount(entry) === 0) return;
+    var open = force !== undefined ? force : !node.classList.contains('open');
+    if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
+    node.classList.toggle('open', open);
+  }
+  this.toggle = toggle;
+
+  function autoExpand(node, levels) {
+    if (levels <= 0) return;
+    toggle(node, true);
+    var box = node.querySelector(':scope > .children');
+    if (!box) return;
+    for (var i = 0; i < box.children.length; i++) {
+      var c = box.children[i];
+      if (c.classList && c.classList.contains('node')) autoExpand(c, levels - 1);
+    }
+  }
+
+  function renderFiltered(q) {
+    var matches = 0, rendered = 0, clipped = false;
+
+    function build(entry) {
+      if (rendered > ROW_BUDGET) { clipped = true; return null; }
+      var selfMatch = adapter.matches(entry, q);
+      var kids = [];
+      var children = adapter.children(entry);
+      for (var i = 0; i < children.length; i++) {
+        var c = build(children[i]);
+        if (c) kids.push(c);
+      }
+      if (!selfMatch && kids.length === 0) return null;
+      if (selfMatch) matches++;
+      rendered++;
+      var node = makeNode(entry, q);
+      if (kids.length) {
+        var box = document.createElement('div');
+        box.className = 'children';
+        for (var j = 0; j < kids.length; j++) box.appendChild(kids[j]);
+        node.appendChild(box);
+        node.dataset.loaded = '1';
+        node.classList.add('open');
+      }
+      return node;
+    }
+
+    var node = build(adapter.rootEntry(root));
+    if (node) el.appendChild(node);
+    else el.innerHTML = '<div class="empty">No matches for “' + esc(q) + '”.</div>';
+    matchCount.textContent = matches
+      ? matches + (clipped ? '+' : '') + ' match' + (matches === 1 ? '' : 'es')
+      : 'no matches';
+    if (clipped) {
+      var n = document.createElement('div');
+      n.className = 'notice';
+      n.textContent = 'Stopped at ' + fmtNum(ROW_BUDGET) + ' rows — narrow the search.';
+      el.appendChild(n);
+    }
+  }
+
+  /* interaction */
+  el.addEventListener('click', function (e) {
+    var row = e.target.closest('.row');
+    if (!row || !el.contains(row) || e.target.closest('button')) return;
+    if (selected) selected.classList.remove('selected');
+    selected = row;
+    row.classList.add('selected');
+    var entry = info.get(row);
+    pathBox.textContent = entry ? adapter.path(entry) : '';
+    toggle(row.parentElement);
+  });
+
+  el.addEventListener('keydown', function (e) {
+    var row = e.target.closest('.row');
+    if (!row) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); toggle(row.parentElement, true); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); toggle(row.parentElement, false); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      var rows = Array.prototype.slice.call(el.querySelectorAll('.row'));
+      var i = rows.indexOf(row);
+      var next = rows[i + (e.key === 'ArrowDown' ? 1 : -1)];
+      if (next) next.focus();
+    }
+  });
+
+  pathBox.addEventListener('click', function () {
+    if (pathBox.textContent) copyText(pathBox.textContent, adapter.pathLabel || 'Path');
+  });
+
+  $('btnExpand').addEventListener('click', function () {
+    var budget = ROW_BUDGET;
+    (function walk(container) {
+      var nodes = container.querySelectorAll(':scope > .node');
+      for (var i = 0; i < nodes.length; i++) {
+        if (budget-- <= 0) return;
+        toggle(nodes[i], true);
+        var box = nodes[i].querySelector(':scope > .children');
+        if (box) walk(box);
+      }
+    })(el);
+    if (budget <= 0) showToast('Expanded the first ' + fmtNum(ROW_BUDGET) + ' rows');
+  });
+
+  $('btnCollapse').addEventListener('click', function () {
+    var open = el.querySelectorAll('.node.open');
+    for (var i = 0; i < open.length; i++) open[i].classList.remove('open');
+    var first = el.querySelector(':scope > .node');
+    if (first) toggle(first, true);
+  });
+
+  /* wrap toggle */
+  var WRAP_KEY = 'lintuz-wrap';
+  var btnWrap = $('btnWrap');
+  var wrapOn = false;
+  try { wrapOn = localStorage.getItem(WRAP_KEY) === '1'; } catch (e) {}
+  function applyWrap(on) {
+    el.classList.toggle('wrap', on);
+    btnWrap.setAttribute('aria-pressed', String(on));
+  }
+  applyWrap(wrapOn);
+  btnWrap.addEventListener('click', function () {
+    wrapOn = !wrapOn;
+    applyWrap(wrapOn);
+    try { localStorage.setItem(WRAP_KEY, wrapOn ? '1' : '0'); } catch (e) {}
+  });
+
+  var searchTimer;
+  searchBox.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(self.render, 220);
+  });
+}
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+function init(config) {
+  var body = document.body;
+
+  /* chrome */
+  var slot = $('chromeSlot');
+  buildSuiteMenu(slot, config.id);
+  buildThemeMenu(slot);
+  var refreshOverflow = buildOverflowMenu(slot);
+
+  /* icons into the treebar buttons */
+  $('btnWrap').innerHTML = svg(ICONS.wrap);
+  $('btnExpand').innerHTML = svg(ICONS.expand);
+  $('btnCollapse').innerHTML = svg(ICONS.collapse);
+  $('searchIcon').innerHTML = svg(ICONS.search);
+
+  /* status */
+  var statusBar = $('statusBar'), statusMsg = $('statusMsg');
+  function setStatus(kind, msg) {
+    statusBar.className = 'status' + (kind ? ' ' + kind : '');
+    statusMsg.textContent = msg;
+  }
+
+  /* error bar */
+  var errorBar = $('errorBar'), errorMsg = $('errorMsg'), errorLoc = $('errorLoc');
+  var errorPos = null;
+
+  var tree = new Tree({
+    adapter: config.adapter,
+    emptyHTML: config.emptyHTML,
+    autoDepth: config.autoDepth
+  });
+
+  var editor = new Editor({
+    highlighter: config.highlighter,
+    onChange: function () { schedule(); }
+  });
+
+  var parseTimer;
+  function schedule() {
+    clearTimeout(parseTimer);
+    parseTimer = setTimeout(run, 280);
+  }
+
+  function run() {
+    var text = editor.getValue();
+    if (!text.trim()) {
+      tree.setData(null, false);
+      errorBar.classList.remove('show');
+      editor.setErrorLine(null);
+      setStatus('', 'Ready');
+      config.onParsed && config.onParsed(null, false);
+      return;
+    }
+    var t0 = performance.now();
+    var res = config.parse(text);
+    var ms = performance.now() - t0;
+
+    if (res.ok) {
+      errorBar.classList.remove('show');
+      editor.setErrorLine(null);
+      errorPos = null;
+      tree.setData(res.value, true);
+      var size = new Blob([text]).size;
+      var st = config.stats(res.value);
+      setStatus('ok', 'Valid · ' + fmtBytes(size) + ' · ' + st +
+        ' · ' + ms.toFixed(ms < 10 ? 1 : 0) + ' ms');
+      config.onParsed && config.onParsed(res.value, true);
+    } else {
+      errorPos = res.pos != null ? res.pos : null;
+      editor.setErrorLine(res.line || null);
+      errorMsg.textContent = res.message;
+      errorLoc.textContent = res.line ? 'line ' + res.line + ':' + (res.col || 1) : '';
+      errorBar.classList.add('show');
+      tree.markStale();
+      setStatus('err', 'Invalid ' + config.label);
+      config.onParsed && config.onParsed(null, false);
+    }
+  }
+
+  errorBar.addEventListener('click', function () {
+    if (errorPos !== null) editor.jumpTo(errorPos);
+  });
+
+  /* toolbar wiring shared by every tool */
+  function on(id, fn) {
+    var b = $(id);
+    if (b) b.addEventListener('click', fn);
+  }
+
+  on('btnCopy', function () {
+    var v = editor.getValue();
+    if (v) copyText(v, config.label);
+  });
+
+  on('btnClear', function () {
+    editor.setValue('');
+    $('search').value = '';
+    editor.input.focus();
+  });
+
+  on('btnSample', function () { editor.setValue(config.sample.trim()); });
+
+  on('btnLoad', function () { $('fileInput').click(); });
+  $('fileInput').addEventListener('change', function (e) {
+    if (e.target.files[0]) readFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  function readFile(file) {
+    if (file.size > 50 * 1048576) {
+      showToast('That file is over 50 MB — too large to open here');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      editor.setValue(String(reader.result));
+      showToast('Opened ' + file.name + ' · ' + fmtBytes(file.size));
+    };
+    reader.onerror = function () { showToast('Could not read that file'); };
+    reader.readAsText(file);
+  }
+
+  ['dragover', 'dragenter'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      e.preventDefault();
+      body.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      e.preventDefault();
+      if (ev === 'drop' || e.relatedTarget === null) body.classList.remove('dragover');
+    });
+  });
+  document.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+
+  /* mobile view tabs */
+  function setView(v) {
+    body.dataset.view = v;
+    $('tabText').classList.toggle('active', v === 'text');
+    $('tabTree').classList.toggle('active', v === 'tree');
+  }
+  $('tabText').addEventListener('click', function () { setView('text'); });
+  $('tabTree').addEventListener('click', function () { setView('tree'); });
+  setView('text');
+
+  /* split divider */
+  var divider = $('divider'), editorPane = $('editorPane');
+  divider.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    divider.classList.add('dragging');
+    divider.setPointerCapture(e.pointerId);
+    function move(ev) {
+      var rect = document.querySelector('.split').getBoundingClientRect();
+      var w = Math.min(Math.max(ev.clientX - rect.left, 240), rect.width - 280);
+      editorPane.style.width = w + 'px';
+    }
+    function up() {
+      divider.classList.remove('dragging');
+      divider.removeEventListener('pointermove', move);
+      divider.removeEventListener('pointerup', up);
+    }
+    divider.addEventListener('pointermove', move);
+    divider.addEventListener('pointerup', up);
+  });
+
+  /* keyboard */
+  document.addEventListener('keydown', function (e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key === 'Enter') {
+      e.preventDefault();
+      var fmt = $('btnFormat');
+      if (fmt) fmt.click();
+    } else if (mod && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      if (window.innerWidth <= 720) setView('tree');
+      $('search').focus();
+      $('search').select();
+    } else if (mod && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      editor.input.focus();
+    }
+  });
+
+  editor.paint();
+  editor.input.focus();
+
+  return {
+    editor: editor,
+    tree: tree,
+    run: run,
+    schedule: schedule,
+    setStatus: setStatus,
+    toast: showToast,
+    copy: copyText
+  };
+}
+
+global.LintApp = {
+  init: init,
+  esc: esc,
+  copy: copyText,
+  toast: showToast,
+  fmtBytes: fmtBytes,
+  fmtNum: fmtNum,
+  highlightInto: highlightInto,
+  STR_TRUNC: STR_TRUNC,
+  THEMES: THEMES,
+  SUITE: SUITE
+};
+
+})(window);

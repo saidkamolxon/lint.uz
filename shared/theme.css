@@ -1,0 +1,301 @@
+/* ==========================================================================
+   lint.uz — design tokens
+   One base system shared by every tool. Each tool sets --hue-* only.
+   ========================================================================== */
+
+/* ---------- fonts (self-hosted: zero outbound requests) ---------- */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/inter-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/inter-var-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/jetbrains-mono-var.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("fonts/jetbrains-mono-var-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- invariants: identical in every theme ---------- */
+:root {
+  --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* type scale — 1.125 minor third off a 13px base */
+  --fs-micro: 10.5px;
+  --fs-small: 11.5px;
+  --fs-base: 13px;
+  --fs-mid: 14.5px;
+  --fs-large: 16.5px;
+  --fs-display: 21px;
+
+  /* space — 4px grid */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 36px;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --gutter-w: 52px;
+  --hairline: 1px;
+
+  --t-fast: 110ms;
+  --t-mid: 180ms;
+
+  /* fallback hue — every tool overrides these three */
+  --hue: #5B61E8;
+  --hue-ink: #FFFFFF;
+  --hue-wash: color-mix(in srgb, var(--hue) 10%, transparent);
+}
+
+/* ==========================================================================
+   THEMES
+   Each block defines the same 18 tokens. To add a theme, copy one block,
+   rename the selector, and register it in THEMES[] in app.js.
+   ========================================================================== */
+
+/* ---------- Daylight — the default light ---------- */
+:root,
+:root[data-theme="daylight"] {
+  --gutter-tint: 16%;
+  --gutter-ink: 78%;
+  --surface: #FBFBFC;
+  --raised: #FFFFFF;
+  --sunken: #F2F3F6;
+  --line: #E1E4EA;
+  --line-strong: #CBD0D9;
+  --ink: #1A1D23;
+  --muted: #5F6672;
+  --faint: #969CA8;
+
+  --ok: #17794B;
+  --bad: #C42B1C;
+  --warn: #A96500;
+
+  --t-key: #2A4FB8;
+  --t-str: #17794B;
+  --t-num: #7A3DB8;
+  --t-bool: #A8480B;
+  --t-null: #7C838F;
+  --t-cont: #0E6E78;
+  --t-date: #A96500;
+  --t-punct: #8B919C;
+
+  --row-hover: #F0F2F6;
+  --row-active: color-mix(in srgb, var(--hue) 13%, transparent);
+  --mark: #FBE38E;
+  --mark-ink: #3A2E00;
+  --scroll: #C6CBD4;
+  --shadow: 0 6px 20px -6px rgb(26 29 35 / 0.18), 0 1px 2px rgb(26 29 35 / 0.07);
+  color-scheme: light;
+}
+
+/* ---------- Slate — the default dark ---------- */
+:root[data-theme="slate"] {
+  --gutter-tint: 20%;
+  --gutter-ink: 72%;
+  --surface: #15171C;
+  --raised: #1B1E25;
+  --sunken: #101216;
+  --line: #2A2E38;
+  --line-strong: #3C4250;
+  --ink: #E6E9F0;
+  --muted: #98A0AE;
+  --faint: #656C7A;
+
+  --ok: #56C88C;
+  --bad: #F2796B;
+  --warn: #E0A33E;
+
+  --t-key: #82B5F0;
+  --t-str: #8FCB9B;
+  --t-num: #C3A2F5;
+  --t-bool: #EFA063;
+  --t-null: #79808D;
+  --t-cont: #5FC7D4;
+  --t-date: #E0A33E;
+  --t-punct: #6E7684;
+
+  --row-hover: #222630;
+  --row-active: color-mix(in srgb, var(--hue) 26%, transparent);
+  --mark: #7A6220;
+  --mark-ink: #FFF3D0;
+  --scroll: #3A404C;
+  --shadow: 0 8px 26px -8px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+
+/* ---------- Paper — warm, low contrast, long sessions ---------- */
+:root[data-theme="paper"] {
+  --gutter-tint: 15%;
+  --gutter-ink: 80%;
+  --surface: #F5F1E8;
+  --raised: #FCFAF4;
+  --sunken: #EBE6DA;
+  --line: #DED7C7;
+  --line-strong: #C4BAA4;
+  --ink: #2B2722;
+  --muted: #6B6355;
+  --faint: #9A9183;
+
+  --ok: #4A6B2F;
+  --bad: #A8341F;
+  --warn: #8A6114;
+
+  --t-key: #2F5488;
+  --t-str: #4A6B2F;
+  --t-num: #6B4292;
+  --t-bool: #9B4A14;
+  --t-null: #8A8276;
+  --t-cont: #1C6A70;
+  --t-date: #8A6114;
+  --t-punct: #9A9183;
+
+  --row-hover: #EEE9DC;
+  --row-active: color-mix(in srgb, var(--hue) 15%, transparent);
+  --mark: #EBD48A;
+  --mark-ink: #3B2F0A;
+  --scroll: #C4BAA4;
+  --shadow: 0 6px 20px -6px rgb(43 39 34 / 0.16), 0 1px 2px rgb(43 39 34 / 0.06);
+  color-scheme: light;
+}
+
+/* ---------- Midnight — near-black, OLED / dim rooms ---------- */
+:root[data-theme="midnight"] {
+  --gutter-tint: 26%;
+  --gutter-ink: 76%;
+  --surface: #08090B;
+  --raised: #0E1014;
+  --sunken: #030405;
+  --line: #1E222A;
+  --line-strong: #333944;
+  --ink: #EDEFF4;
+  --muted: #8F97A5;
+  --faint: #5A6170;
+
+  --ok: #4FD68F;
+  --bad: #FF8175;
+  --warn: #F0AE42;
+
+  --t-key: #7CBCFF;
+  --t-str: #86D69B;
+  --t-num: #CBA6FF;
+  --t-bool: #FFAA66;
+  --t-null: #6E7684;
+  --t-cont: #56D3E2;
+  --t-date: #F0AE42;
+  --t-punct: #636B79;
+
+  --row-hover: #161A21;
+  --row-active: color-mix(in srgb, var(--hue) 30%, transparent);
+  --mark: #6E5A18;
+  --mark-ink: #FFF6D8;
+  --scroll: #2E343F;
+  --shadow: 0 8px 30px -8px rgb(0 0 0 / 0.8), 0 1px 2px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+}
+
+/* ---------- Contrast — WCAG AAA, heavier lines ---------- */
+:root[data-theme="contrast"] {
+  --gutter-tint: 20%;
+  --gutter-ink: 100%;
+  --surface: #FFFFFF;
+  --raised: #FFFFFF;
+  --sunken: #F0F0F0;
+  --line: #7A7A7A;
+  --line-strong: #000000;
+  --ink: #000000;
+  --muted: #3D3D3D;
+  --faint: #5C5C5C;
+
+  --ok: #006B3C;
+  --bad: #B10000;
+  --warn: #7A4B00;
+
+  --t-key: #0033A0;
+  --t-str: #006B3C;
+  --t-num: #5C1F99;
+  --t-bool: #8A3400;
+  --t-null: #4A4A4A;
+  --t-cont: #00575E;
+  --t-date: #7A4B00;
+  --t-punct: #3D3D3D;
+
+  --row-hover: #E8E8E8;
+  --row-active: color-mix(in srgb, var(--hue) 20%, transparent);
+  --mark: #FFE55C;
+  --mark-ink: #000000;
+  --scroll: #7A7A7A;
+  --shadow: 0 0 0 2px #000000;
+  --hairline: 1.5px;
+  color-scheme: light;
+}
+
+/* ---------- System — follows the OS when no explicit theme is set ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+  --gutter-tint: 20%;
+  --gutter-ink: 72%;
+    --surface: #15171C;
+    --raised: #1B1E25;
+    --sunken: #101216;
+    --line: #2A2E38;
+    --line-strong: #3C4250;
+    --ink: #E6E9F0;
+    --muted: #98A0AE;
+    --faint: #656C7A;
+
+    --ok: #56C88C;
+    --bad: #F2796B;
+    --warn: #E0A33E;
+
+    --t-key: #82B5F0;
+    --t-str: #8FCB9B;
+    --t-num: #C3A2F5;
+    --t-bool: #EFA063;
+    --t-null: #79808D;
+    --t-cont: #5FC7D4;
+    --t-date: #E0A33E;
+    --t-punct: #6E7684;
+
+    --row-hover: #222630;
+    --row-active: color-mix(in srgb, var(--hue) 26%, transparent);
+    --mark: #7A6220;
+    --mark-ink: #FFF3D0;
+    --scroll: #3A404C;
+    --shadow: 0 8px 26px -8px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.35);
+    color-scheme: dark;
+  }
+}

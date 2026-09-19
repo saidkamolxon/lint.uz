@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSV Viewer & Formatter · lint.uz</title>
+<meta name="description" content="A fast, private CSV viewer, validator and CSV ↔ JSON converter. Everything runs in your browser — your data never leaves the page.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="stylesheet" href="shared/app.css">
+<style>
+/* CSV shows a table instead of a tree — the only per-tool styling
+   in the suite, and it reuses the shared tokens throughout. */
+#tree.table-mode { padding: 0; font-family: var(--ui); }
+
+.csv-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+.csv-table th, .csv-table td {
+  font-family: var(--mono); font-size: 12px;
+  padding: 4px var(--s3);
+  border-bottom: var(--hairline) solid var(--line);
+  border-right: var(--hairline) solid var(--line);
+  text-align: left; white-space: nowrap;
+  max-width: 340px; overflow: hidden; text-overflow: ellipsis;
+}
+.csv-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--raised);
+  color: var(--t-key); font-weight: 600;
+  border-bottom: 2px solid color-mix(in srgb, var(--hue) 45%, var(--line));
+  font-family: var(--ui); font-size: 12px;
+  cursor: pointer; user-select: none;
+}
+.csv-table thead th:hover { background: var(--row-hover); }
+.csv-table thead th .sort { color: var(--hue); margin-left: var(--s1); font-size: 10px; }
+.csv-table thead th .coltype {
+  display: block; font-family: var(--mono); font-size: var(--fs-micro);
+  font-weight: 400; color: var(--faint); letter-spacing: 0;
+}
+
+/* row-number column, tinted like the editor gutter */
+.csv-table .rn {
+  position: sticky; left: 0; z-index: 1;
+  background: color-mix(in srgb, var(--hue) var(--gutter-tint), var(--raised));
+  color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted));
+  text-align: right; font-variant-numeric: tabular-nums;
+  border-right: 2px solid color-mix(in srgb, var(--hue) 45%, var(--line));
+  font-size: 11px; padding: 4px var(--s2);
+}
+.csv-table thead .rn { z-index: 3; }
+.csv-table tbody tr:hover td { background: var(--row-hover); }
+.csv-table tbody tr:hover .rn { background: color-mix(in srgb, var(--hue) 26%, var(--raised)); }
+.csv-table td.num { color: var(--t-num); text-align: right; font-variant-numeric: tabular-nums; }
+.csv-table td.empty-cell { color: var(--faint); font-style: italic; }
+.csv-table td.ragged { background: color-mix(in srgb, var(--bad) 13%, transparent); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'csv',
+  name: 'CSV Viewer',
+  host: 'csv.lint.uz',
+  label: 'CSV',
+  mark: '⌸',
+  hue: '#9333EA',
+  hueInk: '#FFFFFF',
+  accept: '.csv,.tsv,.txt,text/csv',
+  placeholder: 'Paste CSV, drop a file, or press Sample…',
+  searchPlaceholder: 'Filter rows…',
+  actions: [
+    { id: 'btnFormat', label: 'Align', primary: true, title: 'Normalise quoting and spacing (⌘↵)' },
+    { id: 'btnToJson', label: 'To JSON', title: 'Copy the rows as a JSON array' },
+    { id: 'btnHeader', label: 'Header row', hide: 'md', title: 'Treat the first row as column names' }
+  ]
+};
+</script>
+<script src="shared/theme-boot.js"></script>
+<script src="shared/shell.js"></script>
+<script src="shared/app.js"></script>
+<script>
+(function () {
+'use strict';
+
+var esc = LintApp.esc;
+var hasHeader = true;
+try { hasHeader = localStorage.getItem('lintuz-csv-header') !== '0'; } catch (e) {}
+
+/* ==========================================================================
+   Syntax highlighting — delimiters and quoted fields, so the shape of a
+   row is readable before it reaches the table.
+   ========================================================================== */
+var hlDelim = ',';
+
+function highlight(text) {
+  var lines = text.split('\n');
+  var out = [];
+  var d = hlDelim;
+
+  for (var li = 0; li < lines.length; li++) {
+    var line = lines[li];
+
+    /* the header line is one colour end to end */
+    if (li === 0 && hasHeader) {
+      out.push('<span class="hl-key">' + esc(line) + '</span>');
+      continue;
+    }
+
+    var buf = '', cur = '', inQ = false;
+
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (inQ) {
+        cur += c;
+        if (c === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; }
+          else {
+            inQ = false;
+            buf += '<span class="hl-str">' + esc(cur) + '</span>';
+            cur = '';
+          }
+        }
+      } else if (c === '"' && cur === '') {
+        inQ = true; cur = c;
+      } else if (c === d) {
+        buf += field(cur) + '<span class="hl-punct">' + esc(c) + '</span>';
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    buf += inQ ? '<span class="hl-str">' + esc(cur) + '</span>' : field(cur);
+    out.push(buf);
+  }
+  return out.join('\n');
+}
+
+function field(v) {
+  if (v === '') return '';
+  var t = v.trim();
+  if (isNumeric(t)) return '<span class="hl-num">' + esc(v) + '</span>';
+  if (/^(true|false)$/i.test(t)) return '<span class="hl-bool">' + esc(v) + '</span>';
+  return esc(v);
+}
+
+/* ==========================================================================
+   Parsing — RFC 4180, with delimiter sniffing
+   ========================================================================== */
+function sniffDelimiter(text) {
+  var sample = text.slice(0, 8000).split('\n').slice(0, 12).join('\n');
+  var best = ',', bestScore = -1;
+  [',', '\t', ';', '|'].forEach(function (d) {
+    var counts = sample.split('\n')
+      .filter(function (l) { return l.trim(); })
+      .map(function (l) { return splitLine(l, d).length; });
+    if (!counts.length) return;
+    var first = counts[0];
+    if (first < 2) return;
+    /* prefer the delimiter that yields a consistent column count */
+    var consistent = counts.filter(function (c) { return c === first; }).length;
+    var score = consistent * 100 + first;
+    if (score > bestScore) { bestScore = score; best = d; }
+  });
+  return best;
+}
+
+/* only used for sniffing; the real parse is the state machine below */
+function splitLine(line, delim) {
+  var out = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
+    if (inQ) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+function parse(text) {
+  var delim = sniffDelimiter(text);
+  var rows = [], row = [], cur = '';
+  var inQ = false, i = 0, line = 1, col = 1;
+  var quoteStart = null;
+
+  while (i < text.length) {
+    var c = text[i];
+
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i += 2; col += 2; continue; }
+        inQ = false; i++; col++; continue;
+      }
+      if (c === '\n') { line++; col = 1; } else col++;
+      cur += c; i++; continue;
+    }
+
+    if (c === '"') {
+      if (cur.trim() !== '') {
+        return {
+          ok: false,
+          message: 'A quote opened in the middle of an unquoted field',
+          pos: i, line: line, col: col
+        };
+      }
+      inQ = true; quoteStart = { line: line, col: col };
+      i++; col++; continue;
+    }
+
+    if (c === delim) { row.push(cur); cur = ''; i++; col++; continue; }
+
+    if (c === '\r') { i++; continue; }
+
+    if (c === '\n') {
+      row.push(cur); cur = '';
+      rows.push(row); row = [];
+      i++; line++; col = 1; continue;
+    }
+
+    cur += c; i++; col++;
+  }
+
+  if (inQ) {
+    return {
+      ok: false,
+      message: 'A quoted field was never closed',
+      pos: text.length,
+      line: quoteStart ? quoteStart.line : line,
+      col: quoteStart ? quoteStart.col : col
+    };
+  }
+
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  rows = rows.filter(function (r) {
+    return r.length > 1 || (r[0] !== undefined && r[0] !== '');
+  });
+
+  if (!rows.length) return { ok: false, message: 'No rows found', pos: null };
+
+  return { ok: true, value: { rows: rows, delim: delim } };
+}
+
+function isNumeric(s) {
+  return s !== '' && /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(s.trim());
+}
+
+function columnType(rows, idx, from) {
+  var seen = 0, nums = 0;
+  for (var r = from; r < rows.length && seen < 80; r++) {
+    var v = (rows[r][idx] || '').trim();
+    if (!v) continue;
+    seen++;
+    if (isNumeric(v)) nums++;
+  }
+  if (!seen) return 'empty';
+  return nums === seen ? 'number' : 'text';
+}
+
+function stats(model) {
+  var rows = model.rows;
+  var body = hasHeader ? rows.length - 1 : rows.length;
+  var cols = rows[0] ? rows[0].length : 0;
+  var ragged = 0;
+  for (var i = 0; i < rows.length; i++) if (rows[i].length !== cols) ragged++;
+  var name = { ',': 'comma', '\t': 'tab', ';': 'semicolon', '|': 'pipe' }[model.delim];
+  return LintApp.fmtNum(Math.max(0, body)) + ' rows · ' + cols + ' columns · ' +
+    name + '-separated' + (ragged ? ' · ' + ragged + ' ragged' : '');
+}
+
+/* ==========================================================================
+   Table rendering — replaces the shared tree for this tool
+   ========================================================================== */
+var sortCol = null, sortDir = 1;
+var currentModel = null;
+
+function renderTable() {
+  var treeEl = document.getElementById('tree');
+  var matchCount = document.getElementById('matchCount');
+  treeEl.classList.add('table-mode');
+
+  if (!currentModel) {
+    treeEl.innerHTML = EMPTY;
+    matchCount.textContent = '';
+    return;
+  }
+
+  var rows = currentModel.rows;
+  var headerRow = hasHeader ? rows[0] : null;
+  var from = hasHeader ? 1 : 0;
+  var colCount = 0;
+  for (var r = 0; r < rows.length; r++) colCount = Math.max(colCount, rows[r].length);
+
+  var q = document.getElementById('search').value.trim().toLowerCase();
+  var body = rows.slice(from).map(function (row, i) { return { row: row, n: i + 1 }; });
+
+  if (q) {
+    body = body.filter(function (item) {
+      for (var c = 0; c < item.row.length; c++) {
+        if (String(item.row[c]).toLowerCase().indexOf(q) !== -1) return true;
+      }
+      return false;
+    });
+    matchCount.textContent = body.length
+      ? LintApp.fmtNum(body.length) + (body.length === 1 ? ' row' : ' rows')
+      : 'no matches';
+  } else {
+    matchCount.textContent = '';
+  }
+
+  if (sortCol !== null) {
+    var numeric = columnType(rows, sortCol, from) === 'number';
+    body.sort(function (a, b) {
+      var x = (a.row[sortCol] || '').trim(), y = (b.row[sortCol] || '').trim();
+      if (numeric) return (parseFloat(x) - parseFloat(y)) * sortDir;
+      return x.localeCompare(y) * sortDir;
+    });
+  }
+
+  var types = [];
+  for (var t = 0; t < colCount; t++) types.push(columnType(rows, t, from));
+
+  var html = '<table class="csv-table"><thead><tr><th class="rn"></th>';
+  for (var h = 0; h < colCount; h++) {
+    var label = headerRow && headerRow[h] !== undefined && headerRow[h] !== ''
+      ? headerRow[h] : colName(h);
+    var arrow = sortCol === h ? '<span class="sort">' + (sortDir === 1 ? '▲' : '▼') + '</span>' : '';
+    html += '<th data-col="' + h + '" title="Sort by this column">' +
+      esc(label) + arrow +
+      '<span class="coltype">' + types[h] + '</span></th>';
+  }
+  html += '</tr></thead><tbody>';
+
+  var LIMIT = 2000;
+  var shown = body.slice(0, LIMIT);
+  for (var i = 0; i < shown.length; i++) {
+    var row = shown[i].row;
+    html += '<tr><td class="rn">' + shown[i].n + '</td>';
+    for (var c = 0; c < colCount; c++) {
+      var v = row[c];
+      var cls = [];
+      if (v === undefined) cls.push('ragged');
+      else if (v === '') cls.push('empty-cell');
+      else if (types[c] === 'number' && isNumeric(v)) cls.push('num');
+      var text = v === undefined ? '—' : (v === '' ? '∅' : v);
+      html += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') +
+        ' title="' + esc(String(v === undefined ? '' : v)) + '">' + esc(text) + '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+
+  if (body.length > LIMIT) {
+    html += '<div class="notice">Showing the first ' + LintApp.fmtNum(LIMIT) +
+      ' of ' + LintApp.fmtNum(body.length) + ' rows.</div>';
+  }
+  if (!body.length) {
+    html = '<div class="empty">No rows match “' + esc(q) + '”.</div>';
+  }
+
+  treeEl.innerHTML = html;
+}
+
+function colName(i) {
+  var s = '';
+  i++;
+  while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = ((i - m) / 26) | 0; }
+  return s;
+}
+
+var EMPTY =
+  '<div class="empty">Valid CSV in the editor appears here as a sortable table. ' +
+  'Click a column heading to sort; the row filter searches every cell.<br><br>' +
+  'Press <kbd>⌘K</kbd> for the editor, <kbd>⌘F</kbd> to filter.</div>';
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+var SAMPLE = `endpoint,method,auth,p99_ms,rate_limit,burst,healthy
+/v2/cart,GET,required,84,120,40,true
+/v2/cart,POST,required,97,120,40,true
+/v2/cart,DELETE,required,61,120,40,true
+/v2/checkout,POST,required,212,30,5,true
+/v2/orders,GET,required,143,60,20,true
+/v2/orders/{id},GET,required,78,60,20,true
+/v2/refunds,POST,required,ended,10,2,false
+/health,GET,none,3,,,true
+/metrics,GET,none,7,,,true
+"/v2/search?q=shoes&sort=price",GET,optional,318,45,15,true`;
+
+var app = LintApp.init({
+  id: 'csv',
+  label: 'CSV',
+  parse: parse,
+  stats: stats,
+  highlighter: highlight,
+  autoDepth: 1,
+  emptyHTML: EMPTY,
+  /* the shared tree is unused here — a minimal adapter keeps its
+     wiring inert while the table owns the right-hand pane */
+  adapter: {
+    pathLabel: 'Cell',
+    rootEntry: function () { return { key: undefined, value: null, path: [] }; },
+    children: function () { return []; },
+    childCount: function () { return 0; },
+    matches: function () { return false; },
+    path: function () { return ''; },
+    decorate: function () {},
+    actions: function () { return []; }
+  },
+  onParsed: function (model) {
+    currentModel = model;
+    if (model && model.delim !== hlDelim) {
+      /* repaint once with the real delimiter the sniffer found */
+      hlDelim = model.delim;
+      app.editor.paint();
+    }
+    renderTable();
+  },
+  sample: SAMPLE
+});
+
+/* the table owns search and expand/collapse for this tool */
+var searchTimer;
+document.getElementById('search').addEventListener('input', function () {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderTable, 200);
+});
+
+document.getElementById('tree').addEventListener('click', function (e) {
+  var th = e.target.closest('th[data-col]');
+  if (!th) return;
+  var col = parseInt(th.dataset.col, 10);
+  if (sortCol === col) sortDir = -sortDir;
+  else { sortCol = col; sortDir = 1; }
+  renderTable();
+});
+
+/* Expand / collapse become "widen / narrow columns" here */
+document.getElementById('btnExpand').title = 'Clear sorting';
+document.getElementById('btnExpand').addEventListener('click', function () {
+  sortCol = null; sortDir = 1;
+  renderTable();
+});
+document.getElementById('btnCollapse').style.display = 'none';
+document.getElementById('btnWrap').style.display = 'none';
+
+document.getElementById('btnFormat').addEventListener('click', function () {
+  var res = parse(app.editor.getValue());
+  if (!res.ok) { app.run(); LintApp.toast('Fix the CSV before aligning'); return; }
+  var d = res.value.delim;
+  var out = res.value.rows.map(function (row) {
+    return row.map(function (cell) {
+      var needs = cell.indexOf(d) !== -1 || cell.indexOf('"') !== -1 ||
+                  cell.indexOf('\n') !== -1 || cell !== cell.trim();
+      return needs ? '"' + cell.replace(/"/g, '""') + '"' : cell;
+    }).join(d);
+  }).join('\n');
+  app.editor.setValue(out);
+  LintApp.toast('Quoting normalised');
+});
+
+document.getElementById('btnToJson').addEventListener('click', function () {
+  var res = parse(app.editor.getValue());
+  if (!res.ok) { app.run(); LintApp.toast('Fix the CSV before converting'); return; }
+  var rows = res.value.rows;
+  var out;
+  if (hasHeader && rows.length > 1) {
+    var head = rows[0];
+    out = rows.slice(1).map(function (r) {
+      var o = {};
+      for (var i = 0; i < head.length; i++) {
+        var v = r[i] === undefined ? null : r[i];
+        o[head[i] || colName(i)] = v !== null && isNumeric(v) ? parseFloat(v) : v;
+      }
+      return o;
+    });
+  } else {
+    out = rows;
+  }
+  LintApp.copy(JSON.stringify(out, null, 2), 'JSON');
+});
+
+var btnHeader = document.getElementById('btnHeader');
+function syncHeaderBtn() {
+  btnHeader.setAttribute('aria-pressed', String(hasHeader));
+}
+syncHeaderBtn();
+btnHeader.addEventListener('click', function () {
+  hasHeader = !hasHeader;
+  syncHeaderBtn();
+  try { localStorage.setItem('lintuz-csv-header', hasHeader ? '1' : '0'); } catch (e) {}
+  sortCol = null;
+  app.editor.paint();
+  app.run();
+  LintApp.toast(hasHeader ? 'First row is the header' : 'First row is data');
+});
+})();
+</script>
+</body>
+</html>

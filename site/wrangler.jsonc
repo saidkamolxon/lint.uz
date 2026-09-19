@@ -1,0 +1,11 @@
+{
+  "name": "lintuz-site",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    { "pattern": "lint.uz/*", "zone_name": "lint.uz" },
+    { "pattern": "www.lint.uz/*", "zone_name": "lint.uz" }
+  ]
+}

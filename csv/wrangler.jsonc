@@ -1,0 +1,13 @@
+{
+  "name": "csvviewer",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    {
+      "pattern": "csv.lint.uz/*",
+      "zone_name": "lint.uz"
+    }
+  ]
+}
