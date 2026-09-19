@@ -401,6 +401,7 @@ var app = LintApp.init({
   stats: stats,
   highlighter: highlight,
   autoDepth: 1,
+  ownsPane: true,
   emptyHTML: EMPTY,
   /* the shared tree is unused here — a minimal adapter keeps its
      wiring inert while the table owns the right-hand pane */
@@ -425,6 +426,9 @@ var app = LintApp.init({
   },
   sample: SAMPLE
 });
+
+/* this tool owns the right-hand pane, so it paints its own empty state */
+renderTable();
 
 /* the table owns search and expand/collapse for this tool */
 var searchTimer;

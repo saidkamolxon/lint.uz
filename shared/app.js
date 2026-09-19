@@ -745,11 +745,15 @@ function Tree(opts) {
     try { localStorage.setItem(WRAP_KEY, wrapOn ? '1' : '0'); } catch (e) {}
   });
 
-  var searchTimer;
-  searchBox.addEventListener('input', function () {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(self.render, 220);
-  });
+  /* A tool that renders its own right-hand pane (CSV's table) owns search
+     too — otherwise both listeners fire and the shared tree overwrites it. */
+  if (!opts.ownsSearch) {
+    var searchTimer;
+    searchBox.addEventListener('input', function () {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(self.render, 220);
+    });
+  }
 }
 
 /* ==========================================================================
@@ -784,7 +788,8 @@ function init(config) {
   var tree = new Tree({
     adapter: config.adapter,
     emptyHTML: config.emptyHTML,
-    autoDepth: config.autoDepth
+    autoDepth: config.autoDepth,
+    ownsSearch: config.ownsPane
   });
 
   var editor = new Editor({
@@ -801,7 +806,8 @@ function init(config) {
   function run() {
     var text = editor.getValue();
     if (!text.trim()) {
-      tree.setData(null, false);
+      if (!config.ownsPane) tree.setData(null, false);
+      else tree.hasData = false;
       errorBar.classList.remove('show');
       editor.setErrorLine(null);
       setStatus('', 'Ready');
@@ -816,7 +822,8 @@ function init(config) {
       errorBar.classList.remove('show');
       editor.setErrorLine(null);
       errorPos = null;
-      tree.setData(res.value, true);
+      if (!config.ownsPane) tree.setData(res.value, true);
+      else tree.hasData = true;
       var size = new Blob([text]).size;
       var st = config.stats(res.value);
       setStatus('ok', 'Valid · ' + fmtBytes(size) + ' · ' + st +
@@ -828,7 +835,7 @@ function init(config) {
       errorMsg.textContent = res.message;
       errorLoc.textContent = res.line ? 'line ' + res.line + ':' + (res.col || 1) : '';
       errorBar.classList.add('show');
-      tree.markStale();
+      if (!config.ownsPane) tree.markStale();
       setStatus('err', 'Invalid ' + config.label);
       config.onParsed && config.onParsed(null, false);
     }
@@ -946,8 +953,9 @@ function init(config) {
      The sender set a cookie naming itself. Name the format in the prompt so
      the instruction is concrete, and drop it as soon as anything is typed. */
   /* paint the empty state before anything is typed — otherwise the tree pane
-     sits blank until the first parse cycle */
-  tree.render();
+     sits blank until the first parse cycle. A tool owning the pane paints
+     its own. */
+  if (!config.ownsPane) tree.render();
 
   var from = readHandoff();
   if (from && !editor.getValue()) {
