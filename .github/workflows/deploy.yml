@@ -1,0 +1,90 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  filter:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      site: ${{ steps.changes.outputs.site }}
+      json: ${{ steps.changes.outputs.json }}
+      xml: ${{ steps.changes.outputs.xml }}
+      yaml: ${{ steps.changes.outputs.yaml }}
+      csv: ${{ steps.changes.outputs.csv }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          # a change under shared/ (or to the build or workflow itself)
+          # redeploys every property, since all of them embed it
+          filters: |
+            site:
+              - 'shared/**'
+              - 'build.mjs'
+              - '.github/workflows/deploy.yml'
+              - 'site/**'
+            json:
+              - 'shared/**'
+              - 'build.mjs'
+              - '.github/workflows/deploy.yml'
+              - 'json/**'
+            xml:
+              - 'shared/**'
+              - 'build.mjs'
+              - '.github/workflows/deploy.yml'
+              - 'xml/**'
+            yaml:
+              - 'shared/**'
+              - 'build.mjs'
+              - '.github/workflows/deploy.yml'
+              - 'yaml/**'
+            csv:
+              - 'shared/**'
+              - 'build.mjs'
+              - '.github/workflows/deploy.yml'
+              - 'csv/**'
+
+  deploy:
+    name: Deploy ${{ matrix.tool }}.lint.uz
+    needs: filter
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tool: site
+            changed: ${{ needs.filter.outputs.site }}
+          - tool: json
+            changed: ${{ needs.filter.outputs.json }}
+          - tool: xml
+            changed: ${{ needs.filter.outputs.xml }}
+          - tool: yaml
+            changed: ${{ needs.filter.outputs.yaml }}
+          - tool: csv
+            changed: ${{ needs.filter.outputs.csv }}
+    steps:
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
+
+      - uses: actions/setup-node@v4
+        if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
+        with:
+          node-version: 20
+
+      - name: Copy shared assets into ${{ matrix.tool }}/public
+        if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: node build.mjs ${{ matrix.tool }}
+
+      - name: Deploy
+        if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: ${{ matrix.tool }}
+          command: deploy
