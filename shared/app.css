@@ -332,8 +332,12 @@ button[aria-pressed="true"] {
   background: var(--raised);
 }
 .search-wrap { flex: 1; min-width: 70px; position: relative; display: flex; align-items: center; }
+/* the icon is centred against the input, not the zero-height span that
+   wraps it — anchor it to the .search-wrap box instead */
 .search-wrap svg {
-  position: absolute; left: 9px; width: 13px; height: 13px;
+  position: absolute; left: 9px; top: 50%;
+  transform: translateY(-50%);
+  width: 13px; height: 13px;
   color: var(--faint); pointer-events: none;
 }
 #search {
