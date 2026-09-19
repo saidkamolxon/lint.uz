@@ -109,6 +109,17 @@ button[aria-pressed="true"] {
 }
 
 .group { display: flex; align-items: center; gap: 2px; }
+
+/* shortcut hint inside a button — quiet until the button is hovered */
+button .kb {
+  font-family: var(--mono); font-size: var(--fs-micro);
+  margin-left: var(--s2);
+  opacity: 0.55;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
+@media (max-width: 1100px) { button .kb { display: none; } }
 .sep { width: var(--hairline); height: 18px; background: var(--line); margin: 0 var(--s2); flex: none; }
 .spacer { flex: 1 1 auto; min-width: var(--s2); }
 

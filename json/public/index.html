@@ -30,7 +30,7 @@ window.LINT_CONFIG = {
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
     { id: 'btnMinify', label: 'Minify', title: 'Strip all whitespace' },
     { id: 'btnEscape', label: 'Unescape', hide: 'md', title: 'Parse a JSON-encoded string into real JSON' },
-    { id: 'btnToYaml', label: 'To YAML', hide: 'md', title: 'Copy this document as YAML' }
+    { id: 'btnToYaml', label: 'To YAML', hide: 'md', key: 'mod+shift+y', title: 'Copy this document as YAML' }
   ]
 };
 </script>
@@ -415,8 +415,9 @@ var app = LintApp.init({
   emptyHTML:
     '<div class="empty">Valid JSON in the editor appears here as a tree you can ' +
     'expand, search and copy paths from.<br><br>' +
-    'Press <kbd>⌘K</kbd> for the editor, <kbd>⌘F</kbd> to search, ' +
-    '<kbd>⌘↵</kbd> to format.</div>',
+    'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
+    ' to search, ' + LintApp.kbd('mod+enter') + ' to format, ' +
+    LintApp.kbd('mod+shift+y') + ' to copy as YAML.</div>',
   sample: SAMPLE
 });
 

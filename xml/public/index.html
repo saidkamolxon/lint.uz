@@ -29,7 +29,7 @@ window.LINT_CONFIG = {
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
     { id: 'btnMinify', label: 'Minify', title: 'Strip whitespace between tags' },
-    { id: 'btnToJson', label: 'To JSON', hide: 'md', title: 'Copy this document as JSON' }
+    { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Copy this document as JSON' }
   ]
 };
 </script>
@@ -462,8 +462,9 @@ var app = LintApp.init({
   emptyHTML:
     '<div class="empty">Valid XML in the editor appears here as a tree of ' +
     'elements, attributes and text — click any node to copy its XPath.<br><br>' +
-    'Press <kbd>⌘K</kbd> for the editor, <kbd>⌘F</kbd> to search, ' +
-    '<kbd>⌘↵</kbd> to format.</div>',
+    'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
+    ' to search, ' + LintApp.kbd('mod+enter') + ' to format, ' +
+    LintApp.kbd('mod+shift+j') + ' to copy as JSON.</div>',
   sample: SAMPLE
 });
 

@@ -73,7 +73,7 @@ window.LINT_CONFIG = {
   searchPlaceholder: 'Filter rows…',
   actions: [
     { id: 'btnFormat', label: 'Align', primary: true, title: 'Normalise quoting and spacing (⌘↵)' },
-    { id: 'btnToJson', label: 'To JSON', title: 'Copy the rows as a JSON array' },
+    { id: 'btnToJson', label: 'To JSON', key: 'mod+shift+j', title: 'Copy the rows as a JSON array' },
     { id: 'btnHeader', label: 'Header row', hide: 'md', title: 'Treat the first row as column names' }
   ]
 };
@@ -377,7 +377,8 @@ function colName(i) {
 var EMPTY =
   '<div class="empty">Valid CSV in the editor appears here as a sortable table. ' +
   'Click a column heading to sort; the row filter searches every cell.<br><br>' +
-  'Press <kbd>⌘K</kbd> for the editor, <kbd>⌘F</kbd> to filter.</div>';
+  'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
+  ' to filter, ' + LintApp.kbd('mod+shift+j') + ' to copy as JSON.</div>';
 
 /* ==========================================================================
    Boot

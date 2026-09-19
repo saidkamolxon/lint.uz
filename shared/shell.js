@@ -11,11 +11,31 @@ var c = window.LINT_CONFIG;
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk || '#FFFFFF');
 
+/* A declared `key` renders as a hint inside the button and is bound by
+   app.js — so the shortcut and the label can never drift apart. */
+var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+
+function keyHint(key) {
+  if (!key) return '';
+  var parts = key.split('+');
+  var out = parts.map(function (p) {
+    if (p === 'mod') return IS_MAC ? '\u2318' : 'Ctrl';
+    if (p === 'shift') return IS_MAC ? '\u21E7' : 'Shift';
+    if (p === 'enter') return '\u21B5';
+    return p.toUpperCase();
+  });
+  return IS_MAC ? out.join('') : out.join('+');
+}
+
 var actions = (c.actions || []).map(function (a) {
   return '<button id="' + a.id + '"' +
     (a.primary ? ' class="primary"' : ' class="bordered"') +
     (a.hide ? ' data-hide="' + a.hide + '"' : '') +
-    ' title="' + a.title + '">' + a.label + '</button>';
+    (a.key ? ' data-key="' + a.key + '"' : '') +
+    ' title="' + a.title + (a.key ? ' (' + keyHint(a.key) + ')' : '') + '">' +
+    a.label +
+    (a.key ? '<kbd class="kb">' + keyHint(a.key) + '</kbd>' : '') +
+    '</button>';
 }).join('');
 
 document.getElementById('app').innerHTML =

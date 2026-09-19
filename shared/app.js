@@ -107,7 +107,7 @@ function showToast(msg, action) {
   if (action) {
     var a = document.createElement('a');
     a.className = 'toast-action';
-    a.textContent = action.label;
+    a.innerHTML = esc(action.label) + '<kbd class="kb">\u21B5</kbd>';
     a.href = action.href;
     a.target = '_blank';
     a.rel = 'noopener';
@@ -119,6 +119,35 @@ function showToast(msg, action) {
     });
     t.appendChild(a);
     life = 7000;   /* long enough to actually reach for it */
+
+    /* Enter follows the offer while the toast is up. Bound only for this
+       toast's lifetime, so Enter never does anything surprising afterwards.
+       The editor holds focus permanently, so we cannot simply skip when a
+       textarea is focused — instead the first edit or caret move cancels the
+       binding, which is the real signal that the user went back to work. */
+    var onKey = function (e) {
+      if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      e.preventDefault();
+      a.click();
+      window.open(a.href, '_blank', 'noopener');
+      detach();
+    };
+    var cancel = function () { detach(); };
+    var detach = function () {
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('input', cancel, true);
+      document.removeEventListener('mousedown', cancel, true);
+      clearTimeout(t._keyTimer);
+    };
+    document.addEventListener('keydown', onKey, true);
+    /* typing anywhere, or clicking into the page, means they have moved on */
+    document.addEventListener('input', cancel, true);
+    document.addEventListener('mousedown', cancel, true);
+    t._keyTimer = setTimeout(detach, life);
+    t._detach = detach;
+  } else if (t._detach) {
+    t._detach();
+    t._detach = null;
   }
 
   t.classList.add('show');
@@ -931,9 +960,34 @@ function init(config) {
     divider.addEventListener('pointerup', up);
   });
 
+  /* Buttons declaring data-key bind themselves, so a tool adds a shortcut
+     by naming it in its config and nothing here needs to change. */
+  var keyed = document.querySelectorAll('.toolbar button[data-key]');
+  var keyMap = [];
+  for (var ki = 0; ki < keyed.length; ki++) {
+    var spec = keyed[ki].dataset.key.split('+');
+    keyMap.push({
+      btn: keyed[ki],
+      mod: spec.indexOf('mod') !== -1,
+      shift: spec.indexOf('shift') !== -1,
+      key: spec[spec.length - 1]
+    });
+  }
+
   /* keyboard */
   document.addEventListener('keydown', function (e) {
     var mod = e.ctrlKey || e.metaKey;
+
+    for (var i = 0; i < keyMap.length; i++) {
+      var m = keyMap[i];
+      if (m.mod !== mod) continue;
+      if (m.shift !== e.shiftKey) continue;
+      if (e.key.toLowerCase() !== m.key) continue;
+      e.preventDefault();
+      m.btn.click();
+      return;
+    }
+
     if (mod && e.key === 'Enter') {
       e.preventDefault();
       var fmt = $('btnFormat');
@@ -1004,9 +1058,23 @@ function copyAndOffer(text, label, from, to) {
   } else fallbackCopy(text, done);
 }
 
+/* Same rendering the toolbar hints use, so empty-state copy never claims a
+   key the user's platform does not have. */
+var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+function kbd(key) {
+  var out = key.split('+').map(function (p) {
+    if (p === 'mod') return IS_MAC ? '\u2318' : 'Ctrl';
+    if (p === 'shift') return IS_MAC ? '\u21E7' : 'Shift';
+    if (p === 'enter') return IS_MAC ? '\u21B5' : 'Enter';
+    return p.toUpperCase();
+  });
+  return '<kbd>' + (IS_MAC ? out.join('') : out.join('+')) + '</kbd>';
+}
+
 global.LintApp = {
   init: init,
   copyAndOffer: copyAndOffer,
+  kbd: kbd,
   esc: esc,
   copy: copyText,
   toast: showToast,

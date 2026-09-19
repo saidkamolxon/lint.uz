@@ -29,7 +29,7 @@ window.LINT_CONFIG = {
   searchPlaceholder: 'Search keys and values…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Normalise indentation to 2 spaces (⌘↵)' },
-    { id: 'btnToJson', label: 'To JSON', title: 'Copy this document as JSON' },
+    { id: 'btnToJson', label: 'To JSON', key: 'mod+shift+j', title: 'Copy this document as JSON' },
     { id: 'btnToYaml', label: 'From JSON', hide: 'md', title: 'Convert JSON in the editor into YAML' }
   ]
 };
@@ -402,8 +402,9 @@ var app = LintApp.init({
   emptyHTML:
     '<div class="empty">Valid YAML in the editor appears here as a tree you can ' +
     'expand, search and copy paths from. Multi-document files load as a list.<br><br>' +
-    'Press <kbd>⌘K</kbd> for the editor, <kbd>⌘F</kbd> to search, ' +
-    '<kbd>⌘↵</kbd> to format.</div>',
+    'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
+    ' to search, ' + LintApp.kbd('mod+enter') + ' to format, ' +
+    LintApp.kbd('mod+shift+j') + ' to copy as JSON.</div>',
   sample: SAMPLE
 });
 
