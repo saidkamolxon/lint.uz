@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YAML Viewer & Formatter · lint.uz</title>
+<meta name="description" content="Fast, beautiful, private client-side YAML viewer, formatter, validator, and YAML to JSON converter.">
+<style>
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --border: #DDE1E8;
+  --text: #24292F;
+  --muted: #6B7280;
+  --faint: #9AA1AC;
+  --accent: #B45D14;
+  --accent-soft: #F4E3D3;
+  --key: #1F5FA8;
+  --str: #297A3A;
+  --num: #8250DF;
+  --bool: #B4530A;
+  --null: #8B8F98;
+  --arr: #0E7C86;
+  --date: #D97706;
+  --error: #C0392B;
+  --ok: #2E8B57;
+  --match-bg: #F5DFA8;
+  --row-hover: #EEF1F5;
+  --row-selected: #E4ECF6;
+  --scrollbar: #C8CDD6;
+  --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181D;
+    --panel: #1C1F26;
+    --border: #2A2E37;
+    --text: #E8EAF0;
+    --muted: #9AA1AC;
+    --faint: #666D7A;
+    --accent: #E8A15C;
+    --accent-soft: #3A2E20;
+    --key: #7FB4E8;
+    --str: #96C98A;
+    --num: #C0A0F0;
+    --bool: #E8A15C;
+    --null: #7C828E;
+    --arr: #62C6D0;
+    --date: #FBBF24;
+    --error: #E8756A;
+    --ok: #6BC98F;
+    --match-bg: #6B5620;
+    --row-hover: #232732;
+    --row-selected: #28303E;
+    --scrollbar: #3A3F4A;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F6F7F9; --panel: #FFFFFF; --border: #DDE1E8; --text: #24292F;
+  --muted: #6B7280; --faint: #9AA1AC; --accent: #B45D14; --accent-soft: #F4E3D3;
+  --key: #1F5FA8; --str: #297A3A; --num: #8250DF; --bool: #B4530A; --null: #8B8F98; --arr: #0E7C86; --date: #D97706;
+  --error: #C0392B; --ok: #2E8B57; --match-bg: #F5DFA8;
+  --row-hover: #EEF1F5; --row-selected: #E4ECF6; --scrollbar: #C8CDD6;
+}
+:root[data-theme="dark"] {
+  --bg: #16181D; --panel: #1C1F26; --border: #2A2E37; --text: #E8EAF0;
+  --muted: #9AA1AC; --faint: #666D7A; --accent: #E8A15C; --accent-soft: #3A2E20;
+  --key: #7FB4E8; --str: #96C98A; --num: #C0A0F0; --bool: #E8A15C; --null: #7C828E; --arr: #62C6D0; --date: #FBBF24;
+  --error: #E8756A; --ok: #6BC98F; --match-bg: #6B5620;
+  --row-hover: #232732; --row-selected: #28303E; --scrollbar: #3A3F4A;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--ui);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---------- toolbar ---------- */
+.toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex; align-items: baseline; gap: 7px;
+  margin-right: 10px; user-select: none;
+  text-decoration: none; color: inherit;
+}
+.brand .logo {
+  font-family: var(--mono); font-weight: 700; font-size: 15px;
+  color: var(--accent); letter-spacing: -0.5px;
+}
+.brand .name { font-weight: 600; font-size: 14px; }
+.brand .badge-tag {
+  font-size: 10.5px; color: var(--muted); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+}
+
+button {
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .caret { transition: none !important; }
+}
+button:hover { background: var(--row-hover); }
+button:active { background: var(--row-selected); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .row:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+button.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+button.primary:hover { background: var(--accent-soft); }
+.sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.spacer { flex: 1; }
+.tabs { display: none; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
+.tabs button { border: none; padding: 4px 14px; border-radius: 5px; color: var(--muted); }
+.tabs button.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+
+/* Quick switcher dropdown */
+.nav-dropdown { position: relative; display: inline-block; }
+.nav-dropdown-content {
+  display: none; position: absolute; right: 0; top: calc(100% + 4px);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15); min-width: 140px; z-index: 50; padding: 4px 0;
+}
+.nav-dropdown-content a {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; font-size: 12.5px; text-decoration: none; color: var(--text);
+}
+.nav-dropdown-content a:hover { background: var(--row-hover); color: var(--accent); }
+.nav-dropdown:hover .nav-dropdown-content, .nav-dropdown:focus-within .nav-dropdown-content { display: block; }
+
+/* ---------- split ---------- */
+.split { flex: 1; display: flex; min-height: 0; }
+.pane { display: flex; flex-direction: column; min-height: 0; }
+#editorPane { width: 44%; min-width: 220px; background: var(--panel); }
+#divider {
+  width: 5px; cursor: col-resize; flex: none;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+#divider:hover, #divider.dragging { background: var(--accent); border-color: var(--accent); }
+#treePane { flex: 1; min-width: 0; }
+
+#input {
+  flex: 1; width: 100%;
+  border: none; resize: none;
+  background: transparent; color: var(--text);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  padding: 12px 14px;
+  tab-size: 2;
+  white-space: pre;
+}
+#input::placeholder { color: var(--faint); }
+
+#errorBar {
+  display: none;
+  align-items: center; gap: 8px;
+  padding: 7px 12px;
+  font-family: var(--mono); font-size: 12px;
+  color: var(--error);
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+#errorBar.show { display: flex; }
+#errorBar .loc { color: var(--muted); text-decoration: underline; }
+
+/* ---------- tree pane ---------- */
+.treebar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+#search {
+  flex: 1; min-width: 60px;
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+#search::placeholder { color: var(--faint); }
+#matchCount { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.treebar button { padding: 5px 9px; font-size: 12px; }
+
+#tree {
+  flex: 1; overflow: auto;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+  padding: 8px 12px 40vh 8px;
+}
+#tree.stale { opacity: 0.45; }
+.empty-hint { color: var(--faint); font-family: var(--ui); padding: 24px 16px; }
+
+.node { }
+.children { margin-left: 14px; border-left: 1px solid var(--border); padding-left: 8px; display: none; }
+.node.open > .children { display: block; }
+
+.row {
+  display: flex; align-items: baseline;
+  padding: 1px 6px 1px 2px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+  position: relative;
+}
+.row:hover { background: var(--row-hover); }
+.row.selected { background: var(--row-selected); }
+.caret {
+  flex: none; width: 16px; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--faint); cursor: pointer;
+  transition: transform 120ms;
+}
+.caret::before {
+  content: ""; display: block;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.node.open > .row .caret { transform: rotate(90deg); }
+.caret.leaf { visibility: hidden; cursor: default; }
+
+.ticon {
+  flex: none; width: 16px; height: 15px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: center; margin-right: 6px;
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  user-select: none; letter-spacing: -0.5px;
+}
+.ticon.t-obj  { color: var(--key);  background: color-mix(in srgb, var(--key) 16%, transparent); }
+.ticon.t-arr  { color: var(--arr);  background: color-mix(in srgb, var(--arr) 16%, transparent); }
+.ticon.t-str  { color: var(--str);  background: color-mix(in srgb, var(--str) 16%, transparent); }
+.ticon.t-num  { color: var(--num);  background: color-mix(in srgb, var(--num) 16%, transparent); }
+.ticon.t-bool { color: var(--bool); background: color-mix(in srgb, var(--bool) 16%, transparent); }
+.ticon.t-null { color: var(--null); background: color-mix(in srgb, var(--null) 16%, transparent); }
+.ticon.t-date { color: var(--date); background: color-mix(in srgb, var(--date) 16%, transparent); }
+
+.k { color: var(--key); }
+.k.idx { color: var(--faint); }
+.colon { color: var(--muted); margin-right: 6px; }
+.v.str { color: var(--str); }
+.v.num { color: var(--num); }
+.v.bool { color: var(--bool); font-weight: 600; }
+.v.null { color: var(--null); font-style: italic; }
+.v.date { color: var(--date); }
+.badge { color: var(--muted); }
+.badge .cnt { color: var(--faint); font-size: 11px; margin-left: 6px; font-family: var(--ui); }
+mark { background: var(--match-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+.more-btn {
+  font-family: var(--ui); font-size: 11.5px;
+  color: var(--accent); border: none; padding: 2px 6px; margin: 1px 0 1px 18px;
+}
+.more-btn:hover { background: var(--accent-soft); }
+.trunc-btn {
+  border: none; padding: 0 4px; font-size: 11px; color: var(--accent);
+  font-family: var(--ui);
+}
+
+.row-actions {
+  display: none; gap: 2px;
+  position: absolute; top: 1px; right: 2px;
+  background: inherit; border-radius: 4px; padding: 0 2px 0 6px;
+}
+.row:hover .row-actions, .row.selected .row-actions { display: inline-flex; }
+.row-actions button {
+  border: none; padding: 1px 6px; font-size: 11px;
+  color: var(--muted); border-radius: 4px;
+}
+.row-actions button:hover { color: var(--accent); background: var(--accent-soft); }
+.notice { color: var(--muted); font-family: var(--ui); font-size: 12px; padding: 6px 8px; }
+
+/* wrap mode */
+#tree.wrap .row { white-space: normal; align-items: flex-start; }
+#tree.wrap .v {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; min-width: 0;
+}
+#tree.wrap .k, #tree.wrap .colon, #tree.wrap .badge { flex: 0 0 auto; }
+#tree.wrap .k { max-width: 100%; overflow-wrap: anywhere; }
+#tree.wrap .caret { align-self: flex-start; margin-top: 5px; }
+#tree.wrap .ticon { align-self: flex-start; margin-top: 2px; }
+.treebar button[aria-pressed="true"] {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* ---------- status bar ---------- */
+.status {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+  min-height: 30px;
+}
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.status.ok .dot { background: var(--ok); }
+.status.err .dot { background: var(--error); }
+.status.err #statusMsg { color: var(--error); }
+#statusMsg { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#pathBox {
+  font-family: var(--mono); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: pointer; color: var(--muted); flex: 1; min-width: 0;
+  text-align: right;
+}
+#pathBox:hover { color: var(--accent); }
+#pathBox:empty { cursor: default; }
+
+/* ---------- toast ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  background: var(--text); color: var(--bg);
+  font-size: 12.5px; padding: 7px 16px; border-radius: 7px;
+  opacity: 0; pointer-events: none; transition: opacity 150ms;
+  z-index: 10;
+}
+#toast.show { opacity: 0.95; }
+
+body.dragover #editorPane { outline: 2px dashed var(--accent); outline-offset: -6px; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 800px) {
+  .tabs { display: inline-flex; }
+  #divider { display: none; }
+  #editorPane { width: 100% !important; }
+  body[data-view="tree"] #editorPane { display: none; }
+  body[data-view="text"] #treePane { display: none; }
+  .toolbar .hide-sm { display: none; }
+}
+</style>
+<script src="js-yaml.min.js"></script>
+</head>
+<body data-view="text">
+<div class="app">
+
+  <header class="toolbar">
+    <div class="brand">
+      <span class="logo">---</span>
+      <span class="name">YAML Viewer</span>
+      <span class="badge-tag">lint.uz</span>
+    </div>
+    <nav class="tabs" aria-label="View">
+      <button id="tabText" class="active">Text</button>
+      <button id="tabTree">Tree</button>
+    </nav>
+    <button id="btnFormat" class="primary" title="Pretty-print with 2-space indent (Ctrl+Enter)">Format</button>
+    <button id="btnToJson" title="Convert YAML to formatted JSON">To JSON</button>
+    <button id="btnToYaml" class="hide-sm" title="Convert JSON in editor to YAML">To YAML</button>
+    <span class="sep hide-sm"></span>
+    <button id="btnLoad" title="Open a .yaml/.yml file — or drag one onto the editor">Load file</button>
+    <button id="btnCopy" class="hide-sm" title="Copy editor contents">Copy</button>
+    <button id="btnSample" class="hide-sm">Sample</button>
+    <button id="btnClear" class="hide-sm">Clear</button>
+    <span class="spacer"></span>
+    <div class="nav-dropdown hide-sm">
+      <button id="btnSuite" title="Switch format viewer">Formats ▾</button>
+      <div class="nav-dropdown-content">
+        <a href="https://json.lint.uz" target="_blank" rel="noopener">JSON Viewer ↗</a>
+        <a href="https://xml.lint.uz" target="_blank" rel="noopener">XML Viewer ↗</a>
+        <a href="https://yaml.lint.uz" style="font-weight:600; color:var(--accent);">YAML Viewer ✓</a>
+        <a href="https://csv.lint.uz" target="_blank" rel="noopener" style="opacity:0.6;">CSV Viewer (soon)</a>
+      </div>
+    </div>
+    <button id="btnTheme" title="Toggle light / dark theme" aria-label="Toggle theme">◐</button>
+    <input type="file" id="fileInput" accept=".yaml,.yml,.txt,text/yaml,application/x-yaml" hidden>
+  </header>
+
+  <main class="split">
+    <section class="pane" id="editorPane" aria-label="YAML text">
+      <textarea id="input" spellcheck="false" autocapitalize="off" autocomplete="off"
+        placeholder="Paste YAML here, drop a .yml/.yaml file, or press Sample…"></textarea>
+      <div id="errorBar" role="alert" title="Click to jump to the error">
+        <span id="errorMsg"></span><span class="loc" id="errorLoc"></span>
+      </div>
+    </section>
+
+    <div id="divider" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+
+    <section class="pane" id="treePane" aria-label="Tree view">
+      <div class="treebar">
+        <input id="search" type="search" placeholder="Search keys and values…" aria-label="Search tree">
+        <span id="matchCount"></span>
+        <button id="btnWrap" title="Wrap long values so they fit the pane" aria-pressed="false">Wrap</button>
+        <button id="btnExpand" title="Expand all">＋</button>
+        <button id="btnCollapse" title="Collapse all">－</button>
+      </div>
+      <div id="tree"><div class="empty-hint">The tree view appears here once the editor contains valid YAML.</div></div>
+    </section>
+  </main>
+
+  <footer class="status" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusMsg">Ready</span>
+    <span id="pathBox" title="Click to copy path"></span>
+  </footer>
+
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+'use strict';
+
+/* ---------- element refs ---------- */
+const $ = id => document.getElementById(id);
+const input = $('input'), tree = $('tree'), searchBox = $('search');
+const statusBar = $('statusBar'), statusMsg = $('statusMsg'), pathBox = $('pathBox');
+const errorBar = $('errorBar'), errorMsg = $('errorMsg'), errorLoc = $('errorLoc');
+const matchCount = $('matchCount'), toast = $('toast');
+
+/* ---------- state ---------- */
+let data;
+let hasData = false;
+let errorPos = null;
+let stats = { nodes: 0, depth: 0 };
+let selectedRow = null;
+const nodeInfo = new WeakMap();
+const CHUNK = 100;
+const AUTO_DEPTH = 3;
+const ROW_BUDGET = 4000;
+const STR_TRUNC = 200;
+
+/* ---------- utilities ---------- */
+const IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function pathToString(path) {
+  let s = '$';
+  for (const seg of path) {
+    if (typeof seg === 'number') s += '[' + seg + ']';
+    else if (IDENT_RE.test(seg)) s += '.' + seg;
+    else s += '[' + JSON.stringify(seg) + ']';
+  }
+  return s;
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove('show'), 1600);
+}
+
+function copyText(text, label) {
+  const done = () => showToast(label + ' copied');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { showToast('Copy failed'); }
+  ta.remove();
+}
+
+function highlightInto(el, text, q) {
+  if (!q) { el.appendChild(document.createTextNode(text)); return; }
+  const lower = text.toLowerCase();
+  let i = 0, idx;
+  while ((idx = lower.indexOf(q, i)) !== -1) {
+    if (idx > i) el.appendChild(document.createTextNode(text.slice(i, idx)));
+    const m = document.createElement('mark');
+    m.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(m);
+    i = idx + q.length;
+  }
+  if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
+}
+
+/* ---------- parsing ---------- */
+function tryParseYaml(text) {
+  try {
+    const val = jsyaml.load(text);
+    return { ok: true, value: val };
+  } catch (e) {
+    let line = null, col = null, pos = null;
+    if (e.mark) {
+      line = e.mark.line + 1;
+      col = e.mark.column + 1;
+      pos = e.mark.position;
+    }
+    const message = e.reason || (e.message ? e.message.split('\n')[0] : 'Invalid YAML syntax');
+    return { ok: false, message, pos, line, col };
+  }
+}
+
+function measure(value) {
+  let nodes = 0, depth = 0;
+  (function walk(v, d) {
+    nodes++;
+    if (d > depth) depth = d;
+    if (v && typeof v === 'object') {
+      if (Array.isArray(v)) { for (const x of v) walk(x, d + 1); }
+      else { for (const k in v) walk(v[k], d + 1); }
+    }
+  })(value, 1);
+  return { nodes, depth };
+}
+
+/* ---------- tree rendering ---------- */
+function typeOf(v) {
+  if (v === null) return 'null';
+  if (v instanceof Date) return 'date';
+  if (Array.isArray(v)) return 'array';
+  return typeof v;
+}
+
+function makeRow(key, value, path, q) {
+  const t = typeOf(value);
+  const isContainer = t === 'object' || t === 'array';
+
+  const node = document.createElement('div');
+  node.className = 'node';
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.tabIndex = 0;
+  nodeInfo.set(row, { value, path });
+
+  const caret = document.createElement('span');
+  caret.className = 'caret' + (isContainer && sizeOf(value) > 0 ? '' : ' leaf');
+  row.appendChild(caret);
+
+  const TICON = {
+    object:  ['obj',  '{}'],
+    array:   ['arr',  '[]'],
+    string:  ['str',  'ab'],
+    number:  ['num',  '#'],
+    boolean: ['bool', value ? '✓' : '✕'],
+    null:    ['null', '∅'],
+    date:    ['date', '📅']
+  };
+  const icon = document.createElement('span');
+  icon.className = 'ticon t-' + (TICON[t] ? TICON[t][0] : 'obj');
+  icon.textContent = TICON[t] ? TICON[t][1] : '?';
+  icon.title = t;
+  row.appendChild(icon);
+
+  if (key !== undefined) {
+    const k = document.createElement('span');
+    k.className = 'k' + (typeof key === 'number' ? ' idx' : '');
+    highlightInto(k, typeof key === 'number' ? '[' + key + ']' : String(key), q);
+    row.appendChild(k);
+    const colon = document.createElement('span');
+    colon.className = 'colon';
+    colon.textContent = ':';
+    row.appendChild(colon);
+  }
+
+  if (isContainer) {
+    const n = sizeOf(value);
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = t === 'array' ? (n ? '[…]' : '[]') : (n ? '{…}' : '{}');
+    const cnt = document.createElement('span');
+    cnt.className = 'cnt';
+    cnt.textContent = n === 0 ? '' :
+      t === 'array' ? n + (n === 1 ? ' item' : ' items')
+                    : n + (n === 1 ? ' key' : ' keys');
+    badge.appendChild(cnt);
+    row.appendChild(badge);
+  } else {
+    row.appendChild(makeValueSpan(value, t, q));
+  }
+
+  // Hover actions: copy path / copy YAML / copy JSON
+  const actions = document.createElement('span');
+  actions.className = 'row-actions';
+
+  const bPath = document.createElement('button');
+  bPath.textContent = 'path';
+  bPath.title = 'Copy path';
+  bPath.addEventListener('click', e => { e.stopPropagation(); copyText(pathToString(path), 'Path'); });
+  actions.appendChild(bPath);
+
+  const bYaml = document.createElement('button');
+  bYaml.textContent = 'yaml';
+  bYaml.title = 'Copy as YAML';
+  bYaml.addEventListener('click', e => {
+    e.stopPropagation();
+    try { copyText(jsyaml.dump(value, { indent: 2 }), 'YAML'); } catch (err) { copyText(String(value), 'Value'); }
+  });
+  actions.appendChild(bYaml);
+
+  const bVal = document.createElement('button');
+  bVal.textContent = 'json';
+  bVal.title = 'Copy as JSON';
+  bVal.addEventListener('click', e => { e.stopPropagation(); copyText(JSON.stringify(value, null, 2), 'JSON'); });
+  actions.appendChild(bVal);
+
+  row.appendChild(actions);
+  node.appendChild(row);
+  return node;
+}
+
+function sizeOf(v) {
+  if (!v) return 0;
+  return Array.isArray(v) ? v.length : Object.keys(v).length;
+}
+
+function makeValueSpan(value, t, q) {
+  const v = document.createElement('span');
+  v.className = 'v ' + (t === 'boolean' ? 'bool' : t === 'string' ? 'str' : t === 'date' ? 'date' : t);
+
+  if (t === 'string') {
+    const display = value;
+    if (display.length > STR_TRUNC) {
+      const short = display.slice(0, STR_TRUNC) + '…';
+      highlightInto(v, short, q);
+      const btn = document.createElement('button');
+      btn.className = 'trunc-btn';
+      btn.textContent = '+' + (display.length - STR_TRUNC) + ' chars';
+      btn.title = 'Show full string';
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        v.textContent = '';
+        highlightInto(v, display, q);
+      });
+      v.appendChild(btn);
+    } else {
+      highlightInto(v, display, q);
+    }
+  } else if (t === 'date') {
+    highlightInto(v, value.toISOString(), q);
+  } else {
+    highlightInto(v, String(value), q);
+  }
+  return v;
+}
+
+function renderChildren(node, value, path, q, from) {
+  let box = node.querySelector(':scope > .children');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'children';
+    node.appendChild(box);
+  }
+  const entries = Array.isArray(value)
+    ? value.map((v, i) => [i, v])
+    : Object.keys(value).map(k => [k, value[k]]);
+  const start = from || 0;
+  const end = Math.min(start + CHUNK, entries.length);
+  for (let i = start; i < end; i++) {
+    const [k, v] = entries[i];
+    box.appendChild(makeRow(k, v, path.concat([k]), q));
+  }
+  if (end < entries.length) {
+    const more = document.createElement('button');
+    more.className = 'more-btn';
+    more.textContent = 'Show ' + Math.min(CHUNK, entries.length - end) + ' more (' + (entries.length - end) + ' remaining)';
+    more.addEventListener('click', () => {
+      more.remove();
+      renderChildren(node, value, path, q, end);
+    });
+    box.appendChild(more);
+  }
+  node.dataset.loaded = '1';
+}
+
+function toggleNode(node, forceOpen) {
+  const row = node.querySelector(':scope > .row');
+  const info = nodeInfo.get(row);
+  if (!info) return;
+  const t = typeOf(info.value);
+  if (t !== 'object' && t !== 'array') return;
+  if (sizeOf(info.value) === 0) return;
+  const open = forceOpen !== undefined ? forceOpen : !node.classList.contains('open');
+  if (open && !node.dataset.loaded) renderChildren(node, info.value, info.path, currentQuery());
+  node.classList.toggle('open', open);
+}
+
+function currentQuery() {
+  return searchBox.value.trim().toLowerCase();
+}
+
+function renderTree() {
+  tree.innerHTML = '';
+  tree.classList.remove('stale');
+  selectedRow = null;
+  pathBox.textContent = '';
+  if (!hasData || data === undefined) {
+    tree.innerHTML = '<div class="empty-hint">The tree view appears here once the editor contains valid YAML.</div>';
+    return;
+  }
+  const q = currentQuery();
+  if (q) { renderFilteredTree(q); return; }
+  matchCount.textContent = '';
+  const root = makeRow(undefined, data, []);
+  tree.appendChild(root);
+  autoExpand(root, AUTO_DEPTH);
+}
+
+function autoExpand(node, levels) {
+  if (levels <= 0) return;
+  toggleNode(node, true);
+  const box = node.querySelector(':scope > .children');
+  if (!box) return;
+  for (const child of box.children) {
+    if (child.classList && child.classList.contains('node')) autoExpand(child, levels - 1);
+  }
+}
+
+/* ---------- search / filter ---------- */
+function renderFilteredTree(q) {
+  let matches = 0, rendered = 0, clipped = false;
+
+  function primitiveMatches(v) {
+    const t = typeOf(v);
+    if (t === 'object' || t === 'array') return false;
+    return String(v).toLowerCase().includes(q);
+  }
+
+  function build(key, value, path) {
+    if (rendered > ROW_BUDGET) { clipped = true; return null; }
+    const keyMatch = typeof key === 'string' && key.toLowerCase().includes(q);
+    const t = typeOf(value);
+    if (t === 'object' || t === 'array') {
+      const entries = Array.isArray(value) ? value.map((x, i) => [i, x]) : Object.entries(value || {});
+      const kids = [];
+      for (const [k, v] of entries) {
+        const child = build(k, v, path.concat([k]));
+        if (child) kids.push(child);
+      }
+      if (!keyMatch && kids.length === 0) return null;
+      if (keyMatch) matches++;
+      const node = makeRow(key, value, path, q);
+      rendered++;
+      if (kids.length) {
+        const box = document.createElement('div');
+        box.className = 'children';
+        for (const kid of kids) box.appendChild(kid);
+        node.appendChild(box);
+        node.dataset.loaded = '1';
+        node.classList.add('open');
+      }
+      return node;
+    } else {
+      if (!keyMatch && !primitiveMatches(value)) return null;
+      matches++;
+      rendered++;
+      return makeRow(key, value, path, q);
+    }
+  }
+
+  const root = build(undefined, data, []);
+  if (root) tree.appendChild(root); else tree.innerHTML = '<div class="empty-hint">No matches found.</div>';
+  matchCount.textContent = matches ? matches + (clipped ? '+' : '') + ' match' + (matches === 1 ? '' : 'es') : 'no matches';
+  if (clipped) {
+    const note = document.createElement('div');
+    note.className = 'notice';
+    note.textContent = 'Result set truncated at ' + ROW_BUDGET + ' rows — refine search.';
+    tree.appendChild(note);
+  }
+}
+
+/* ---------- tree events ---------- */
+tree.addEventListener('click', e => {
+  const row = e.target.closest('.row');
+  if (!row || !tree.contains(row)) return;
+  if (e.target.closest('button')) return;
+  if (selectedRow) selectedRow.classList.remove('selected');
+  selectedRow = row;
+  row.classList.add('selected');
+  const info = nodeInfo.get(row);
+  pathBox.textContent = info ? pathToString(info.path) : '';
+  toggleNode(row.parentElement);
+});
+tree.addEventListener('keydown', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); toggleNode(row.parentElement, true); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); toggleNode(row.parentElement, false); }
+});
+pathBox.addEventListener('click', () => {
+  if (pathBox.textContent) copyText(pathBox.textContent, 'Path');
+});
+
+$('btnExpand').addEventListener('click', () => {
+  let budget = ROW_BUDGET;
+  (function expand(el) {
+    for (const node of el.querySelectorAll(':scope > .node')) {
+      if (budget-- <= 0) return;
+      toggleNode(node, true);
+      const box = node.querySelector(':scope > .children');
+      if (box) expand(box);
+    }
+  })(tree);
+  if (budget <= 0) showToast('Expanded first ' + ROW_BUDGET + ' rows');
+});
+$('btnCollapse').addEventListener('click', () => {
+  for (const node of tree.querySelectorAll('.node.open')) node.classList.remove('open');
+  const root = tree.querySelector(':scope > .node');
+  if (root) toggleNode(root, true);
+});
+
+/* wrap toggle */
+const WRAP_KEY = 'yamlviewer-wrap';
+const btnWrap = $('btnWrap');
+function applyWrap(on) {
+  tree.classList.toggle('wrap', on);
+  btnWrap.setAttribute('aria-pressed', String(on));
+}
+let wrapOn = false;
+try { wrapOn = localStorage.getItem(WRAP_KEY) === '1'; } catch (e) {}
+applyWrap(wrapOn);
+btnWrap.addEventListener('click', () => {
+  wrapOn = !wrapOn;
+  applyWrap(wrapOn);
+  try { localStorage.setItem(WRAP_KEY, wrapOn ? '1' : '0'); } catch (e) {}
+});
+
+let searchTimer;
+searchBox.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderTree, 250);
+});
+
+/* ---------- editor / parse loop ---------- */
+let parseTimer;
+input.addEventListener('input', () => {
+  clearTimeout(parseTimer);
+  parseTimer = setTimeout(reparse, 300);
+});
+
+/* Tab key indentation in textarea (2 spaces) */
+input.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    if (e.shiftKey) {
+      // Outdent
+      const lineStart = input.value.lastIndexOf('\n', start - 1) + 1;
+      if (input.value.slice(lineStart, lineStart + 2) === '  ') {
+        input.value = input.value.slice(0, lineStart) + input.value.slice(lineStart + 2);
+        input.selectionStart = Math.max(lineStart, start - 2);
+        input.selectionEnd = Math.max(lineStart, end - 2);
+        reparse();
+      }
+    } else {
+      // Indent 2 spaces
+      input.value = input.value.substring(0, start) + '  ' + input.value.substring(end);
+      input.selectionStart = input.selectionEnd = start + 2;
+      reparse();
+    }
+  }
+});
+
+function reparse() {
+  const text = input.value;
+  if (!text.trim()) {
+    hasData = false; data = undefined; errorPos = null;
+    setStatus('', 'Ready');
+    errorBar.classList.remove('show');
+    renderTree();
+    return;
+  }
+  const t0 = performance.now();
+  const res = tryParseYaml(text);
+  const ms = performance.now() - t0;
+  if (res.ok) {
+    data = res.value; hasData = true; errorPos = null;
+    stats = measure(data);
+    errorBar.classList.remove('show');
+    const size = new Blob([text]).size;
+    setStatus('ok', 'Valid · ' + fmtBytes(size) + ' · ' + stats.nodes.toLocaleString() + ' nodes · depth ' + stats.depth + ' · ' + ms.toFixed(ms < 10 ? 1 : 0) + ' ms');
+    renderTree();
+  } else {
+    errorPos = res.pos;
+    setStatus('err', 'Invalid YAML');
+    errorMsg.textContent = '✕ ' + res.message;
+    errorLoc.textContent = res.line ? ' line ' + res.line + ', column ' + res.col : '';
+    errorBar.classList.add('show');
+    tree.classList.add('stale');
+  }
+}
+
+function setStatus(kind, msg) {
+  statusBar.className = 'status' + (kind ? ' ' + kind : '');
+  statusMsg.textContent = msg;
+}
+
+errorBar.addEventListener('click', () => {
+  if (errorPos === null) return;
+  input.focus();
+  input.setSelectionRange(errorPos, Math.min(errorPos + 1, input.value.length));
+  const before = input.value.slice(0, errorPos);
+  const lines = before.split('\n').length;
+  const lineHeight = parseFloat(getComputedStyle(input).lineHeight) || 19;
+  input.scrollTop = Math.max(0, (lines - 4) * lineHeight);
+});
+
+/* ---------- toolbar actions ---------- */
+$('btnFormat').addEventListener('click', formatYaml);
+function formatYaml() {
+  const res = tryParseYaml(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot format — fix YAML first'); return; }
+  try {
+    input.value = jsyaml.dump(res.value, { indent: 2, lineWidth: -1, noRefs: true });
+    reparse();
+    showToast('Formatted');
+  } catch (err) {
+    showToast('Formatting error: ' + err.message);
+  }
+}
+
+$('btnToJson').addEventListener('click', () => {
+  const res = tryParseYaml(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot convert — fix YAML first'); return; }
+  const jsonStr = JSON.stringify(res.value, null, 2);
+  copyText(jsonStr, 'Converted JSON');
+});
+
+$('btnToYaml').addEventListener('click', () => {
+  try {
+    const jsonVal = JSON.parse(input.value);
+    input.value = jsyaml.dump(jsonVal, { indent: 2, lineWidth: -1, noRefs: true });
+    reparse();
+    showToast('Converted JSON to YAML');
+  } catch (e) {
+    showToast('Editor does not contain valid JSON to convert');
+  }
+});
+
+$('btnCopy').addEventListener('click', () => {
+  if (input.value) copyText(input.value, 'YAML');
+});
+$('btnClear').addEventListener('click', () => {
+  input.value = ''; searchBox.value = '';
+  reparse();
+  input.focus();
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formatYaml(); }
+});
+
+/* file loading */
+$('btnLoad').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+  e.target.value = '';
+});
+function readFile(file) {
+  if (file.size > 50 * 1048576) { showToast('File is over 50 MB — too large for this viewer'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    input.value = reader.result;
+    reparse();
+    showToast('Loaded ' + file.name + ' (' + fmtBytes(file.size) + ')');
+  };
+  reader.readAsText(file);
+}
+['dragover', 'dragenter'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.remove('dragover');
+}));
+document.addEventListener('drop', e => {
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+/* sample */
+$('btnSample').addEventListener('click', () => {
+  input.value = SAMPLE_YAML.trim();
+  reparse();
+});
+
+const SAMPLE_YAML = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-api-service
+  namespace: production
+  labels:
+    app.kubernetes.io/name: web-api
+    app.kubernetes.io/part-of: lint-platform
+    environment: prod
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: web-api
+  template:
+    metadata:
+      labels:
+        app: web-api
+        tier: backend
+    spec:
+      containers:
+        - name: server
+          image: ghcr.io/lint-uz/api:v2.4.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: CACHE_TTL_SECONDS
+              value: "3600"
+            - name: ENABLE_FEATURE_FLAG_V2
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-api-svc
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: web-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080`;
+
+/* ---------- split divider ---------- */
+const divider = $('divider'), editorPane = $('editorPane');
+divider.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  divider.classList.add('dragging');
+  divider.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const rect = document.querySelector('.split').getBoundingClientRect();
+    const w = Math.min(Math.max(ev.clientX - rect.left, 200), rect.width - 260);
+    editorPane.style.width = w + 'px';
+  };
+  const up = () => {
+    divider.classList.remove('dragging');
+    divider.removeEventListener('pointermove', move);
+    divider.removeEventListener('pointerup', up);
+  };
+  divider.addEventListener('pointermove', move);
+  divider.addEventListener('pointerup', up);
+});
+
+/* ---------- mobile tabs ---------- */
+$('tabText').addEventListener('click', () => setView('text'));
+$('tabTree').addEventListener('click', () => setView('tree'));
+function setView(v) {
+  document.body.dataset.view = v;
+  $('tabText').classList.toggle('active', v === 'text');
+  $('tabTree').classList.toggle('active', v === 'tree');
+}
+
+/* ---------- theme ---------- */
+const THEME_KEY = 'yamlviewer-theme';
+function applyTheme(t) {
+  if (t) document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+try { applyTheme(localStorage.getItem(THEME_KEY) || ''); } catch (e) {}
+$('btnTheme').addEventListener('click', () => {
+  const current = document.documentElement.dataset.theme ||
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+});
+
+/* ---------- init ---------- */
+setView(document.body.dataset.view || 'text');
+input.focus();
+})();
+</script>
+</body>
+</html>
