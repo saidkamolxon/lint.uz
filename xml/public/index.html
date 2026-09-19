@@ -1,0 +1,1282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XML Viewer & Formatter · lint.uz</title>
+<meta name="description" content="Fast, beautiful, private client-side XML viewer, formatter, minifier, and XPath explorer.">
+<style>
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --border: #DDE1E8;
+  --text: #24292F;
+  --muted: #6B7280;
+  --faint: #9AA1AC;
+  --accent: #B45D14;
+  --accent-soft: #F4E3D3;
+  --tag: #1F5FA8;
+  --attr-name: #8250DF;
+  --attr-val: #297A3A;
+  --text-val: #24292F;
+  --cdata: #0E7C86;
+  --comment: #8B8F98;
+  --error: #C0392B;
+  --ok: #2E8B57;
+  --match-bg: #F5DFA8;
+  --row-hover: #EEF1F5;
+  --row-selected: #E4ECF6;
+  --scrollbar: #C8CDD6;
+  --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181D;
+    --panel: #1C1F26;
+    --border: #2A2E37;
+    --text: #E8EAF0;
+    --muted: #9AA1AC;
+    --faint: #666D7A;
+    --accent: #E8A15C;
+    --accent-soft: #3A2E20;
+    --tag: #7FB4E8;
+    --attr-name: #C0A0F0;
+    --attr-val: #96C98A;
+    --text-val: #E8EAF0;
+    --cdata: #62C6D0;
+    --comment: #7C828E;
+    --error: #E8756A;
+    --ok: #6BC98F;
+    --match-bg: #6B5620;
+    --row-hover: #232732;
+    --row-selected: #28303E;
+    --scrollbar: #3A3F4A;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F6F7F9; --panel: #FFFFFF; --border: #DDE1E8; --text: #24292F;
+  --muted: #6B7280; --faint: #9AA1AC; --accent: #B45D14; --accent-soft: #F4E3D3;
+  --tag: #1F5FA8; --attr-name: #8250DF; --attr-val: #297A3A; --text-val: #24292F;
+  --cdata: #0E7C86; --comment: #8B8F98; --error: #C0392B; --ok: #2E8B57;
+  --match-bg: #F5DFA8; --row-hover: #EEF1F5; --row-selected: #E4ECF6; --scrollbar: #C8CDD6;
+}
+:root[data-theme="dark"] {
+  --bg: #16181D; --panel: #1C1F26; --border: #2A2E37; --text: #E8EAF0;
+  --muted: #9AA1AC; --faint: #666D7A; --accent: #E8A15C; --accent-soft: #3A2E20;
+  --tag: #7FB4E8; --attr-name: #C0A0F0; --attr-val: #96C98A; --text-val: #E8EAF0;
+  --cdata: #62C6D0; --comment: #7C828E; --error: #E8756A; --ok: #6BC98F;
+  --match-bg: #6B5620; --row-hover: #232732; --row-selected: #28303E; --scrollbar: #3A3F4A;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--ui);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---------- toolbar ---------- */
+.toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex; align-items: baseline; gap: 7px;
+  margin-right: 10px; user-select: none;
+  text-decoration: none; color: inherit;
+}
+.brand .logo {
+  font-family: var(--mono); font-weight: 700; font-size: 15px;
+  color: var(--accent); letter-spacing: -0.5px;
+}
+.brand .name { font-weight: 600; font-size: 14px; }
+.brand .badge-tag {
+  font-size: 10.5px; color: var(--muted); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+}
+
+button {
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .caret { transition: none !important; }
+}
+button:hover { background: var(--row-hover); }
+button:active { background: var(--row-selected); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .row:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+button.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+button.primary:hover { background: var(--accent-soft); }
+.sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.spacer { flex: 1; }
+.tabs { display: none; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
+.tabs button { border: none; padding: 4px 14px; border-radius: 5px; color: var(--muted); }
+.tabs button.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+
+/* Quick switcher dropdown */
+.nav-dropdown { position: relative; display: inline-block; }
+.nav-dropdown-content {
+  display: none; position: absolute; right: 0; top: calc(100% + 4px);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15); min-width: 140px; z-index: 50; padding: 4px 0;
+}
+.nav-dropdown-content a {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; font-size: 12.5px; text-decoration: none; color: var(--text);
+}
+.nav-dropdown-content a:hover { background: var(--row-hover); color: var(--accent); }
+.nav-dropdown:hover .nav-dropdown-content, .nav-dropdown:focus-within .nav-dropdown-content { display: block; }
+
+/* ---------- split ---------- */
+.split { flex: 1; display: flex; min-height: 0; }
+.pane { display: flex; flex-direction: column; min-height: 0; }
+#editorPane { width: 44%; min-width: 220px; background: var(--panel); }
+#divider {
+  width: 5px; cursor: col-resize; flex: none;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+#divider:hover, #divider.dragging { background: var(--accent); border-color: var(--accent); }
+#treePane { flex: 1; min-width: 0; }
+
+#input {
+  flex: 1; width: 100%;
+  border: none; resize: none;
+  background: transparent; color: var(--text);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  padding: 12px 14px;
+  tab-size: 2;
+  white-space: pre;
+}
+#input::placeholder { color: var(--faint); }
+
+#errorBar {
+  display: none;
+  align-items: center; gap: 8px;
+  padding: 7px 12px;
+  font-family: var(--mono); font-size: 12px;
+  color: var(--error);
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+#errorBar.show { display: flex; }
+#errorBar .loc { color: var(--muted); text-decoration: underline; }
+
+/* ---------- tree pane ---------- */
+.treebar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+#search {
+  flex: 1; min-width: 60px;
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+#search::placeholder { color: var(--faint); }
+#matchCount { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.treebar button { padding: 5px 9px; font-size: 12px; }
+
+#tree {
+  flex: 1; overflow: auto;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+  padding: 8px 12px 40vh 8px;
+}
+#tree.stale { opacity: 0.45; }
+.empty-hint { color: var(--faint); font-family: var(--ui); padding: 24px 16px; }
+
+.node { }
+.children { margin-left: 14px; border-left: 1px solid var(--border); padding-left: 8px; display: none; }
+.node.open > .children { display: block; }
+
+.row {
+  display: flex; align-items: baseline;
+  padding: 1px 6px 1px 2px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+  position: relative;
+}
+.row:hover { background: var(--row-hover); }
+.row.selected { background: var(--row-selected); }
+.caret {
+  flex: none; width: 16px; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--faint); cursor: pointer;
+  transition: transform 120ms;
+}
+.caret::before {
+  content: ""; display: block;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.node.open > .row .caret { transform: rotate(90deg); }
+.caret.leaf { visibility: hidden; cursor: default; }
+
+.ticon {
+  flex: none; width: 16px; height: 15px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: center; margin-right: 6px;
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  user-select: none; letter-spacing: -0.5px;
+}
+.ticon.t-elem  { color: var(--tag); background: color-mix(in srgb, var(--tag) 16%, transparent); }
+.ticon.t-attr  { color: var(--attr-name); background: color-mix(in srgb, var(--attr-name) 16%, transparent); }
+.ticon.t-text  { color: var(--attr-val); background: color-mix(in srgb, var(--attr-val) 16%, transparent); }
+.ticon.t-cdata { color: var(--cdata); background: color-mix(in srgb, var(--cdata) 16%, transparent); }
+.ticon.t-comm  { color: var(--comment); background: color-mix(in srgb, var(--comment) 16%, transparent); }
+
+.tag-bracket { color: var(--muted); }
+.tag-name { color: var(--tag); font-weight: 600; }
+.attr-key { color: var(--attr-name); margin-left: 6px; }
+.attr-eq { color: var(--muted); }
+.attr-val { color: var(--attr-val); }
+.text-val { color: var(--text-val); }
+.cdata-val { color: var(--cdata); font-style: italic; }
+.comment-val { color: var(--comment); font-style: italic; }
+.badge { color: var(--muted); }
+.badge .cnt { color: var(--faint); font-size: 11px; margin-left: 6px; font-family: var(--ui); }
+mark { background: var(--match-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+.more-btn {
+  font-family: var(--ui); font-size: 11.5px;
+  color: var(--accent); border: none; padding: 2px 6px; margin: 1px 0 1px 18px;
+}
+.more-btn:hover { background: var(--accent-soft); }
+.trunc-btn {
+  border: none; padding: 0 4px; font-size: 11px; color: var(--accent);
+  font-family: var(--ui);
+}
+
+.row-actions {
+  display: none; gap: 2px;
+  position: absolute; top: 1px; right: 2px;
+  background: inherit; border-radius: 4px; padding: 0 2px 0 6px;
+}
+.row:hover .row-actions, .row.selected .row-actions { display: inline-flex; }
+.row-actions button {
+  border: none; padding: 1px 6px; font-size: 11px;
+  color: var(--muted); border-radius: 4px;
+}
+.row-actions button:hover { color: var(--accent); background: var(--accent-soft); }
+.notice { color: var(--muted); font-family: var(--ui); font-size: 12px; padding: 6px 8px; }
+
+/* wrap mode */
+#tree.wrap .row { white-space: normal; align-items: flex-start; }
+#tree.wrap .text-val, #tree.wrap .cdata-val, #tree.wrap .comment-val {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; min-width: 0;
+}
+#tree.wrap .tag-bracket, #tree.wrap .tag-name, #tree.wrap .attr-key { flex: 0 0 auto; }
+#tree.wrap .caret { align-self: flex-start; margin-top: 5px; }
+#tree.wrap .ticon { align-self: flex-start; margin-top: 2px; }
+.treebar button[aria-pressed="true"] {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* ---------- status bar ---------- */
+.status {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+  min-height: 30px;
+}
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.status.ok .dot { background: var(--ok); }
+.status.err .dot { background: var(--error); }
+.status.err #statusMsg { color: var(--error); }
+#statusMsg { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#pathBox {
+  font-family: var(--mono); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: pointer; color: var(--muted); flex: 1; min-width: 0;
+  text-align: right;
+}
+#pathBox:hover { color: var(--accent); }
+#pathBox:empty { cursor: default; }
+
+/* ---------- toast ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  background: var(--text); color: var(--bg);
+  font-size: 12.5px; padding: 7px 16px; border-radius: 7px;
+  opacity: 0; pointer-events: none; transition: opacity 150ms;
+  z-index: 10;
+}
+#toast.show { opacity: 0.95; }
+
+body.dragover #editorPane { outline: 2px dashed var(--accent); outline-offset: -6px; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 800px) {
+  .tabs { display: inline-flex; }
+  #divider { display: none; }
+  #editorPane { width: 100% !important; }
+  body[data-view="tree"] #editorPane { display: none; }
+  body[data-view="text"] #treePane { display: none; }
+  .toolbar .hide-sm { display: none; }
+}
+</style>
+</head>
+<body data-view="text">
+<div class="app">
+
+  <header class="toolbar">
+    <div class="brand">
+      <span class="logo">&lt;/&gt;</span>
+      <span class="name">XML Viewer</span>
+      <span class="badge-tag">lint.uz</span>
+    </div>
+    <nav class="tabs" aria-label="View">
+      <button id="tabText" class="active">Text</button>
+      <button id="tabTree">Tree</button>
+    </nav>
+    <button id="btnFormat" class="primary" title="Pretty-print with 2-space indent (Ctrl+Enter)">Format</button>
+    <button id="btnMinify" title="Remove inter-tag whitespace">Minify</button>
+    <button id="btnToJson" class="hide-sm" title="Convert XML to formatted JSON">To JSON</button>
+    <span class="sep hide-sm"></span>
+    <button id="btnLoad" title="Open an XML file — or drag one onto the editor">Load file</button>
+    <button id="btnCopy" class="hide-sm" title="Copy editor contents">Copy</button>
+    <button id="btnSample" class="hide-sm">Sample</button>
+    <button id="btnClear" class="hide-sm">Clear</button>
+    <span class="spacer"></span>
+    <div class="nav-dropdown hide-sm">
+      <button id="btnSuite" title="Switch format viewer">Formats ▾</button>
+      <div class="nav-dropdown-content">
+        <a href="https://json.lint.uz" target="_blank" rel="noopener">JSON Viewer ↗</a>
+        <a href="https://xml.lint.uz" style="font-weight:600; color:var(--accent);">XML Viewer ✓</a>
+        <a href="https://yaml.lint.uz" target="_blank" rel="noopener" style="opacity:0.6;">YAML Viewer (soon)</a>
+        <a href="https://csv.lint.uz" target="_blank" rel="noopener" style="opacity:0.6;">CSV Viewer (soon)</a>
+      </div>
+    </div>
+    <button id="btnTheme" title="Toggle light / dark theme" aria-label="Toggle theme">◐</button>
+    <input type="file" id="fileInput" accept=".xml,.xsd,.svg,.rss,.atom,.kml,.gpx,.plist,.wsdl,.xsl,.html,text/xml,application/xml" hidden>
+  </header>
+
+  <main class="split">
+    <section class="pane" id="editorPane" aria-label="XML text">
+      <textarea id="input" spellcheck="false" autocapitalize="off" autocomplete="off"
+        placeholder="Paste XML here, drop an XML/SVG/XSD file, or press Sample…"></textarea>
+      <div id="errorBar" role="alert" title="Click to jump to the error">
+        <span id="errorMsg"></span><span class="loc" id="errorLoc"></span>
+      </div>
+    </section>
+
+    <div id="divider" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+
+    <section class="pane" id="treePane" aria-label="Tree view">
+      <div class="treebar">
+        <input id="search" type="search" placeholder="Search tags, attributes, text…" aria-label="Search tree">
+        <span id="matchCount"></span>
+        <button id="btnWrap" title="Wrap long values so they fit the pane" aria-pressed="false">Wrap</button>
+        <button id="btnExpand" title="Expand all">＋</button>
+        <button id="btnCollapse" title="Collapse all">－</button>
+      </div>
+      <div id="tree"><div class="empty-hint">The tree view appears here once the editor contains valid XML.</div></div>
+    </section>
+  </main>
+
+  <footer class="status" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusMsg">Ready</span>
+    <span id="pathBox" title="Click to copy XPath"></span>
+  </footer>
+
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+'use strict';
+
+/* ---------- element refs ---------- */
+const $ = id => document.getElementById(id);
+const input = $('input'), tree = $('tree'), searchBox = $('search');
+const statusBar = $('statusBar'), statusMsg = $('statusMsg'), pathBox = $('pathBox');
+const errorBar = $('errorBar'), errorMsg = $('errorMsg'), errorLoc = $('errorLoc');
+const matchCount = $('matchCount'), toast = $('toast');
+
+/* ---------- state ---------- */
+let xmlDoc = null;
+let hasData = false;
+let errorPos = null;
+let stats = { elements: 0, attributes: 0, depth: 0 };
+let selectedRow = null;
+const nodeInfo = new WeakMap();
+const CHUNK = 100;
+const AUTO_DEPTH = 3;
+const ROW_BUDGET = 4000;
+const STR_TRUNC = 200;
+
+/* ---------- utilities ---------- */
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove('show'), 1600);
+}
+
+function copyText(text, label) {
+  const done = () => showToast(label + ' copied');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { showToast('Copy failed'); }
+  ta.remove();
+}
+
+function highlightInto(el, text, q) {
+  if (!q) { el.appendChild(document.createTextNode(text)); return; }
+  const lower = text.toLowerCase();
+  let i = 0, idx;
+  while ((idx = lower.indexOf(q, i)) !== -1) {
+    if (idx > i) el.appendChild(document.createTextNode(text.slice(i, idx)));
+    const m = document.createElement('mark');
+    m.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(m);
+    i = idx + q.length;
+  }
+  if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
+}
+
+/* ---------- parsing & XPath derivation ---------- */
+function getXPath(node) {
+  if (!node) return '';
+  if (node.nodeType === Node.DOCUMENT_NODE) return '/';
+  if (node.nodeType === Node.ATTRIBUTE_NODE) {
+    return getXPath(node.ownerElement) + '/@' + node.nodeName;
+  }
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    let index = 1;
+    let sibling = node.previousSibling;
+    while (sibling) {
+      if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === node.nodeName) {
+        index++;
+      }
+      sibling = sibling.previousSibling;
+    }
+    // Check if there are other siblings with the same tag
+    let hasSiblingsWithSameTag = false;
+    sibling = node.nextSibling;
+    while (sibling) {
+      if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === node.nodeName) {
+        hasSiblingsWithSameTag = true; break;
+      }
+      sibling = sibling.nextSibling;
+    }
+    const idxStr = (index > 1 || hasSiblingsWithSameTag) ? '[' + index + ']' : '';
+    const parent = node.parentNode;
+    if (!parent || parent.nodeType === Node.DOCUMENT_NODE) {
+      return '/' + node.nodeName;
+    }
+    return getXPath(parent) + '/' + node.nodeName + idxStr;
+  }
+  if (node.nodeType === Node.TEXT_NODE) {
+    return getXPath(node.parentNode) + '/text()';
+  }
+  if (node.nodeType === Node.COMMENT_NODE) {
+    return getXPath(node.parentNode) + '/comment()';
+  }
+  if (node.nodeType === Node.CDATA_SECTION_NODE) {
+    return getXPath(node.parentNode) + '/cdata()';
+  }
+  return '';
+}
+
+function positionToLineCol(text, pos) {
+  let line = 1, col = 1;
+  for (let i = 0; i < pos && i < text.length; i++) {
+    if (text[i] === '\n') { line++; col = 1; } else col++;
+  }
+  return { line, col };
+}
+
+function lineColToPosition(text, line, col) {
+  let p = 0, l = 1;
+  while (l < line && p < text.length) {
+    if (text[p] === '\n') l++;
+    p++;
+  }
+  return Math.min(p + (col - 1), text.length);
+}
+
+function tryParseXML(text) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'application/xml');
+  const parserError = doc.querySelector('parsererror');
+
+  if (parserError) {
+    const errorText = parserError.textContent || '';
+    let line = null, col = null, pos = null;
+    // Extract line and column from common parser error formats:
+    // "error on line 5 at column 12:" or "line 5, column 12" or "line 5 column 12"
+    let m = errorText.match(/line\s+(\d+)(?:,\s*|\s+)column\s+(\d+)/i) ||
+            errorText.match(/line\s+(\d+)\s+at\s+column\s+(\d+)/i) ||
+            errorText.match(/on line\s+(\d+)\s+at\s+column\s+(\d+)/i);
+    if (m) {
+      line = +m[1];
+      col = +m[2];
+      pos = lineColToPosition(text, line, col);
+    }
+    // Clean up message
+    let clean = errorText.split('\n')[0]
+      .replace(/^error on line \d+ at column \d+:\s*/i, '')
+      .replace(/^XML Parsing Error:\s*/i, '')
+      .replace(/\s*Location:.*$/i, '')
+      .trim();
+    if (!clean) clean = 'Syntax error in XML';
+    return { ok: false, message: clean, pos, line, col };
+  }
+
+  return { ok: true, doc };
+}
+
+function measureXML(doc) {
+  let elements = 0, attributes = 0, depth = 0;
+  function walk(node, d) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      elements++;
+      if (node.attributes) attributes += node.attributes.length;
+      if (d > depth) depth = d;
+      for (const child of node.childNodes) {
+        walk(child, d + 1);
+      }
+    }
+  }
+  if (doc.documentElement) walk(doc.documentElement, 1);
+  return { elements, attributes, depth };
+}
+
+/* ---------- XML Formatter & Minifier ---------- */
+function formatXmlString(xml) {
+  let formatted = '';
+  let pad = 0;
+  const PADDING = '  ';
+
+  // Normalize lines and comments/cdata
+  const reg = /(>)(<)(\/*)/g;
+  xml = xml.replace(reg, '$1\r\n$2$3');
+  const lines = xml.split('\r\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+    if (!line) continue;
+
+    let indent = 0;
+    if (line.match(/^<\/\w/)) {
+      // Closing tag: </element>
+      if (pad > 0) pad -= 1;
+    } else if (line.match(/^<\w[^>]*[^\/]>.*$/) && !line.match(/^<\w[^>]*\/>/)) {
+      // Opening tag that does NOT close on same line
+      if (!line.match(/<([a-zA-Z0-9_\-:]+)(?:\s+[^>]*?)?>.*?<\/\1>/)) {
+        indent = 1;
+      }
+    } else if (line.match(/^<\w[^>]*\/>/)) {
+      // Self-closing: <element />
+      indent = 0;
+    }
+
+    formatted += PADDING.repeat(pad) + line + '\n';
+    pad += indent;
+  }
+  return formatted.trim();
+}
+
+function minifyXmlString(xml) {
+  // Strip spaces between tags, respecting CDATA and comments
+  const cdataList = [];
+  xml = xml.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, match => {
+    cdataList.push(match);
+    return `___CDATA_${cdataList.length - 1}___`;
+  });
+  xml = xml.replace(/>\s+</g, '><').trim();
+  xml = xml.replace(/___CDATA_(\d+)___/g, (_, i) => cdataList[+i]);
+  return xml;
+}
+
+/* XML to JSON converter */
+function xmlToJson(node) {
+  let obj = {};
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    if (node.attributes.length > 0) {
+      obj["@attributes"] = {};
+      for (let j = 0; j < node.attributes.length; j++) {
+        const attribute = node.attributes.item(j);
+        obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
+      }
+    }
+  } else if (node.nodeType === Node.TEXT_NODE) {
+    return node.nodeValue.trim();
+  }
+
+  if (node.hasChildNodes()) {
+    let textOnly = true;
+    for (let i = 0; i < node.childNodes.length; i++) {
+      const item = node.childNodes.item(i);
+      if (item.nodeType === Node.ELEMENT_NODE) {
+        textOnly = false;
+        const nodeName = item.nodeName;
+        if (typeof obj[nodeName] === "undefined") {
+          obj[nodeName] = xmlToJson(item);
+        } else {
+          if (!Array.isArray(obj[nodeName])) {
+            obj[nodeName] = [obj[nodeName]];
+          }
+          obj[nodeName].push(xmlToJson(item));
+        }
+      }
+    }
+    if (textOnly) {
+      const text = node.textContent.trim();
+      if (Object.keys(obj).length === 0) return text;
+      if (text) obj["#text"] = text;
+    }
+  }
+  return obj;
+}
+
+/* ---------- tree rendering ---------- */
+function getDirectTextContent(element) {
+  let text = '';
+  for (const child of element.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) text += child.nodeValue;
+  }
+  return text.trim();
+}
+
+function getChildElements(element) {
+  const elems = [];
+  for (const child of element.childNodes) {
+    if (child.nodeType === Node.ELEMENT_NODE ||
+        child.nodeType === Node.COMMENT_NODE ||
+        child.nodeType === Node.CDATA_SECTION_NODE) {
+      elems.push(child);
+    } else if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim()) {
+      elems.push(child);
+    }
+  }
+  return elems;
+}
+
+function makeElementRow(node, q) {
+  const isElem = node.nodeType === Node.ELEMENT_NODE;
+  const isCdata = node.nodeType === Node.CDATA_SECTION_NODE;
+  const isComment = node.nodeType === Node.COMMENT_NODE;
+  const isText = node.nodeType === Node.TEXT_NODE;
+
+  const rowNode = document.createElement('div');
+  rowNode.className = 'node';
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.tabIndex = 0;
+  const xpath = getXPath(node);
+  nodeInfo.set(row, { domNode: node, xpath });
+
+  const children = isElem ? getChildElements(node) : [];
+  const hasChildren = children.length > 0;
+
+  const caret = document.createElement('span');
+  caret.className = 'caret' + (hasChildren ? '' : ' leaf');
+  row.appendChild(caret);
+
+  const icon = document.createElement('span');
+  icon.className = 'ticon ' + (isElem ? 't-elem' : isCdata ? 't-cdata' : isComment ? 't-comm' : 't-text');
+  icon.textContent = isElem ? '<>' : isCdata ? '<!>' : isComment ? '//' : 'T';
+  icon.title = isElem ? 'Element' : isCdata ? 'CDATA' : isComment ? 'Comment' : 'Text';
+  row.appendChild(icon);
+
+  if (isElem) {
+    const ob = document.createElement('span');
+    ob.className = 'tag-bracket'; ob.textContent = '<';
+    row.appendChild(ob);
+
+    const tagSpan = document.createElement('span');
+    tagSpan.className = 'tag-name';
+    highlightInto(tagSpan, node.nodeName, q);
+    row.appendChild(tagSpan);
+
+    // Attributes
+    if (node.attributes && node.attributes.length > 0) {
+      for (let i = 0; i < node.attributes.length; i++) {
+        const attr = node.attributes[i];
+        const aKey = document.createElement('span');
+        aKey.className = 'attr-key';
+        highlightInto(aKey, attr.name, q);
+        row.appendChild(aKey);
+
+        const aEq = document.createElement('span');
+        aEq.className = 'attr-eq'; aEq.textContent = '="';
+        row.appendChild(aEq);
+
+        const aVal = document.createElement('span');
+        aVal.className = 'attr-val';
+        highlightInto(aVal, attr.value, q);
+        row.appendChild(aVal);
+
+        const aQuote = document.createElement('span');
+        aQuote.className = 'attr-eq'; aQuote.textContent = '"';
+        row.appendChild(aQuote);
+      }
+    }
+
+    const cb = document.createElement('span');
+    cb.className = 'tag-bracket';
+    cb.textContent = hasChildren ? '>' : '/>';
+    row.appendChild(cb);
+
+    // If single direct text child, display preview inline
+    const directText = getDirectTextContent(node);
+    if (!hasChildren && directText) {
+      const tv = document.createElement('span');
+      tv.className = 'text-val';
+      tv.style.marginLeft = '6px';
+      highlightInto(tv, directText.length > STR_TRUNC ? directText.slice(0, STR_TRUNC) + '…' : directText, q);
+      row.appendChild(tv);
+
+      const closeTag = document.createElement('span');
+      closeTag.className = 'tag-bracket';
+      closeTag.textContent = '</' + node.nodeName + '>';
+      row.appendChild(closeTag);
+    } else if (hasChildren) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      const cnt = document.createElement('span');
+      cnt.className = 'cnt';
+      const elemCount = children.filter(c => c.nodeType === Node.ELEMENT_NODE).length;
+      cnt.textContent = children.length === 1 ? '1 child' :
+        (elemCount === children.length ? `${elemCount} elements` : `${children.length} items`);
+      badge.appendChild(cnt);
+      row.appendChild(badge);
+    }
+  } else if (isCdata) {
+    const val = document.createElement('span');
+    val.className = 'cdata-val';
+    const cdataText = node.nodeValue || '';
+    highlightInto(val, '<![CDATA[' + (cdataText.length > STR_TRUNC ? cdataText.slice(0, STR_TRUNC) + '…' : cdataText) + ']]>', q);
+    row.appendChild(val);
+  } else if (isComment) {
+    const val = document.createElement('span');
+    val.className = 'comment-val';
+    const commText = node.nodeValue || '';
+    highlightInto(val, '<!-- ' + (commText.length > STR_TRUNC ? commText.slice(0, STR_TRUNC) + '…' : commText) + ' -->', q);
+    row.appendChild(val);
+  } else if (isText) {
+    const val = document.createElement('span');
+    val.className = 'text-val';
+    const tText = (node.nodeValue || '').trim();
+    highlightInto(val, tText.length > STR_TRUNC ? tText.slice(0, STR_TRUNC) + '…' : tText, q);
+    row.appendChild(val);
+  }
+
+  // Hover actions
+  const actions = document.createElement('span');
+  actions.className = 'row-actions';
+
+  const bPath = document.createElement('button');
+  bPath.textContent = 'xpath';
+  bPath.title = 'Copy XPath';
+  bPath.addEventListener('click', e => { e.stopPropagation(); copyText(xpath, 'XPath'); });
+  actions.appendChild(bPath);
+
+  const bXml = document.createElement('button');
+  bXml.textContent = 'xml';
+  bXml.title = 'Copy XML snippet';
+  bXml.addEventListener('click', e => {
+    e.stopPropagation();
+    const s = new XMLSerializer().serializeToString(node);
+    copyText(formatXmlString(s), 'XML');
+  });
+  actions.appendChild(bXml);
+
+  if (isElem) {
+    const bJson = document.createElement('button');
+    bJson.textContent = 'json';
+    bJson.title = 'Copy element as JSON';
+    bJson.addEventListener('click', e => {
+      e.stopPropagation();
+      const jsonObj = {};
+      jsonObj[node.nodeName] = xmlToJson(node);
+      copyText(JSON.stringify(jsonObj, null, 2), 'JSON');
+    });
+    actions.appendChild(bJson);
+  }
+
+  row.appendChild(actions);
+  rowNode.appendChild(row);
+  return rowNode;
+}
+
+function renderNodeChildren(containerEl, domNode, q, from) {
+  let box = containerEl.querySelector(':scope > .children');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'children';
+    containerEl.appendChild(box);
+  }
+  const children = getChildElements(domNode);
+  const start = from || 0;
+  const end = Math.min(start + CHUNK, children.length);
+
+  for (let i = start; i < end; i++) {
+    box.appendChild(makeElementRow(children[i], q));
+  }
+
+  if (end < children.length) {
+    const more = document.createElement('button');
+    more.className = 'more-btn';
+    more.textContent = 'Show ' + Math.min(CHUNK, children.length - end) + ' more (' + (children.length - end) + ' remaining)';
+    more.addEventListener('click', () => {
+      more.remove();
+      renderNodeChildren(containerEl, domNode, q, end);
+    });
+    box.appendChild(more);
+  }
+  containerEl.dataset.loaded = '1';
+}
+
+function toggleNode(nodeEl, forceOpen) {
+  const row = nodeEl.querySelector(':scope > .row');
+  const info = nodeInfo.get(row);
+  if (!info || !info.domNode) return;
+  const children = getChildElements(info.domNode);
+  if (children.length === 0) return;
+
+  const open = forceOpen !== undefined ? forceOpen : !nodeEl.classList.contains('open');
+  if (open && !nodeEl.dataset.loaded) {
+    renderNodeChildren(nodeEl, info.domNode, currentQuery());
+  }
+  nodeEl.classList.toggle('open', open);
+}
+
+function currentQuery() {
+  return searchBox.value.trim().toLowerCase();
+}
+
+function renderTree() {
+  tree.innerHTML = '';
+  tree.classList.remove('stale');
+  selectedRow = null;
+  pathBox.textContent = '';
+  if (!hasData || !xmlDoc || !xmlDoc.documentElement) {
+    tree.innerHTML = '<div class="empty-hint">The tree view appears here once the editor contains valid XML.</div>';
+    return;
+  }
+  const q = currentQuery();
+  if (q) { renderFilteredTree(q); return; }
+  matchCount.textContent = '';
+
+  const root = makeElementRow(xmlDoc.documentElement, '');
+  tree.appendChild(root);
+  autoExpand(root, AUTO_DEPTH);
+}
+
+function autoExpand(nodeEl, levels) {
+  if (levels <= 0) return;
+  toggleNode(nodeEl, true);
+  const box = nodeEl.querySelector(':scope > .children');
+  if (!box) return;
+  for (const child of box.children) {
+    if (child.classList && child.classList.contains('node')) autoExpand(child, levels - 1);
+  }
+}
+
+/* ---------- search / filter ---------- */
+function renderFilteredTree(q) {
+  let matches = 0, rendered = 0, clipped = false;
+
+  function buildFiltered(domNode) {
+    if (rendered > ROW_BUDGET) { clipped = true; return null; }
+
+    let selfMatch = false;
+    if (domNode.nodeType === Node.ELEMENT_NODE) {
+      if (domNode.nodeName.toLowerCase().includes(q)) selfMatch = true;
+      if (domNode.attributes) {
+        for (let a = 0; a < domNode.attributes.length; a++) {
+          const at = domNode.attributes[a];
+          if (at.name.toLowerCase().includes(q) || at.value.toLowerCase().includes(q)) {
+            selfMatch = true; break;
+          }
+        }
+      }
+    } else {
+      if ((domNode.nodeValue || '').toLowerCase().includes(q)) selfMatch = true;
+    }
+
+    const children = domNode.nodeType === Node.ELEMENT_NODE ? getChildElements(domNode) : [];
+    const kids = [];
+    for (const child of children) {
+      const k = buildFiltered(child);
+      if (k) kids.push(k);
+    }
+
+    if (!selfMatch && kids.length === 0) return null;
+    if (selfMatch) matches++;
+    rendered++;
+
+    const rowNode = makeElementRow(domNode, q);
+    if (kids.length > 0) {
+      const box = document.createElement('div');
+      box.className = 'children';
+      for (const kid of kids) box.appendChild(kid);
+      rowNode.appendChild(box);
+      rowNode.dataset.loaded = '1';
+      rowNode.classList.add('open');
+    }
+    return rowNode;
+  }
+
+  const root = buildFiltered(xmlDoc.documentElement);
+  if (root) tree.appendChild(root); else tree.innerHTML = '<div class="empty-hint">No matches found.</div>';
+  matchCount.textContent = matches ? matches + (clipped ? '+' : '') + ' match' + (matches === 1 ? '' : 'es') : 'no matches';
+  if (clipped) {
+    const note = document.createElement('div');
+    note.className = 'notice';
+    note.textContent = 'Result set truncated at ' + ROW_BUDGET + ' rows — refine the search query.';
+    tree.appendChild(note);
+  }
+}
+
+/* ---------- tree events ---------- */
+tree.addEventListener('click', e => {
+  const row = e.target.closest('.row');
+  if (!row || !tree.contains(row)) return;
+  if (e.target.closest('button')) return;
+  if (selectedRow) selectedRow.classList.remove('selected');
+  selectedRow = row;
+  row.classList.add('selected');
+  const info = nodeInfo.get(row);
+  pathBox.textContent = info ? info.xpath : '';
+  toggleNode(row.parentElement);
+});
+
+tree.addEventListener('keydown', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); toggleNode(row.parentElement, true); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); toggleNode(row.parentElement, false); }
+});
+
+pathBox.addEventListener('click', () => {
+  if (pathBox.textContent) copyText(pathBox.textContent, 'XPath');
+});
+
+$('btnExpand').addEventListener('click', () => {
+  let budget = ROW_BUDGET;
+  (function expand(el) {
+    for (const node of el.querySelectorAll(':scope > .node')) {
+      if (budget-- <= 0) return;
+      toggleNode(node, true);
+      const box = node.querySelector(':scope > .children');
+      if (box) expand(box);
+    }
+  })(tree);
+  if (budget <= 0) showToast('Expanded first ' + ROW_BUDGET + ' rows');
+});
+
+$('btnCollapse').addEventListener('click', () => {
+  for (const node of tree.querySelectorAll('.node.open')) node.classList.remove('open');
+  const root = tree.querySelector(':scope > .node');
+  if (root) toggleNode(root, true);
+});
+
+/* wrap toggle */
+const WRAP_KEY = 'xmlviewer-wrap';
+const btnWrap = $('btnWrap');
+function applyWrap(on) {
+  tree.classList.toggle('wrap', on);
+  btnWrap.setAttribute('aria-pressed', String(on));
+}
+let wrapOn = false;
+try { wrapOn = localStorage.getItem(WRAP_KEY) === '1'; } catch (e) {}
+applyWrap(wrapOn);
+btnWrap.addEventListener('click', () => {
+  wrapOn = !wrapOn;
+  applyWrap(wrapOn);
+  try { localStorage.setItem(WRAP_KEY, wrapOn ? '1' : '0'); } catch (e) {}
+});
+
+let searchTimer;
+searchBox.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderTree, 250);
+});
+
+/* ---------- editor / parse loop ---------- */
+let parseTimer;
+input.addEventListener('input', () => {
+  clearTimeout(parseTimer);
+  parseTimer = setTimeout(reparse, 300);
+});
+
+function reparse() {
+  const text = input.value;
+  if (!text.trim()) {
+    hasData = false; xmlDoc = null; errorPos = null;
+    setStatus('', 'Ready');
+    errorBar.classList.remove('show');
+    renderTree();
+    return;
+  }
+  const t0 = performance.now();
+  const res = tryParseXML(text);
+  const ms = performance.now() - t0;
+
+  if (res.ok) {
+    xmlDoc = res.doc; hasData = true; errorPos = null;
+    stats = measureXML(xmlDoc);
+    errorBar.classList.remove('show');
+    const size = new Blob([text]).size;
+    setStatus('ok', 'Valid · ' + fmtBytes(size) + ' · ' + stats.elements.toLocaleString() + ' elements · ' + stats.attributes.toLocaleString() + ' attributes · depth ' + stats.depth + ' · ' + ms.toFixed(ms < 10 ? 1 : 0) + ' ms');
+    renderTree();
+  } else {
+    errorPos = res.pos;
+    setStatus('err', 'Invalid XML');
+    errorMsg.textContent = '✕ ' + res.message;
+    errorLoc.textContent = res.line ? ' line ' + res.line + ', column ' + res.col : '';
+    errorBar.classList.add('show');
+    tree.classList.add('stale');
+  }
+}
+
+function setStatus(kind, msg) {
+  statusBar.className = 'status' + (kind ? ' ' + kind : '');
+  statusMsg.textContent = msg;
+}
+
+errorBar.addEventListener('click', () => {
+  if (errorPos === null) return;
+  input.focus();
+  input.setSelectionRange(errorPos, Math.min(errorPos + 1, input.value.length));
+  const before = input.value.slice(0, errorPos);
+  const lines = before.split('\n').length;
+  const lineHeight = parseFloat(getComputedStyle(input).lineHeight) || 19;
+  input.scrollTop = Math.max(0, (lines - 4) * lineHeight);
+});
+
+/* ---------- toolbar actions ---------- */
+$('btnFormat').addEventListener('click', formatXml);
+function formatXml() {
+  const res = tryParseXML(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot format — fix XML syntax first'); return; }
+  input.value = formatXmlString(input.value);
+  reparse();
+  showToast('Formatted');
+}
+
+$('btnMinify').addEventListener('click', () => {
+  const res = tryParseXML(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot minify — fix XML syntax first'); return; }
+  input.value = minifyXmlString(input.value);
+  reparse();
+  showToast('Minified');
+});
+
+$('btnToJson').addEventListener('click', () => {
+  const res = tryParseXML(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot convert — fix XML syntax first'); return; }
+  const rootObj = {};
+  rootObj[xmlDoc.documentElement.nodeName] = xmlToJson(xmlDoc.documentElement);
+  copyText(JSON.stringify(rootObj, null, 2), 'Converted JSON');
+});
+
+$('btnCopy').addEventListener('click', () => {
+  if (input.value) copyText(input.value, 'XML');
+});
+
+$('btnClear').addEventListener('click', () => {
+  input.value = ''; searchBox.value = '';
+  reparse();
+  input.focus();
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formatXml(); }
+});
+
+/* file loading & drag and drop */
+$('btnLoad').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+  e.target.value = '';
+});
+function readFile(file) {
+  if (file.size > 50 * 1048576) { showToast('File is over 50 MB — too large for this viewer'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    input.value = reader.result;
+    reparse();
+    showToast('Loaded ' + file.name + ' (' + fmtBytes(file.size) + ')');
+  };
+  reader.readAsText(file);
+}
+['dragover', 'dragenter'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.remove('dragover');
+}));
+document.addEventListener('drop', e => {
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+/* sample */
+$('btnSample').addEventListener('click', () => {
+  input.value = SAMPLE_XML.trim();
+  reparse();
+});
+
+const SAMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<store name="Central Bazaar" currency="USD" updated="2026-09-19T11:00:00Z" xmlns:meta="https://lint.uz/schema/store">
+  <!-- Inventory catalog with items, attributes and CDATA -->
+  <meta:info version="2.4" verified="true"/>
+  <categories>
+    <category id="cat-101" featured="true">
+      <name>Electronics</name>
+      <products>
+        <product id="prod-994" inStock="true" rating="4.9">
+          <title>Acoustic Wireless Headphones</title>
+          <brand>SoundWave</brand>
+          <price discount="0.15">149.99</price>
+          <tags>
+            <tag>audio</tag>
+            <tag>bluetooth</tag>
+            <tag>noise-cancelling</tag>
+          </tags>
+          <description><![CDATA[High fidelity audio with <strong>active noise cancellation</strong> and 40-hour battery life.]]></description>
+          <specs>
+            <spec key="bluetooth">5.3</spec>
+            <spec key="weight">240g</spec>
+            <spec key="battery">800mAh</spec>
+          </specs>
+        </product>
+        <product id="prod-995" inStock="false" rating="4.7">
+          <title>Mechanical Ergonomic Keyboard</title>
+          <brand>KeyCraft</brand>
+          <price>120.00</price>
+          <tags>
+            <tag>hardware</tag>
+            <tag>usb-c</tag>
+          </tags>
+          <description><![CDATA[Gateron Brown switches with custom RGB backlighting and PBT keycaps.]]></description>
+        </product>
+      </products>
+    </category>
+    <category id="cat-102" featured="false">
+      <name>Books &amp; Stationery</name>
+      <products>
+        <product id="prod-810" inStock="true" rating="5.0">
+          <title>The Art of Unix Programming</title>
+          <author>Eric S. Raymond</author>
+          <price>39.95</price>
+          <tags>
+            <tag>programming</tag>
+            <tag>classic</tag>
+          </tags>
+          <description><![CDATA[Philosophy and practice of software design in the Unix tradition.]]></description>
+        </product>
+      </products>
+    </category>
+  </categories>
+  <shipping-zones default="standard">
+    <zone code="UZ" rate="0.00">Uzbekistan (Domestic Free)</zone>
+    <zone code="US" rate="15.00">United States</zone>
+    <zone code="EU" rate="12.50">European Union</zone>
+  </shipping-zones>
+</store>`;
+
+/* ---------- split divider ---------- */
+const divider = $('divider'), editorPane = $('editorPane');
+divider.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  divider.classList.add('dragging');
+  divider.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const rect = document.querySelector('.split').getBoundingClientRect();
+    const w = Math.min(Math.max(ev.clientX - rect.left, 200), rect.width - 260);
+    editorPane.style.width = w + 'px';
+  };
+  const up = () => {
+    divider.classList.remove('dragging');
+    divider.removeEventListener('pointermove', move);
+    divider.removeEventListener('pointerup', up);
+  };
+  divider.addEventListener('pointermove', move);
+  divider.addEventListener('pointerup', up);
+});
+
+/* ---------- mobile tabs ---------- */
+$('tabText').addEventListener('click', () => setView('text'));
+$('tabTree').addEventListener('click', () => setView('tree'));
+function setView(v) {
+  document.body.dataset.view = v;
+  $('tabText').classList.toggle('active', v === 'text');
+  $('tabTree').classList.toggle('active', v === 'tree');
+}
+
+/* ---------- theme ---------- */
+const THEME_KEY = 'xmlviewer-theme';
+function applyTheme(t) {
+  if (t) document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+try { applyTheme(localStorage.getItem(THEME_KEY) || ''); } catch (e) {}
+$('btnTheme').addEventListener('click', () => {
+  const current = document.documentElement.dataset.theme ||
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+});
+
+/* ---------- init ---------- */
+setView(document.body.dataset.view || 'text');
+input.focus();
+})();
+</script>
+</body>
+</html>

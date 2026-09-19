@@ -1,0 +1,13 @@
+{
+  "name": "xmlviewer",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    {
+      "pattern": "xml.lint.uz/*",
+      "zone_name": "lint.uz"
+    }
+  ]
+}

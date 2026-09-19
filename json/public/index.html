@@ -1,0 +1,1020 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON Viewer</title>
+<style>
+:root {
+  --bg: #F6F7F9;
+  --panel: #FFFFFF;
+  --border: #DDE1E8;
+  --text: #24292F;
+  --muted: #6B7280;
+  --faint: #9AA1AC;
+  --accent: #B45D14;
+  --accent-soft: #F4E3D3;
+  --key: #1F5FA8;
+  --str: #297A3A;
+  --num: #8250DF;
+  --bool: #B4530A;
+  --null: #8B8F98;
+  --arr: #0E7C86;
+  --error: #C0392B;
+  --ok: #2E8B57;
+  --match-bg: #F5DFA8;
+  --row-hover: #EEF1F5;
+  --row-selected: #E4ECF6;
+  --scrollbar: #C8CDD6;
+  --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181D;
+    --panel: #1C1F26;
+    --border: #2A2E37;
+    --text: #E8EAF0;
+    --muted: #9AA1AC;
+    --faint: #666D7A;
+    --accent: #E8A15C;
+    --accent-soft: #3A2E20;
+    --key: #7FB4E8;
+    --str: #96C98A;
+    --num: #C0A0F0;
+    --bool: #E8A15C;
+    --null: #7C828E;
+    --arr: #62C6D0;
+    --error: #E8756A;
+    --ok: #6BC98F;
+    --match-bg: #6B5620;
+    --row-hover: #232732;
+    --row-selected: #28303E;
+    --scrollbar: #3A3F4A;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F6F7F9; --panel: #FFFFFF; --border: #DDE1E8; --text: #24292F;
+  --muted: #6B7280; --faint: #9AA1AC; --accent: #B45D14; --accent-soft: #F4E3D3;
+  --key: #1F5FA8; --str: #297A3A; --num: #8250DF; --bool: #B4530A; --null: #8B8F98; --arr: #0E7C86;
+  --error: #C0392B; --ok: #2E8B57; --match-bg: #F5DFA8;
+  --row-hover: #EEF1F5; --row-selected: #E4ECF6; --scrollbar: #C8CDD6;
+}
+:root[data-theme="dark"] {
+  --bg: #16181D; --panel: #1C1F26; --border: #2A2E37; --text: #E8EAF0;
+  --muted: #9AA1AC; --faint: #666D7A; --accent: #E8A15C; --accent-soft: #3A2E20;
+  --key: #7FB4E8; --str: #96C98A; --num: #C0A0F0; --bool: #E8A15C; --null: #7C828E; --arr: #62C6D0;
+  --error: #E8756A; --ok: #6BC98F; --match-bg: #6B5620;
+  --row-hover: #232732; --row-selected: #28303E; --scrollbar: #3A3F4A;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--ui);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---------- toolbar ---------- */
+.toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex; align-items: baseline; gap: 7px;
+  margin-right: 10px; user-select: none;
+}
+.brand .logo {
+  font-family: var(--mono); font-weight: 700; font-size: 15px;
+  color: var(--accent); letter-spacing: -0.5px;
+}
+.brand .name { font-weight: 600; font-size: 14px; }
+button {
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .caret { transition: none !important; }
+}
+button:hover { background: var(--row-hover); }
+button:active { background: var(--row-selected); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .row:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+button.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+button.primary:hover { background: var(--accent-soft); }
+.sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.spacer { flex: 1; }
+.tabs { display: none; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
+.tabs button { border: none; padding: 4px 14px; border-radius: 5px; color: var(--muted); }
+.tabs button.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+
+/* ---------- split ---------- */
+.split { flex: 1; display: flex; min-height: 0; }
+.pane { display: flex; flex-direction: column; min-height: 0; }
+#editorPane { width: 44%; min-width: 220px; background: var(--panel); }
+#divider {
+  width: 5px; cursor: col-resize; flex: none;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+#divider:hover, #divider.dragging { background: var(--accent); border-color: var(--accent); }
+#treePane { flex: 1; min-width: 0; }
+
+#input {
+  flex: 1; width: 100%;
+  border: none; resize: none;
+  background: transparent; color: var(--text);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  padding: 12px 14px;
+  tab-size: 2;
+  white-space: pre;
+}
+#input::placeholder { color: var(--faint); }
+
+#errorBar {
+  display: none;
+  align-items: center; gap: 8px;
+  padding: 7px 12px;
+  font-family: var(--mono); font-size: 12px;
+  color: var(--error);
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+#errorBar.show { display: flex; }
+#errorBar .loc { color: var(--muted); text-decoration: underline; }
+
+/* ---------- tree pane ---------- */
+.treebar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+#search {
+  flex: 1; min-width: 60px;
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+#search::placeholder { color: var(--faint); }
+#matchCount { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.treebar button { padding: 5px 9px; font-size: 12px; }
+
+#tree {
+  flex: 1; overflow: auto;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+  padding: 8px 12px 40vh 8px;
+}
+#tree.stale { opacity: 0.45; }
+.empty-hint { color: var(--faint); font-family: var(--ui); padding: 24px 16px; }
+
+.node { }
+.children { margin-left: 14px; border-left: 1px solid var(--border); padding-left: 8px; display: none; }
+.node.open > .children { display: block; }
+
+.row {
+  display: flex; align-items: baseline;
+  padding: 1px 6px 1px 2px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+  position: relative;
+}
+.row:hover { background: var(--row-hover); }
+.row.selected { background: var(--row-selected); }
+.caret {
+  flex: none; width: 16px; align-self: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--faint); cursor: pointer;
+  transition: transform 120ms;
+}
+.caret::before {
+  content: ""; display: block;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.node.open > .row .caret { transform: rotate(90deg); }
+.caret.leaf { visibility: hidden; cursor: default; }
+.ticon {
+  flex: none; width: 16px; height: 15px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: center; margin-right: 6px;
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  user-select: none; letter-spacing: -0.5px;
+}
+.ticon.t-obj  { color: var(--key);  background: color-mix(in srgb, var(--key) 16%, transparent); }
+.ticon.t-arr  { color: var(--arr);  background: color-mix(in srgb, var(--arr) 16%, transparent); }
+.ticon.t-str  { color: var(--str);  background: color-mix(in srgb, var(--str) 16%, transparent); }
+.ticon.t-num  { color: var(--num);  background: color-mix(in srgb, var(--num) 16%, transparent); }
+.ticon.t-bool { color: var(--bool); background: color-mix(in srgb, var(--bool) 16%, transparent); }
+.ticon.t-null { color: var(--null); background: color-mix(in srgb, var(--null) 16%, transparent); }
+.k { color: var(--key); }
+.k.idx { color: var(--faint); }
+.colon { color: var(--muted); margin-right: 6px; }
+.v.str { color: var(--str); }
+.v.num { color: var(--num); }
+.v.bool { color: var(--bool); font-weight: 600; }
+.v.null { color: var(--null); font-style: italic; }
+.badge { color: var(--muted); }
+.badge .cnt { color: var(--faint); font-size: 11px; margin-left: 6px; font-family: var(--ui); }
+mark { background: var(--match-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
+.more-btn {
+  font-family: var(--ui); font-size: 11.5px;
+  color: var(--accent); border: none; padding: 2px 6px; margin: 1px 0 1px 18px;
+}
+.more-btn:hover { background: var(--accent-soft); }
+.trunc-btn {
+  border: none; padding: 0 4px; font-size: 11px; color: var(--accent);
+  font-family: var(--ui);
+}
+/* floats over the row so appearing on hover never reflows wrapped text */
+.row-actions {
+  display: none; gap: 2px;
+  position: absolute; top: 1px; right: 2px;
+  background: inherit; border-radius: 4px; padding: 0 2px 0 6px;
+}
+.row:hover .row-actions, .row.selected .row-actions { display: inline-flex; }
+.row-actions button {
+  border: none; padding: 1px 6px; font-size: 11px;
+  color: var(--muted); border-radius: 4px;
+}
+.row-actions button:hover { color: var(--accent); background: var(--accent-soft); }
+.notice { color: var(--muted); font-family: var(--ui); font-size: 12px; padding: 6px 8px; }
+
+/* wrap mode: long values break instead of scrolling sideways */
+#tree.wrap .row { white-space: normal; align-items: flex-start; }
+#tree.wrap .v {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+  min-width: 0;
+}
+/* keys keep their natural width — never squeezed into vertical letters */
+#tree.wrap .k, #tree.wrap .colon, #tree.wrap .badge { flex: 0 0 auto; }
+#tree.wrap .k { max-width: 100%; overflow-wrap: anywhere; }
+/* caret and type icon stay aligned with the first line of a tall row */
+#tree.wrap .caret { align-self: flex-start; margin-top: 5px; }
+#tree.wrap .ticon { align-self: flex-start; margin-top: 2px; }
+.treebar button[aria-pressed="true"] {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* ---------- status bar ---------- */
+.status {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+  min-height: 30px;
+}
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.status.ok .dot { background: var(--ok); }
+.status.err .dot { background: var(--error); }
+.status.err #statusMsg { color: var(--error); }
+#statusMsg { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#pathBox {
+  font-family: var(--mono); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: pointer; color: var(--muted); flex: 1; min-width: 0;
+  text-align: right;
+}
+#pathBox:hover { color: var(--accent); }
+#pathBox:empty { cursor: default; }
+
+/* ---------- toast ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+  background: var(--text); color: var(--bg);
+  font-size: 12.5px; padding: 7px 16px; border-radius: 7px;
+  opacity: 0; pointer-events: none; transition: opacity 150ms;
+  z-index: 10;
+}
+#toast.show { opacity: 0.95; }
+
+body.dragover #editorPane { outline: 2px dashed var(--accent); outline-offset: -6px; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 800px) {
+  .tabs { display: inline-flex; }
+  #divider { display: none; }
+  #editorPane { width: 100% !important; }
+  body[data-view="tree"] #editorPane { display: none; }
+  body[data-view="text"] #treePane { display: none; }
+  .toolbar .hide-sm { display: none; }
+}
+</style>
+</head>
+<body data-view="text">
+<div class="app">
+
+  <header class="toolbar">
+    <div class="brand"><span class="logo">{;}</span><span class="name">JSON Viewer</span></div>
+    <nav class="tabs" aria-label="View">
+      <button id="tabText" class="active">Text</button>
+      <button id="tabTree">Tree</button>
+    </nav>
+    <button id="btnFormat" class="primary" title="Pretty-print with 2-space indent (Ctrl+Enter)">Format</button>
+    <button id="btnMinify" title="Remove all whitespace">Minify</button>
+    <span class="sep hide-sm"></span>
+    <button id="btnLoad" title="Open a .json file — or drag one onto the editor">Load file</button>
+    <button id="btnCopy" class="hide-sm" title="Copy editor contents">Copy</button>
+    <button id="btnSample" class="hide-sm">Sample</button>
+    <button id="btnClear" class="hide-sm">Clear</button>
+    <span class="spacer"></span>
+    <button id="btnTheme" title="Toggle light / dark theme" aria-label="Toggle theme">◐</button>
+    <input type="file" id="fileInput" accept=".json,.txt,application/json" hidden>
+  </header>
+
+  <main class="split">
+    <section class="pane" id="editorPane" aria-label="JSON text">
+      <textarea id="input" spellcheck="false" autocapitalize="off" autocomplete="off"
+        placeholder="Paste JSON here, drop a file, or press Sample…"></textarea>
+      <div id="errorBar" role="alert" title="Click to jump to the error">
+        <span id="errorMsg"></span><span class="loc" id="errorLoc"></span>
+      </div>
+    </section>
+
+    <div id="divider" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+
+    <section class="pane" id="treePane" aria-label="Tree view">
+      <div class="treebar">
+        <input id="search" type="search" placeholder="Search keys and values…" aria-label="Search tree">
+        <span id="matchCount"></span>
+        <button id="btnWrap" title="Wrap long values so they fit the pane" aria-pressed="false">Wrap</button>
+        <button id="btnExpand" title="Expand all">＋</button>
+        <button id="btnCollapse" title="Collapse all">－</button>
+      </div>
+      <div id="tree"><div class="empty-hint">The tree view appears here once the editor contains valid JSON.</div></div>
+    </section>
+  </main>
+
+  <footer class="status" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusMsg">Ready</span>
+    <span id="pathBox" title="Click to copy path"></span>
+  </footer>
+
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+'use strict';
+
+/* ---------- element refs ---------- */
+const $ = id => document.getElementById(id);
+const input = $('input'), tree = $('tree'), searchBox = $('search');
+const statusBar = $('statusBar'), statusMsg = $('statusMsg'), pathBox = $('pathBox');
+const errorBar = $('errorBar'), errorMsg = $('errorMsg'), errorLoc = $('errorLoc');
+const matchCount = $('matchCount'), toast = $('toast');
+
+/* ---------- state ---------- */
+let data;                     // last successfully parsed value
+let hasData = false;
+let errorPos = null;          // caret position of last parse error
+let stats = { nodes: 0, depth: 0 };
+let selectedRow = null;
+const nodeInfo = new WeakMap();   // row element -> { value, path }
+const CHUNK = 100;                // array/object children per render chunk
+const AUTO_DEPTH = 2;             // levels expanded by default
+const ROW_BUDGET = 4000;          // max rows rendered by expand-all / search
+const STR_TRUNC = 200;            // chars before a string is truncated
+
+/* ---------- utilities ---------- */
+const IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function pathToString(path) {
+  let s = '$';
+  for (const seg of path) {
+    if (typeof seg === 'number') s += '[' + seg + ']';
+    else if (IDENT_RE.test(seg)) s += '.' + seg;
+    else s += '[' + JSON.stringify(seg) + ']';
+  }
+  return s;
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove('show'), 1600);
+}
+
+function copyText(text, label) {
+  const done = () => showToast(label + ' copied');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { showToast('Copy failed'); }
+  ta.remove();
+}
+
+/* Append text to el, wrapping case-insensitive occurrences of q in <mark>. */
+function highlightInto(el, text, q) {
+  if (!q) { el.appendChild(document.createTextNode(text)); return; }
+  const lower = text.toLowerCase();
+  let i = 0, idx;
+  while ((idx = lower.indexOf(q, i)) !== -1) {
+    if (idx > i) el.appendChild(document.createTextNode(text.slice(i, idx)));
+    const m = document.createElement('mark');
+    m.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(m);
+    i = idx + q.length;
+  }
+  if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
+}
+
+/* ---------- parsing ---------- */
+function positionToLineCol(text, pos) {
+  let line = 1, col = 1;
+  for (let i = 0; i < pos && i < text.length; i++) {
+    if (text[i] === '\n') { line++; col = 1; } else col++;
+  }
+  return { line, col };
+}
+
+function tryParse(text) {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (e) {
+    const msg = String(e.message || e);
+    let pos = null, line = null, col = null;
+    let m = msg.match(/position (\d+)/i);
+    if (m) pos = +m[1];
+    m = msg.match(/line (\d+) column (\d+)/i);
+    if (m) { line = +m[1]; col = +m[2]; }
+    if (pos !== null && line === null) ({ line, col } = positionToLineCol(text, pos));
+    if (pos === null && line !== null) {
+      // Firefox gives line/col but no offset — derive it
+      let p = 0, l = 1;
+      while (l < line && p < text.length) { if (text[p] === '\n') l++; p++; }
+      pos = p + col - 1;
+    }
+    // Trim noisy suffixes like "in JSON at position 10 (line 2 column 3)"
+    const clean = msg.replace(/\s*(?:in JSON)?\s*at position.*$/i, '')
+                     .replace(/\s*at line \d+ column \d+.*$/i, '');
+    return { ok: false, message: clean, pos, line, col };
+  }
+}
+
+function measure(value) {
+  let nodes = 0, depth = 0;
+  (function walk(v, d) {
+    nodes++;
+    if (d > depth) depth = d;
+    if (v && typeof v === 'object') {
+      if (Array.isArray(v)) { for (const x of v) walk(x, d + 1); }
+      else { for (const k in v) walk(v[k], d + 1); }
+    }
+  })(value, 1);
+  return { nodes, depth };
+}
+
+/* ---------- tree rendering ---------- */
+function typeOf(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'array';
+  return typeof v; // object | string | number | boolean
+}
+
+function makeRow(key, value, path, q) {
+  const t = typeOf(value);
+  const isContainer = t === 'object' || t === 'array';
+
+  const node = document.createElement('div');
+  node.className = 'node';
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.tabIndex = 0;
+  nodeInfo.set(row, { value, path });
+
+  const caret = document.createElement('span');
+  caret.className = 'caret' + (isContainer && sizeOf(value) > 0 ? '' : ' leaf');
+  row.appendChild(caret);
+
+  const TICON = {
+    object:  ['obj',  '{}'],
+    array:   ['arr',  '[]'],
+    string:  ['str',  'ab'],
+    number:  ['num',  '#'],
+    boolean: ['bool', value ? '✓' : '✕'],
+    null:    ['null', '∅']
+  };
+  const icon = document.createElement('span');
+  icon.className = 'ticon t-' + TICON[t][0];
+  icon.textContent = TICON[t][1];
+  icon.title = t;
+  row.appendChild(icon);
+
+  if (key !== undefined) {
+    const k = document.createElement('span');
+    k.className = 'k' + (typeof key === 'number' ? ' idx' : '');
+    highlightInto(k, typeof key === 'number' ? '[' + key + ']' : JSON.stringify(key), q);
+    row.appendChild(k);
+    const colon = document.createElement('span');
+    colon.className = 'colon';
+    colon.textContent = ':';
+    row.appendChild(colon);
+  }
+
+  if (isContainer) {
+    const n = sizeOf(value);
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = t === 'array' ? (n ? '[…]' : '[]') : (n ? '{…}' : '{}');
+    const cnt = document.createElement('span');
+    cnt.className = 'cnt';
+    cnt.textContent = n === 0 ? '' :
+      t === 'array' ? n + (n === 1 ? ' item' : ' items')
+                    : n + (n === 1 ? ' key' : ' keys');
+    badge.appendChild(cnt);
+    row.appendChild(badge);
+  } else {
+    row.appendChild(makeValueSpan(value, t, q));
+  }
+
+  // hover actions: copy path / copy value
+  const actions = document.createElement('span');
+  actions.className = 'row-actions';
+  const bPath = document.createElement('button');
+  bPath.textContent = 'path';
+  bPath.title = 'Copy path';
+  bPath.addEventListener('click', e => { e.stopPropagation(); copyText(pathToString(path), 'Path'); });
+  const bVal = document.createElement('button');
+  bVal.textContent = 'copy';
+  bVal.title = 'Copy value as JSON';
+  bVal.addEventListener('click', e => { e.stopPropagation(); copyText(JSON.stringify(value, null, 2), 'Value'); });
+  actions.appendChild(bPath);
+  actions.appendChild(bVal);
+  row.appendChild(actions);
+
+  node.appendChild(row);
+  return node;
+}
+
+function sizeOf(v) {
+  return Array.isArray(v) ? v.length : Object.keys(v).length;
+}
+
+function makeValueSpan(value, t, q) {
+  const v = document.createElement('span');
+  v.className = 'v ' + (t === 'boolean' ? 'bool' : t === 'string' ? 'str' : t);
+  if (t === 'string') {
+    const display = JSON.stringify(value);
+    if (display.length > STR_TRUNC) {
+      const short = display.slice(0, STR_TRUNC) + '…"';
+      highlightInto(v, short, q);
+      const btn = document.createElement('button');
+      btn.className = 'trunc-btn';
+      btn.textContent = '+' + (display.length - STR_TRUNC) + ' chars';
+      btn.title = 'Show full string';
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        v.textContent = '';
+        highlightInto(v, display, q);
+      });
+      v.appendChild(btn);
+    } else {
+      highlightInto(v, display, q);
+    }
+  } else {
+    highlightInto(v, String(value), q);
+  }
+  return v;
+}
+
+/* Render the children of a container into node.children, chunked. */
+function renderChildren(node, value, path, q, from) {
+  let box = node.querySelector(':scope > .children');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'children';
+    node.appendChild(box);
+  }
+  const entries = Array.isArray(value)
+    ? value.map((v, i) => [i, v])
+    : Object.keys(value).map(k => [k, value[k]]);
+  const start = from || 0;
+  const end = Math.min(start + CHUNK, entries.length);
+  for (let i = start; i < end; i++) {
+    const [k, v] = entries[i];
+    box.appendChild(makeRow(k, v, path.concat([k]), q));
+  }
+  if (end < entries.length) {
+    const more = document.createElement('button');
+    more.className = 'more-btn';
+    more.textContent = 'Show ' + Math.min(CHUNK, entries.length - end) + ' more (' + (entries.length - end) + ' remaining)';
+    more.addEventListener('click', () => {
+      more.remove();
+      renderChildren(node, value, path, q, end);
+    });
+    box.appendChild(more);
+  }
+  node.dataset.loaded = '1';
+}
+
+function toggleNode(node, forceOpen) {
+  const row = node.querySelector(':scope > .row');
+  const info = nodeInfo.get(row);
+  if (!info) return;
+  const t = typeOf(info.value);
+  if (t !== 'object' && t !== 'array') return;
+  if (sizeOf(info.value) === 0) return;
+  const open = forceOpen !== undefined ? forceOpen : !node.classList.contains('open');
+  if (open && !node.dataset.loaded) renderChildren(node, info.value, info.path, currentQuery());
+  node.classList.toggle('open', open);
+}
+
+function currentQuery() {
+  return searchBox.value.trim().toLowerCase();
+}
+
+function renderTree() {
+  tree.innerHTML = '';
+  tree.classList.remove('stale');
+  selectedRow = null;
+  pathBox.textContent = '';
+  if (!hasData) {
+    tree.innerHTML = '<div class="empty-hint">The tree view appears here once the editor contains valid JSON.</div>';
+    return;
+  }
+  const q = currentQuery();
+  if (q) { renderFilteredTree(q); return; }
+  matchCount.textContent = '';
+  const root = makeRow(undefined, data, []);
+  tree.appendChild(root);
+  autoExpand(root, AUTO_DEPTH);
+}
+
+function autoExpand(node, levels) {
+  if (levels <= 0) return;
+  toggleNode(node, true);
+  const box = node.querySelector(':scope > .children');
+  if (!box) return;
+  for (const child of box.children) {
+    if (child.classList && child.classList.contains('node')) autoExpand(child, levels - 1);
+  }
+}
+
+/* ---------- search / filter ---------- */
+function renderFilteredTree(q) {
+  let matches = 0, rendered = 0, clipped = false;
+
+  function primitiveMatches(v) {
+    const t = typeOf(v);
+    if (t === 'object' || t === 'array') return false;
+    return String(t === 'string' ? v : v).toLowerCase().includes(q);
+  }
+
+  function build(key, value, path) {
+    if (rendered > ROW_BUDGET) { clipped = true; return null; }
+    const keyMatch = typeof key === 'string' && key.toLowerCase().includes(q);
+    const t = typeOf(value);
+    if (t === 'object' || t === 'array') {
+      const entries = Array.isArray(value) ? value.map((x, i) => [i, x]) : Object.entries(value);
+      const kids = [];
+      for (const [k, v] of entries) {
+        const child = build(k, v, path.concat([k]));
+        if (child) kids.push(child);
+      }
+      if (!keyMatch && kids.length === 0) return null;
+      if (keyMatch) matches++;
+      const node = makeRow(key, value, path, q);
+      rendered++;
+      if (kids.length) {
+        const box = document.createElement('div');
+        box.className = 'children';
+        for (const kid of kids) box.appendChild(kid);
+        node.appendChild(box);
+        node.dataset.loaded = '1';
+        node.classList.add('open');
+      }
+      return node;
+    } else {
+      if (!keyMatch && !primitiveMatches(value)) return null;
+      matches++;
+      rendered++;
+      return makeRow(key, value, path, q);
+    }
+  }
+
+  const root = build(undefined, data, []);
+  if (root) tree.appendChild(root); else tree.innerHTML = '<div class="empty-hint">No matches.</div>';
+  matchCount.textContent = matches ? matches + (clipped ? '+' : '') + ' match' + (matches === 1 ? '' : 'es') : 'no matches';
+  if (clipped) {
+    const note = document.createElement('div');
+    note.className = 'notice';
+    note.textContent = 'Result set truncated at ' + ROW_BUDGET + ' rows — refine the search to see everything.';
+    tree.appendChild(note);
+  }
+}
+
+/* ---------- tree interaction (delegated) ---------- */
+tree.addEventListener('click', e => {
+  const row = e.target.closest('.row');
+  if (!row || !tree.contains(row)) return;
+  if (e.target.closest('button')) return;
+  if (selectedRow) selectedRow.classList.remove('selected');
+  selectedRow = row;
+  row.classList.add('selected');
+  const info = nodeInfo.get(row);
+  pathBox.textContent = info ? pathToString(info.path) : '';
+  toggleNode(row.parentElement);
+});
+tree.addEventListener('keydown', e => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); toggleNode(row.parentElement, true); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); toggleNode(row.parentElement, false); }
+});
+pathBox.addEventListener('click', () => {
+  if (pathBox.textContent) copyText(pathBox.textContent, 'Path');
+});
+
+$('btnExpand').addEventListener('click', () => {
+  let budget = ROW_BUDGET;
+  (function expand(el) {
+    for (const node of el.querySelectorAll(':scope > .node')) {
+      if (budget-- <= 0) return;
+      toggleNode(node, true);
+      const box = node.querySelector(':scope > .children');
+      if (box) expand(box);
+    }
+  })(tree);
+  if (budget <= 0) showToast('Expanded the first ' + ROW_BUDGET + ' rows');
+});
+$('btnCollapse').addEventListener('click', () => {
+  for (const node of tree.querySelectorAll('.node.open')) node.classList.remove('open');
+  const root = tree.querySelector(':scope > .node');
+  if (root) toggleNode(root, true);
+});
+
+/* wrap toggle */
+const WRAP_KEY = 'jsonviewer-wrap';
+const btnWrap = $('btnWrap');
+function applyWrap(on) {
+  tree.classList.toggle('wrap', on);
+  btnWrap.setAttribute('aria-pressed', String(on));
+}
+let wrapOn = false;
+try { wrapOn = localStorage.getItem(WRAP_KEY) === '1'; } catch (e) {}
+applyWrap(wrapOn);
+btnWrap.addEventListener('click', () => {
+  wrapOn = !wrapOn;
+  applyWrap(wrapOn);
+  try { localStorage.setItem(WRAP_KEY, wrapOn ? '1' : '0'); } catch (e) {}
+});
+
+let searchTimer;
+searchBox.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderTree, 250);
+});
+
+/* ---------- editor / parse loop ---------- */
+let parseTimer;
+input.addEventListener('input', () => {
+  clearTimeout(parseTimer);
+  parseTimer = setTimeout(reparse, 300);
+});
+
+function reparse() {
+  const text = input.value;
+  if (!text.trim()) {
+    hasData = false; data = undefined; errorPos = null;
+    setStatus('', 'Ready');
+    errorBar.classList.remove('show');
+    renderTree();
+    return;
+  }
+  const t0 = performance.now();
+  const res = tryParse(text);
+  const ms = performance.now() - t0;
+  if (res.ok) {
+    data = res.value; hasData = true; errorPos = null;
+    stats = measure(data);
+    errorBar.classList.remove('show');
+    const size = new Blob([text]).size;
+    setStatus('ok', 'Valid · ' + fmtBytes(size) + ' · ' + stats.nodes.toLocaleString() + ' nodes · depth ' + stats.depth + ' · ' + ms.toFixed(ms < 10 ? 1 : 0) + ' ms');
+    renderTree();
+  } else {
+    errorPos = res.pos;
+    setStatus('err', 'Invalid JSON');
+    errorMsg.textContent = '✕ ' + res.message;
+    errorLoc.textContent = res.line ? ' line ' + res.line + ', column ' + res.col : '';
+    errorBar.classList.add('show');
+    tree.classList.add('stale'); // keep last good tree, dimmed
+  }
+}
+
+function setStatus(kind, msg) {
+  statusBar.className = 'status' + (kind ? ' ' + kind : '');
+  statusMsg.textContent = msg;
+}
+
+errorBar.addEventListener('click', () => {
+  if (errorPos === null) return;
+  input.focus();
+  input.setSelectionRange(errorPos, Math.min(errorPos + 1, input.value.length));
+  // scroll the selection into view: proportional approximation
+  const before = input.value.slice(0, errorPos);
+  const lines = before.split('\n').length;
+  const lineHeight = parseFloat(getComputedStyle(input).lineHeight) || 19;
+  input.scrollTop = Math.max(0, (lines - 4) * lineHeight);
+});
+
+/* ---------- toolbar actions ---------- */
+$('btnFormat').addEventListener('click', formatJson);
+function formatJson() {
+  const res = tryParse(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot format — fix the JSON first'); return; }
+  input.value = JSON.stringify(res.value, null, 2);
+  reparse();
+}
+$('btnMinify').addEventListener('click', () => {
+  const res = tryParse(input.value);
+  if (!res.ok) { reparse(); showToast('Cannot minify — fix the JSON first'); return; }
+  input.value = JSON.stringify(res.value);
+  reparse();
+  showToast('Minified');
+});
+$('btnCopy').addEventListener('click', () => {
+  if (input.value) copyText(input.value, 'Text');
+});
+$('btnClear').addEventListener('click', () => {
+  input.value = ''; searchBox.value = '';
+  reparse();
+  input.focus();
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); formatJson(); }
+});
+
+/* file loading */
+$('btnLoad').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+  e.target.value = '';
+});
+function readFile(file) {
+  if (file.size > 50 * 1048576) { showToast('File is over 50 MB — too large for this viewer'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    input.value = reader.result;
+    reparse();
+    showToast('Loaded ' + file.name + ' (' + fmtBytes(file.size) + ')');
+  };
+  reader.readAsText(file);
+}
+['dragover', 'dragenter'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.remove('dragover');
+}));
+document.addEventListener('drop', e => {
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+/* sample */
+$('btnSample').addEventListener('click', () => {
+  input.value = JSON.stringify(SAMPLE, null, 2);
+  reparse();
+});
+const SAMPLE = {
+  api: "orders/v2",
+  generated: "2026-08-06T09:14:07Z",
+  count: 3,
+  has_more: false,
+  orders: [
+    {
+      id: "ord_8fK2mQ",
+      status: "shipped",
+      total: { amount: 148.5, currency: "USD" },
+      customer: { name: "Aiko Tanaka", email: "aiko@example.com", verified: true },
+      items: [
+        { sku: "TS-041", title: "Thermal flask 750 ml", qty: 2, price: 34.25 },
+        { sku: "BK-217", title: "Field notebook — dotted", qty: 4, price: 20 }
+      ],
+      shipping: { carrier: "DHL", tracking: "JD014600003RU", eta_days: 3 },
+      notes: null
+    },
+    {
+      id: "ord_3xN9pl",
+      status: "pending",
+      total: { amount: 89.99, currency: "EUR" },
+      customer: { name: "Márton Kovács", email: "marton@example.hu", verified: false },
+      items: [
+        { sku: "HD-902", title: "Wireless headphones", qty: 1, price: 89.99 }
+      ],
+      shipping: null,
+      notes: "Gift wrap requested \"blue ribbon\" — see ticket #4821"
+    },
+    {
+      id: "ord_0aW5vt",
+      status: "cancelled",
+      total: { amount: 0, currency: "USD" },
+      customer: { name: "Sam O'Neill", email: "sam@example.com", verified: true },
+      items: [],
+      shipping: null,
+      notes: null
+    }
+  ],
+  facets: { statuses: ["shipped", "pending", "cancelled"], currencies: ["USD", "EUR"] },
+  metrics: { avg_order_value: 79.49, conversion: 0.0312, uptime_ratio: 0.99987 },
+  _links: { self: "/orders?page=1", next: null }
+};
+
+/* ---------- split divider ---------- */
+const divider = $('divider'), editorPane = $('editorPane');
+divider.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  divider.classList.add('dragging');
+  divider.setPointerCapture(e.pointerId);
+  const move = ev => {
+    const rect = document.querySelector('.split').getBoundingClientRect();
+    const w = Math.min(Math.max(ev.clientX - rect.left, 200), rect.width - 260);
+    editorPane.style.width = w + 'px';
+  };
+  const up = () => {
+    divider.classList.remove('dragging');
+    divider.removeEventListener('pointermove', move);
+    divider.removeEventListener('pointerup', up);
+  };
+  divider.addEventListener('pointermove', move);
+  divider.addEventListener('pointerup', up);
+});
+
+/* ---------- mobile tabs ---------- */
+$('tabText').addEventListener('click', () => setView('text'));
+$('tabTree').addEventListener('click', () => setView('tree'));
+function setView(v) {
+  document.body.dataset.view = v;
+  $('tabText').classList.toggle('active', v === 'text');
+  $('tabTree').classList.toggle('active', v === 'tree');
+}
+
+/* ---------- theme ---------- */
+const THEME_KEY = 'jsonviewer-theme';
+function applyTheme(t) {
+  if (t) document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+try { applyTheme(localStorage.getItem(THEME_KEY) || ''); } catch (e) {}
+$('btnTheme').addEventListener('click', () => {
+  const current = document.documentElement.dataset.theme ||
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+});
+
+/* ---------- init ---------- */
+setView(document.body.dataset.view || 'text');
+input.focus();
+})();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"c098681e14c14fc0bbc9c89f4371c4ac","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
+
+
