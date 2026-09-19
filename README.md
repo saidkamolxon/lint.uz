@@ -28,8 +28,18 @@ The landing page at **[lint.uz](https://lint.uz)** links all four.
 - **Verify it yourself.** Open DevTools → Network, paste a production secret,
   and watch nothing happen.
 
-The only thing stored is your theme choice: a `lintuz_theme` cookie on
-`.lint.uz`, so the four tools agree on the theme you picked. No other cookies.
+Two cookies, both on `.lint.uz`, neither carrying document data:
+`lintuz_theme` remembers the theme you picked so all four tools agree, and
+`lintuz_from` lives for two minutes after you click "Open JSON viewer" so the
+destination can say *which* format is waiting on your clipboard. Nothing else
+is stored.
+
+### Moving between tools
+
+Converting copies the result to your clipboard and offers a button to open the
+tool that reads it. The document travels on your clipboard — never in a URL,
+never through a server — so the destination asks you to paste rather than
+filling itself in.
 
 ---
 

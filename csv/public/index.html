@@ -484,7 +484,7 @@ document.getElementById('btnToJson').addEventListener('click', function () {
   } else {
     out = rows;
   }
-  LintApp.copy(JSON.stringify(out, null, 2), 'JSON');
+  LintApp.copyAndOffer(JSON.stringify(out, null, 2), 'JSON', 'csv', 'json');
 });
 
 var btnHeader = document.getElementById('btnHeader');

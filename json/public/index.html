@@ -29,7 +29,8 @@ window.LINT_CONFIG = {
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
     { id: 'btnMinify', label: 'Minify', title: 'Strip all whitespace' },
-    { id: 'btnEscape', label: 'Unescape', hide: 'md', title: 'Parse a JSON-encoded string into real JSON' }
+    { id: 'btnEscape', label: 'Unescape', hide: 'md', title: 'Parse a JSON-encoded string into real JSON' },
+    { id: 'btnToYaml', label: 'To YAML', hide: 'md', title: 'Copy this document as YAML' }
   ]
 };
 </script>
@@ -242,6 +243,118 @@ var adapter = {
   }
 };
 
+
+/* ==========================================================================
+   JSON -> YAML
+   Only has to serialise what JSON.parse can produce: objects, arrays,
+   strings, finite numbers, booleans and null. That is a small enough
+   grammar to do correctly here rather than ship a 60 KB YAML library.
+   ========================================================================== */
+
+/* A plain (unquoted) scalar is only safe when it cannot be mistaken for
+   another YAML type or for structure. When in doubt, quote. */
+var YAML_RESERVED = /^(|~|null|Null|NULL|true|True|TRUE|false|False|FALSE|y|Y|n|N|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF)$/;
+var YAML_NUMERIC = /^[-+]?(\d[\d_]*(\.\d*)?|\.\d+)([eE][-+]?\d+)?$/;
+var YAML_SEXAGESIMAL = /^[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?$/;
+/* YAML 1.1 also reads these as numbers, so a string that looks like one
+   must be quoted or it comes back as the wrong type */
+var YAML_SPECIAL_FLOAT = /^[-+]?(\.inf|\.Inf|\.INF|\.nan|\.NaN|\.NAN)$/;
+var YAML_RADIX = /^[-+]?0(b[01_]+|x[0-9a-fA-F_]+|o?[0-7_]+)$/;
+var YAML_INDICATOR = /^[-?:,\[\]{}#&*!|>'"%@`]/;
+
+function yamlScalar(v) {
+  if (v === null) return 'null';
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'number') {
+    if (!isFinite(v)) return v > 0 ? '.inf' : (v < 0 ? '-.inf' : '.nan');
+    return String(v);
+  }
+
+  var s = String(v);
+
+  /* multi-line strings read far better as literal blocks, but only when
+     every line is plain text — otherwise fall back to a quoted scalar */
+  if (s.indexOf('\n') !== -1) return null;   /* caller emits a block */
+
+  var needsQuote =
+    s === '' ||
+    YAML_RESERVED.test(s) ||
+    YAML_NUMERIC.test(s) ||
+    YAML_SEXAGESIMAL.test(s) ||
+    YAML_SPECIAL_FLOAT.test(s) ||
+    YAML_RADIX.test(s) ||
+    YAML_INDICATOR.test(s) ||
+    /: /.test(s) || /\s#/.test(s) ||
+    /^\s|\s$/.test(s) ||
+    /[\t\r\u0000-\u0008\u000b-\u001f\u007f]/.test(s);
+
+  if (!needsQuote) return s;
+
+  /* single quotes keep the text literal; double only when we must escape */
+  if (!/[\\\t\r\u0000-\u0008\u000b-\u001f\u007f]/.test(s)) {
+    return "'" + s.replace(/'/g, "''") + "'";
+  }
+  return JSON.stringify(s);
+}
+
+function toYaml(value, indent) {
+  indent = indent || 0;
+  var pad = '  '.repeat(indent);
+
+  if (Array.isArray(value)) {
+    if (!value.length) return pad + '[]\n';
+    var out = '';
+    for (var i = 0; i < value.length; i++) {
+      var item = value[i];
+      if (item !== null && typeof item === 'object') {
+        var block = toYaml(item, indent + 1);
+        /* hoist the first line onto the dash so the list reads naturally */
+        out += pad + '-' + block.slice(pad.length + 2 - 1);
+      } else {
+        out += pad + '- ' + scalarOrBlock(item, indent + 1);
+      }
+    }
+    return out;
+  }
+
+  if (value !== null && typeof value === 'object') {
+    var keys = Object.keys(value);
+    if (!keys.length) return pad + '{}\n';
+    var res = '';
+    for (var k = 0; k < keys.length; k++) {
+      var key = keys[k], val = value[key];
+      var kq = yamlScalar(key);
+      if (kq === null) kq = JSON.stringify(key);   /* keys never become blocks */
+      if (val !== null && typeof val === 'object' &&
+          (Array.isArray(val) ? val.length : Object.keys(val).length)) {
+        res += pad + kq + ':\n' + toYaml(val, indent + 1);
+      } else if (val !== null && typeof val === 'object') {
+        res += pad + kq + ': ' + (Array.isArray(val) ? '[]' : '{}') + '\n';
+      } else {
+        res += pad + kq + ': ' + scalarOrBlock(val, indent + 1);
+      }
+    }
+    return res;
+  }
+
+  return pad + scalarOrBlock(value, indent);
+}
+
+/* returns the scalar plus its newline, or a literal block for multi-line text */
+function scalarOrBlock(v, indent) {
+  var q = yamlScalar(v);
+  if (q !== null) return q + '\n';
+
+  var pad = '  '.repeat(indent);
+  var lines = String(v).split('\n');
+  /* a trailing newline decides the chomping indicator */
+  var chomp = '';
+  if (lines[lines.length - 1] === '') { lines.pop(); }
+  else { chomp = '-'; }
+  var body = lines.map(function (l) { return l ? pad + l : ''; }).join('\n');
+  return '|' + chomp + '\n' + body + '\n';
+}
+
 var SAMPLE = `{
   "service": "checkout-api",
   "version": "2.4.1",
@@ -338,6 +451,13 @@ document.getElementById('btnEscape').addEventListener('click', function () {
   } catch (e) {
     LintApp.toast('That is not a JSON-encoded string');
   }
+});
+
+
+document.getElementById('btnToYaml').addEventListener('click', function () {
+  var res = parse(app.editor.getValue());
+  if (!res.ok) { app.run(); LintApp.toast('Fix the JSON before converting'); return; }
+  LintApp.copyAndOffer(toYaml(res.value), 'YAML', 'json', 'yaml');
 });
 
 })();

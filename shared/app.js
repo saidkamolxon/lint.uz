@@ -88,13 +88,76 @@ var ICONS = {
 
 /* ---------- clipboard ---------- */
 var toastTimer;
-function showToast(msg) {
+
+/* showToast(msg) — plain message.
+   showToast(msg, {label, href, from}) — adds one action. The toast only
+   accepts pointer events while an action is present, so a plain toast never
+   sits in front of the page. */
+function showToast(msg, action) {
   var t = $('toast');
   if (!t) return;
-  t.textContent = msg;
+  t.textContent = '';
+  t.classList.toggle('actionable', !!action);
+
+  var text = document.createElement('span');
+  text.textContent = msg;
+  t.appendChild(text);
+
+  var life = 1700;
+  if (action) {
+    var a = document.createElement('a');
+    a.className = 'toast-action';
+    a.textContent = action.label;
+    a.href = action.href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.addEventListener('click', function () {
+      /* tell the destination which tool sent the user, so it can name the
+         format in its prompt. Carries no document data. */
+      if (action.from) writeHandoff(action.from, action.format);
+      t.classList.remove('show');
+    });
+    t.appendChild(a);
+    life = 7000;   /* long enough to actually reach for it */
+  }
+
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1700);
+  toastTimer = setTimeout(function () { t.classList.remove('show'); }, life);
+}
+
+/* ---------- cross-tool handoff ----------
+   A short-lived cookie on .lint.uz naming the tool the user just left, so the
+   destination can say "your JSON from YAML is on the clipboard" instead of a
+   generic hint. The document itself never leaves the clipboard. */
+var HANDOFF_COOKIE = 'lintuz_from';
+
+function writeHandoff(fromId, format) {
+  var domain = /(^|\.)lint\.uz$/.test(location.hostname) ? '; domain=.lint.uz' : '';
+  var secure = location.protocol === 'https:' ? '; secure' : '';
+  try {
+    document.cookie = HANDOFF_COOKIE + '=' +
+      encodeURIComponent(fromId + ':' + (format || '')) +
+      '; path=/; max-age=120; samesite=lax' + domain + secure;
+  } catch (e) {}
+}
+
+function readHandoff() {
+  var m = document.cookie.match(/(?:^|;\s*)lintuz_from=([^;]*)/);
+  if (!m) return null;
+  var parts = decodeURIComponent(m[1]).split(':');
+  var id = parts[0], format = parts[1] || '';
+  /* one-shot: clear it so a later visit does not show a stale prompt */
+  var domain = /(^|\.)lint\.uz$/.test(location.hostname) ? '; domain=.lint.uz' : '';
+  try {
+    document.cookie = HANDOFF_COOKIE + '=; path=/; max-age=0' + domain;
+  } catch (e) {}
+  for (var i = 0; i < SUITE.length; i++) {
+    if (SUITE[i].id === id) {
+      return { id: id, name: SUITE[i].name, host: SUITE[i].host, format: format };
+    }
+  }
+  return null;
 }
 
 function copyText(text, label) {
@@ -879,6 +942,31 @@ function init(config) {
     }
   });
 
+  /* ---------- arriving from another tool ----------
+     The sender set a cookie naming itself. Name the format in the prompt so
+     the instruction is concrete, and drop it as soon as anything is typed. */
+  /* paint the empty state before anything is typed — otherwise the tree pane
+     sits blank until the first parse cycle */
+  tree.render();
+
+  var from = readHandoff();
+  if (from && !editor.getValue()) {
+    var paste = navigator.platform.indexOf('Mac') === 0 ? '\u2318V' : 'Ctrl+V';
+    $('tree').innerHTML =
+      '<div class="empty arrived">' +
+        '<p class="arrived-lead">Your ' + (from.format || config.label) +
+        ' from ' + from.name + ' is on the clipboard.</p>' +
+        '<p>Press <kbd>' + paste + '</kbd> in the editor to see it here.</p>' +
+      '</div>';
+    /* restore the normal empty state once they start working */
+    var clearArrival = function () {
+      var a = $('tree').querySelector('.arrived');
+      if (a) tree.render();
+      editor.input.removeEventListener('input', clearArrival);
+    };
+    editor.input.addEventListener('input', clearArrival);
+  }
+
   editor.paint();
   editor.input.focus();
 
@@ -893,8 +981,24 @@ function init(config) {
   };
 }
 
+/* Copy a converted document, then offer to open the tool that reads it.
+   from = the id of the tool doing the sending; to = the id it converts into. */
+function copyAndOffer(text, label, from, to) {
+  var dest = null;
+  for (var i = 0; i < SUITE.length; i++) if (SUITE[i].id === to) dest = SUITE[i];
+  var done = function () {
+    showToast(label + ' copied',
+      dest ? { label: 'Open ' + dest.name + ' viewer', href: dest.host,
+               from: from, format: label } : null);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+  } else fallbackCopy(text, done);
+}
+
 global.LintApp = {
   init: init,
+  copyAndOffer: copyAndOffer,
   esc: esc,
   copy: copyText,
   toast: showToast,

@@ -543,6 +543,35 @@ mark {
   z-index: 100;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* only a toast offering an action may be clicked; plain ones stay inert */
+#toast.actionable {
+  display: flex; align-items: center; gap: var(--s3);
+  padding-right: var(--s1);
+}
+#toast.actionable.show { pointer-events: auto; }
+.toast-action {
+  color: var(--surface);
+  background: color-mix(in srgb, var(--surface) 18%, transparent);
+  border-radius: 6px;
+  padding: 4px var(--s3);
+  font-size: 12px; font-weight: 600;
+  text-decoration: none; white-space: nowrap;
+  transition: background-color var(--t-fast);
+}
+.toast-action:hover { background: color-mix(in srgb, var(--surface) 30%, transparent); }
+.toast-action:focus-visible { outline: 2px solid var(--surface); outline-offset: 1px; }
+
+/* the prompt shown when arriving from another viewer */
+.empty.arrived .arrived-lead {
+  color: var(--ink); font-weight: 550;
+  margin: 0 0 var(--s2);
+}
+.empty.arrived p { margin: 0; }
+.empty.arrived {
+  border-left: 2px solid var(--hue);
+  padding-left: var(--s4);
+  margin: var(--s5) var(--s4);
+}
 
 body.dragover #editorPane::after {
   content: "";

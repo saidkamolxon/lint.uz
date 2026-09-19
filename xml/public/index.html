@@ -489,7 +489,7 @@ document.getElementById('btnToJson').addEventListener('click', function () {
   var root = res.value.documentElement;
   var wrapper = {};
   wrapper[root.nodeName] = xmlToJson(root);
-  LintApp.copy(JSON.stringify(wrapper, null, 2), 'JSON');
+  LintApp.copyAndOffer(JSON.stringify(wrapper, null, 2), 'JSON', 'xml', 'json');
 });
 })();
 </script>

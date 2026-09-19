@@ -426,7 +426,7 @@ document.getElementById('btnFormat').addEventListener('click', function () {
 document.getElementById('btnToJson').addEventListener('click', function () {
   var res = parse(app.editor.getValue());
   if (!res.ok) { app.run(); LintApp.toast('Fix the YAML before converting'); return; }
-  LintApp.copy(JSON.stringify(res.value, null, 2), 'JSON');
+  LintApp.copyAndOffer(JSON.stringify(res.value, null, 2), 'JSON', 'yaml', 'json');
 });
 
 document.getElementById('btnToYaml').addEventListener('click', function () {
