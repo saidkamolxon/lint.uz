@@ -1,0 +1,13 @@
+{
+  "name": "jsonviewer",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    {
+      "pattern": "json.lint.uz/*",
+      "zone_name": "lint.uz"
+    }
+  ]
+}

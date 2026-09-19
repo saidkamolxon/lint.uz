@@ -1,0 +1,17 @@
+{
+  "name": "lint-uz-suite",
+  "version": "1.0.0",
+  "description": "Suite of client-side web format viewers under lint.uz",
+  "private": true,
+  "scripts": {
+    "deploy:json": "cd json && npx wrangler deploy",
+    "deploy:xml": "cd xml && npx wrangler deploy",
+    "deploy:yaml": "cd yaml && npx wrangler deploy",
+    "dev:json": "cd json && npx wrangler dev",
+    "dev:xml": "cd xml && npx wrangler dev",
+    "dev:yaml": "cd yaml && npx wrangler dev"
+  },
+  "keywords": ["json", "xml", "yaml", "linter", "viewer", "formatter"],
+  "author": "saidkamolxon",
+  "license": "MIT"
+}
