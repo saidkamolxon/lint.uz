@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const SHARED = join(root, 'shared');
-const TOOLS = ['json', 'xml', 'yaml', 'csv'];
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf'];
 
 const only = process.argv[2];
 const targets = only ? [only] : TOOLS;

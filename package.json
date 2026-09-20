@@ -15,9 +15,20 @@
     "dev:json": "node build.mjs json && cd json && npx wrangler dev",
     "dev:xml": "node build.mjs xml && cd xml && npx wrangler dev",
     "dev:yaml": "node build.mjs yaml && cd yaml && npx wrangler dev",
-    "dev:csv": "node build.mjs csv && cd csv && npx wrangler dev"
+    "dev:csv": "node build.mjs csv && cd csv && npx wrangler dev",
+    "deploy:pdf": "node build.mjs pdf && cd pdf && npx wrangler deploy",
+    "dev:pdf": "node build.mjs pdf && cd pdf && npx wrangler dev"
   },
-  "keywords": ["json", "xml", "yaml", "csv", "linter", "viewer", "formatter"],
+  "keywords": [
+    "json",
+    "xml",
+    "yaml",
+    "csv",
+    "linter",
+    "viewer",
+    "formatter",
+    "pdf"
+  ],
   "author": "saidkamolxon",
   "license": "MIT"
 }

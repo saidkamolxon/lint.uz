@@ -15,6 +15,7 @@ jobs:
       xml: ${{ steps.changes.outputs.xml }}
       yaml: ${{ steps.changes.outputs.yaml }}
       csv: ${{ steps.changes.outputs.csv }}
+      pdf: ${{ steps.changes.outputs.pdf }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -48,6 +49,11 @@ jobs:
               - 'build.mjs'
               - '.github/workflows/deploy.yml'
               - 'csv/**'
+            pdf:
+              - 'shared/**'
+              - 'build.mjs'
+              - '.github/workflows/deploy.yml'
+              - 'pdf/**'
 
   deploy:
     name: Deploy ${{ matrix.tool }}.lint.uz
@@ -67,6 +73,8 @@ jobs:
             changed: ${{ needs.filter.outputs.yaml }}
           - tool: csv
             changed: ${{ needs.filter.outputs.csv }}
+          - tool: pdf
+            changed: ${{ needs.filter.outputs.pdf }}
     steps:
       - uses: actions/checkout@v4
         if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'

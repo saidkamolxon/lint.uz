@@ -1,0 +1,1725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Viewer &amp; Inspector · lint.uz</title>
+<meta name="description" content="A fast, private PDF viewer and inspector. Read pages, extract text, and check what a document contains — all in your browser. Nothing is uploaded.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="stylesheet" href="shared/app.css">
+<style>
+/* ==========================================================================
+   PDF is the one single-pane tool: a page is the content, so there is no
+   source text to sit beside it. Everything below is scoped to this tool.
+   ========================================================================== */
+.app { overflow: hidden; }
+
+.pdf-main {
+  flex: 1; min-height: 0; position: relative;
+  display: flex; overflow: hidden;
+}
+
+/* ---------- the page column ---------- */
+#pages {
+  /* positioned so descendants' offsetTop is measured against this scroll
+     container rather than the document body */
+  position: relative;
+  flex: 1; min-width: 0; overflow: auto;
+  padding: var(--s5) var(--s4) 40vh;
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--s5);
+  scroll-padding-top: var(--s4);
+  background: var(--sunken);
+}
+
+/* The lift sits on the wrapper, never on the canvas: a filter applies to an
+   element's shadow too, so an inverted page would turn its own dark shadow
+   into a bright halo. */
+.page-wrap {
+  position: relative; flex: none; max-width: 100%;
+  box-shadow: var(--shadow);
+  border-radius: 2px;
+  line-height: 0;
+}
+.page-wrap canvas {
+  display: block;
+  max-width: 100%; height: auto;
+  background: #fff;
+  border-radius: 2px;
+}
+/* the page treatment — chrome is always themed, the sheet is opt-in */
+body[data-page="dim"] .page-wrap canvas { filter: brightness(0.82) contrast(1.04); }
+body[data-page="invert"] .page-wrap canvas { filter: invert(1) hue-rotate(180deg); }
+/* an inverted page is nearly black, so a dark shadow under it reads as dirt —
+   a hairline edge separates it from the backdrop instead */
+body[data-page="invert"] .page-wrap {
+  box-shadow: none;
+  outline: var(--hairline) solid var(--line);
+  outline-offset: -1px;
+}
+
+/* a slot waiting to be filled should not pretend to be a page */
+.page-wrap.pending {
+  background: var(--raised);
+  border: var(--hairline) dashed var(--line);
+  border-radius: 2px;
+  display: grid; place-items: center;
+  color: var(--faint); font-size: var(--fs-small);
+  box-shadow: none;
+  outline: none;
+  line-height: normal;
+}
+
+/* ---------- search highlights ----------
+   Drawn as absolutely-positioned boxes over the page, from each text item's
+   own transform — so they track the text at any zoom. They sit outside the
+   canvas, so the page filters never touch them. */
+.hl-box {
+  position: absolute;
+  background: color-mix(in srgb, var(--mark) 55%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+body[data-page="invert"] .hl-box { mix-blend-mode: screen; }
+.hl-box.current {
+  background: color-mix(in srgb, var(--hue) 45%, transparent);
+  outline: 1.5px solid var(--hue);
+}
+/* the rest of the word the match sits inside — tinted so the box never looks
+   cut off mid-word, but weaker so the typed characters still read as the hit */
+.hl-box.word {
+  background: color-mix(in srgb, var(--mark) 22%, transparent);
+  border-radius: 3px;
+}
+.hl-box.word.current { background: color-mix(in srgb, var(--hue) 18%, transparent); }
+
+/* ---------- find, floating over the page ----------
+   A popover rather than a second header strip: it must not reflow the
+   document or compete with the toolbar for the eye. */
+.find-pop {
+  position: absolute; top: var(--s3); right: var(--s3); z-index: 25;
+  display: flex; align-items: center; gap: 2px;
+  padding: var(--s1);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.find-pop[hidden] { display: none; }
+/* the popover itself says find is open, so the toolbar button stays quiet */
+#btnFind[aria-pressed="true"] {
+  background: var(--row-hover); color: var(--ink);
+  border-color: transparent; font-weight: 500;
+}
+#findInput {
+  width: 210px;
+  font-family: var(--ui); font-size: 12.5px;
+  color: var(--ink); background: transparent;
+  border: none; outline: none;
+  padding: 5px var(--s2);
+}
+#findInput::placeholder { color: var(--faint); }
+#findCount {
+  font-family: var(--mono); font-size: var(--fs-small);
+  color: var(--muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; padding: 0 var(--s2);
+  border-left: var(--hairline) solid var(--line);
+  min-width: 68px; text-align: right;
+}
+#findCount:empty { display: none; }
+#findCount.none { color: var(--bad); }
+/* a thread of colour while the rest of the document is still being scanned */
+.find-pop.scanning #findCount { color: var(--hue); }
+.find-pop.scanning::after {
+  content: ""; position: absolute; left: var(--s2); right: var(--s2); bottom: 0; height: 2px;
+  background: var(--hue); border-radius: 2px;
+  animation: scanning 1.1s ease-in-out infinite;
+}
+@keyframes scanning { 0%,100% { opacity: 0.2; } 50% { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) {
+  .find-pop.scanning::after { animation: none; opacity: 0.6; }
+}
+
+/* ---------- cross-reference links ----------
+   One anchor per link annotation, positioned over the page from the
+   annotation's own rect. Invisible until hovered — the page should look like
+   the document, not like a web page. */
+.lnk {
+  position: absolute;
+  display: block;
+  border-radius: 2px;
+  cursor: pointer;
+  background: transparent;
+  transition: background-color var(--t-fast);
+}
+.lnk:hover {
+  background: color-mix(in srgb, var(--hue) 22%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--hue) 55%, transparent);
+}
+.lnk:focus-visible {
+  background: color-mix(in srgb, var(--hue) 22%, transparent);
+  outline: 2px solid var(--hue);
+}
+/* a held modifier reveals every link at once, for scanning a dense page */
+body.show-links .lnk {
+  background: color-mix(in srgb, var(--hue) 13%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--hue) 30%, transparent);
+}
+
+/* A page you jumped to across a long distance settles into place, so an
+   instant move still reads as arriving somewhere rather than a cut. */
+@keyframes arrive {
+  from { opacity: 0.3; transform: translateY(6px); }
+  to   { opacity: 1;   transform: none; }
+}
+.page-wrap.arrived { animation: arrive 220ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .page-wrap.arrived { animation: none; }
+}
+
+/* ---------- reading position ----------
+   A label by default; it becomes an input only when you mean to jump. */
+.pagebox { display: flex; align-items: center; gap: 2px; }
+.pagebox[hidden] { display: none; }
+.page-pos {
+  font-family: var(--mono); font-size: 12.5px;
+  color: var(--ink);
+  padding: 4px var(--s2);
+  border-radius: var(--radius);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* the current page holds room for the widest number the document can show,
+   so the toolbar does not shift as you scroll from 9 to 10 to 1000 */
+#pageCur {
+  display: inline-block;
+  text-align: right;
+}
+.page-pos .slash { color: var(--faint); margin: 0 4px; }
+.page-pos:hover { background: var(--row-hover); }
+#pageNum {
+  /* width is measured from the real glyphs in JS: ch under-measures for this
+     face, and a fixed guess clips the moment a book runs past 999 pages */
+  text-align: center;
+  font-family: var(--mono); font-size: 12.5px;
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--hue);
+  border-radius: var(--radius); padding: 4px var(--s2);
+  outline: none;
+}
+#pageNum[hidden] { display: none; }
+
+/* ---------- page appearance: three states, three positions ---------- */
+.segmented {
+  display: inline-flex; padding: 2px; gap: 2px;
+  background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.segmented button {
+  width: 26px; height: 22px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 6px; color: var(--muted);
+}
+.segmented button svg { width: 14px; height: 14px; display: block; }
+.segmented button:hover { color: var(--ink); }
+.segmented button[aria-checked="true"] {
+  background: var(--hue); color: var(--hue-ink);
+}
+.segmented[data-disabled="true"] { opacity: 0.4; pointer-events: none; }
+
+/* ---------- zoom, floating near the page ---------- */
+.zoom-pop {
+  position: absolute; right: var(--s3); bottom: var(--s3); z-index: 22;
+  display: flex; align-items: center; gap: 2px;
+  padding: var(--s1);
+  background: color-mix(in srgb, var(--raised) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  opacity: 0.45;
+  transition: opacity var(--t-mid);
+}
+.zoom-pop[hidden] { display: none; }
+.zoom-pop:hover, .zoom-pop:focus-within { opacity: 1; }
+.zoom-fit {
+  font-size: 12px; padding: 4px var(--s2);
+  color: var(--muted); border-radius: var(--radius);
+}
+.zoom-fit:hover { color: var(--ink); }
+
+/* ---------- contents rail ---------- */
+#contents {
+  width: 276px; flex: none; overflow: auto;
+  border-right: var(--hairline) solid var(--line);
+  background: var(--raised);
+  padding: 0 0 var(--s4);
+  display: none;
+}
+#contents.open { display: block; }
+@media (max-width: 860px) {
+  #contents { position: absolute; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow); }
+}
+@media (max-width: 620px) {
+  .brand-text { display: none; }
+  .find-pop { left: var(--s2); right: var(--s2); top: var(--s2); }
+  #findInput { width: auto; flex: 1; min-width: 0; }
+  .zoom-pop { bottom: var(--s2); right: var(--s2); }
+}
+.rail-head {
+  position: sticky; top: 0; z-index: 1;
+  padding: var(--s3) var(--s4) var(--s2);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.page-area { flex: 1; min-width: 0; position: relative; display: flex; }
+
+/* ---------- contents list ---------- */
+.bm { list-style: none; margin: 0; padding: var(--s2) var(--s2) 0; }
+.bm ul { list-style: none; margin: 0; padding-left: var(--s3); }
+.bm li { margin: 0; }
+.bm button {
+  display: block; width: 100%; text-align: left;
+  padding: 5px var(--s2); border: none; border-radius: var(--radius);
+  font-size: 12.5px; color: var(--ink); line-height: 1.45;
+  white-space: normal;
+}
+.bm button:hover { background: var(--row-hover); color: var(--hue); }
+.bm > li > button { font-weight: 550; }
+.bm ul button { color: var(--muted); font-size: 12px; }
+.bm ul button:hover { color: var(--hue); }
+.bm button.here {
+  background: var(--hue-wash); color: var(--hue); font-weight: 600;
+}
+
+/* ---------- the info drawer ---------- */
+#drawer {
+  width: 340px; flex: none;
+  border-left: var(--hairline) solid var(--line);
+  background: var(--raised);
+  display: none; flex-direction: column; min-height: 0;
+}
+#drawer.open { display: flex; }
+@media (max-width: 760px) {
+  #drawer { position: absolute; inset: 0 0 0 auto; width: min(340px, 88vw); z-index: 30;
+            box-shadow: var(--shadow); }
+}
+
+.drawer-tabs {
+  display: flex; gap: 2px; flex: none;
+  padding: var(--s2); border-bottom: var(--hairline) solid var(--line);
+}
+.drawer-tabs button {
+  flex: 1; padding: 5px var(--s2); border-radius: var(--radius);
+  color: var(--muted); font-size: 12px;
+}
+.drawer-tabs button[aria-selected="true"] {
+  background: var(--hue-wash); color: var(--hue); font-weight: 600;
+}
+.drawer-body { flex: 1; overflow: auto; padding: var(--s3); }
+.drawer-panel { display: none; }
+.drawer-panel.active { display: block; }
+
+/* metadata rows — a definition list, because that is what this is */
+.meta { margin: 0; font-size: 12.5px; }
+.meta div {
+  display: grid; grid-template-columns: 96px 1fr; gap: var(--s3);
+  padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
+  align-items: baseline;
+}
+.meta div:last-child { border-bottom: none; }
+.meta dt { color: var(--muted); }
+.meta dd {
+  margin: 0; font-family: var(--mono); font-size: 11.5px;
+  overflow-wrap: anywhere; color: var(--ink);
+}
+.meta dd.none { color: var(--faint); font-style: italic; font-family: var(--ui); }
+
+/* security flags read as findings, not decoration */
+.flag {
+  display: flex; align-items: baseline; gap: var(--s2);
+  padding: var(--s2) 0; border-bottom: var(--hairline) solid var(--line);
+  font-size: 12.5px;
+}
+.flag:last-child { border-bottom: none; }
+.flag .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: 5px; }
+.flag.yes .dot { background: var(--warn); }
+.flag.no .dot { background: var(--ok); }
+.flag .what { flex: 1; }
+.flag .what small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+
+.font-row {
+  display: flex; justify-content: space-between; gap: var(--s2);
+  padding: 4px 0; border-bottom: var(--hairline) solid var(--line);
+  font-family: var(--mono); font-size: 11.5px;
+}
+.font-row:last-child { border-bottom: none; }
+.font-row .kind { color: var(--faint); flex: none; }
+
+/* extracted text */
+#textOut {
+  width: 100%; min-height: 240px; resize: vertical;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.6;
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: var(--s2); white-space: pre-wrap;
+}
+.drawer-actions { display: flex; gap: var(--s1); margin-top: var(--s2); }
+.hint { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0 0 var(--s3); }
+
+/* ---------- empty state ---------- */
+.pdf-empty {
+  margin: auto; text-align: center; max-width: 42ch;
+  color: var(--muted); padding: var(--s4);
+}
+.pdf-empty .big {
+  font-size: var(--fs-large); color: var(--ink);
+  font-weight: 600; margin-bottom: var(--s2);
+  letter-spacing: -0.015em;
+}
+.pdf-empty p { margin: 0 0 var(--s3); line-height: 1.6; font-size: 13.5px; }
+.pdf-empty kbd {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: 4px; padding: 1px 5px; color: var(--muted);
+}
+
+/* the shared dragover cue targets #editorPane, which this tool has none of */
+body.dragover #pages::after {
+  content: "";
+  position: absolute; inset: var(--s2);
+  border: 2px dashed var(--hue);
+  border-radius: var(--radius-lg);
+  background: var(--hue-wash);
+  pointer-events: none; z-index: 20;
+}
+
+.page-error {
+  display: grid; place-items: center; height: 100%;
+  color: var(--bad); font-size: var(--fs-small); font-family: var(--ui);
+  line-height: normal;
+}
+
+#progress {
+  position: absolute; left: 0; top: 0; height: 2px;
+  background: var(--hue); width: 0;
+  transition: width var(--t-mid); z-index: 40;
+}
+</style>
+</head>
+<body data-page="normal">
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'pdf',
+  name: 'PDF Viewer',
+  host: 'pdf.lint.uz',
+  label: 'PDF',
+  mark: 'P',
+  hue: '#BE123C',
+  hueInk: '#FFFFFF',
+  accept: '.pdf,application/pdf'
+};
+</script>
+<script src="shared/theme-boot.js"></script>
+<script src="shared/app.js"></script>
+<script type="module">
+import * as pdfjsLib from './vendor/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs';
+
+const $ = (id) => document.getElementById(id);
+const esc = LintApp.esc;
+
+/* ==========================================================================
+   Chrome — this tool has no editor/tree, so it builds its own frame rather
+   than using shared/shell.js. Everything else (themes, suite switcher,
+   toast) comes from the shared runtime.
+   ========================================================================== */
+const c = window.LINT_CONFIG;
+document.documentElement.style.setProperty('--hue', c.hue);
+document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+
+$('app').innerHTML = `
+  <header class="toolbar">
+    <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
+            aria-pressed="false" disabled></button>
+    <a class="brand" href="https://lint.uz" title="All lint.uz tools">
+      <span class="mark">${c.mark}</span>
+      <span class="brand-text">
+        <span class="brand-name">${c.name}</span>
+        <span class="brand-host">${c.host}</span>
+      </span>
+    </a>
+    <button id="btnOpen" class="primary" title="Open a PDF — or drop one anywhere">Open</button>
+
+    <span class="spacer"></span>
+
+    <!-- reading position: a label until you click it -->
+    <span class="pagebox" id="pageBox" hidden>
+      <button id="btnPrev" class="icon-btn" title="Previous page" aria-label="Previous page" disabled></button>
+      <button id="pagePos" class="page-pos" title="Go to page">
+        <span id="pageCur">1</span><span class="slash">/</span><span id="pageTotal">1</span>
+      </button>
+      <input id="pageNum" type="text" inputmode="numeric" aria-label="Go to page" hidden>
+      <button id="btnNext" class="icon-btn" title="Next page" aria-label="Next page" disabled></button>
+    </span>
+
+    <span class="spacer"></span>
+
+    <button id="btnFind" class="icon-btn" title="Find in this document"
+            aria-label="Find in this document" aria-pressed="false" disabled></button>
+
+    <!-- page treatment: state is the active segment, not the label -->
+    <div class="segmented" id="pageModeSeg" role="group" aria-label="Page appearance"></div>
+
+    <button id="btnInfo" class="icon-btn" title="Document details"
+            aria-label="Document details" aria-pressed="false" disabled></button>
+    <div class="group" id="chromeSlot"></div>
+    <button id="btnMore" class="icon-btn" title="More" aria-label="More" aria-haspopup="true"></button>
+    <div class="menu" id="moreMenu" role="menu">
+      <button class="menu-item" id="btnClose" role="menuitem" disabled>Close document</button>
+    </div>
+    <input type="file" id="fileInput" accept="${c.accept}" hidden>
+  </header>
+
+  <main class="pdf-main">
+    <div id="progress"></div>
+
+    <aside id="contents" aria-label="Contents"></aside>
+
+    <div class="page-area">
+      <div id="pages"></div>
+
+      <!-- find floats over the page rather than adding a second header -->
+      <div class="find-pop" id="findBar" hidden>
+        <input id="findInput" type="text" placeholder="Find in this document"
+               aria-label="Find in this document" spellcheck="false">
+        <span id="findCount"></span>
+        <button id="findPrev" class="icon-btn" title="Previous match" aria-label="Previous match"></button>
+        <button id="findNext" class="icon-btn" title="Next match" aria-label="Next match"></button>
+        <button id="findClose" class="icon-btn" title="Close" aria-label="Close find"></button>
+      </div>
+
+      <!-- zoom sits near the page, not in the header -->
+      <div class="zoom-pop" id="zoomPop" hidden>
+        <button id="btnOut" class="icon-btn" title="Zoom out" aria-label="Zoom out"></button>
+        <button id="btnFit" class="zoom-fit" title="Fit page to window">Fit</button>
+        <button id="btnIn" class="icon-btn" title="Zoom in" aria-label="Zoom in"></button>
+      </div>
+    </div>
+
+    <aside id="drawer" aria-label="Document details">
+      <div class="drawer-tabs" role="tablist">
+        <button id="tabAbout" role="tab" aria-selected="true">About</button>
+        <button id="tabFonts" role="tab" aria-selected="false">Fonts</button>
+        <button id="tabText" role="tab" aria-selected="false">Text</button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-panel active" id="panelAbout"></div>
+        <div class="drawer-panel" id="panelFonts"></div>
+        <div class="drawer-panel" id="panelText"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="status" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusMsg">Ready</span>
+    <span id="pathBox"></span>
+  </footer>
+`;
+
+LintApp.mountChrome($('chromeSlot'), 'pdf');
+
+/* ---------- icons ----------
+   Drawn rather than lettered so the toolbar reads as one set. */
+const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+
+const ICON = {
+  contents: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
+  find:     '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/>',
+  info:     '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
+  more:     '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
+            '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
+            '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
+  up:       '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  down:     '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  close:    '<path d="M6 6l12 12M18 6L6 18"/>',
+  minus:    '<path d="M5 12h14"/>',
+  plus:     '<path d="M12 5v14M5 12h14"/>',
+  /* page appearance — one circle, filled three ways */
+  normal:   '<circle cx="12" cy="12" r="8"/>',
+  dim:      '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" opacity="0.45" stroke="none"/>',
+  invert:   '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="5.6" fill="currentColor" stroke="none"/>'
+};
+
+$('btnContents').innerHTML = I(ICON.contents);
+$('btnFind').innerHTML = I(ICON.find);
+$('btnInfo').innerHTML = I(ICON.info);
+$('btnMore').innerHTML = I(ICON.more);
+$('btnPrev').innerHTML = I(ICON.up);
+$('btnNext').innerHTML = I(ICON.down);
+$('findPrev').innerHTML = I(ICON.up);
+$('findNext').innerHTML = I(ICON.down);
+$('findClose').innerHTML = I(ICON.close);
+$('btnOut').innerHTML = I(ICON.minus);
+$('btnIn').innerHTML = I(ICON.plus);
+
+LintApp.wireMenu($('btnMore'), $('moreMenu'));
+
+/* ---------- page appearance ----------
+   Three states shown as three positions. The old control relabelled itself
+   to the current state, which read as a verb rather than a state. */
+const PAGE_MODES = [
+  { id: 'normal', name: 'Normal', hint: 'The page as the author made it' },
+  { id: 'dim',    name: 'Dim',    hint: 'Softened for low light — nothing recoloured' },
+  { id: 'invert', name: 'Invert', hint: 'Dark page — images are recoloured too' }
+];
+
+let pageMode = 'normal';
+let modeExplicit = false;
+try {
+  const saved = localStorage.getItem('lintuz-pdf-page');
+  modeExplicit = saved !== null;
+  if (saved) pageMode = saved;
+} catch (e) {}
+
+const DARK_THEMES = ['slate', 'midnight'];
+function isDarkTheme() {
+  const t = document.documentElement.getAttribute('data-theme');
+  if (t) return DARK_THEMES.indexOf(t) !== -1;
+  return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+}
+if (!modeExplicit) pageMode = isDarkTheme() ? 'dim' : 'normal';
+
+function applyPageMode(id) {
+  pageMode = id;
+  document.body.dataset.page = id;
+  $('pageModeSeg').querySelectorAll('button').forEach((b) => {
+    b.setAttribute('aria-checked', String(b.dataset.mode === id));
+  });
+}
+
+$('pageModeSeg').innerHTML = PAGE_MODES.map((m) =>
+  `<button data-mode="${m.id}" role="radio" aria-checked="${m.id === pageMode}"
+           title="${m.name} — ${m.hint}" aria-label="${m.name}">${I(ICON[m.id])}</button>`
+).join('');
+$('pageModeSeg').querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    applyPageMode(b.dataset.mode);
+    try { localStorage.setItem('lintuz-pdf-page', b.dataset.mode); } catch (e) {}
+  });
+});
+$('pageModeSeg').dataset.disabled = 'true';
+applyPageMode(pageMode);
+
+/* ==========================================================================
+   Document state
+   ========================================================================== */
+let doc = null;
+let scale = 1.2;
+let fitMode = true;
+let renderedPages = new Map();
+
+const EMPTY = `
+  <div class="pdf-empty">
+    <div class="big">Open a PDF to read it</div>
+    <p>Pages render here and never leave your browser — there is no server to
+       send them to. Use <strong>Info</strong> to see what the file contains:
+       metadata, fonts, extracted text, and whether it carries JavaScript or
+       encryption.</p>
+    <p><kbd>${LintApp.isMac ? '⌘O' : 'Ctrl+O'}</kbd> to open · or drop a file anywhere</p>
+  </div>`;
+
+function showEmpty() {
+  $('pages').innerHTML = EMPTY;
+  $('pages').style.display = 'flex';
+}
+showEmpty();
+
+function setStatus(kind, msg) {
+  $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusMsg').textContent = msg;
+}
+
+function setBusy(pct) {
+  $('progress').style.width = pct === null ? '0' : pct + '%';
+}
+
+function enableControls(on) {
+  ['btnClose', 'btnOut', 'btnFit', 'btnIn', 'btnInfo', 'btnFind',
+   'btnPrev', 'btnNext', 'btnContents']
+    .forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
+  $('pageBox').hidden = !on;
+  $('zoomPop').hidden = !on;
+  $('pageModeSeg').dataset.disabled = String(!on);
+}
+
+/* ==========================================================================
+   Loading and rendering
+   ========================================================================== */
+async function openFile(file) {
+  if (!file) return;
+  if (file.size > 100 * 1048576) {
+    LintApp.toast('That file is over 100 MB — too large to open here');
+    return;
+  }
+  setStatus('', 'Reading ' + file.name + '…');
+  setBusy(12);
+
+  try {
+    const buf = await file.arrayBuffer();
+    setBusy(40);
+    const task = pdfjsLib.getDocument({
+      data: new Uint8Array(buf),
+      standardFontDataUrl: './vendor/standard_fonts/',
+      /* a password-protected file should ask, not fail silently */
+      password: undefined
+    });
+
+    task.onPassword = (retry, reason) => {
+      const pw = window.prompt(
+        reason === 1 ? 'This PDF is password protected. Enter its password:'
+                     : 'That password was not accepted. Try again:');
+      if (pw === null) { task.destroy(); resetView(); setStatus('', 'Ready'); return; }
+      retry(pw);
+    };
+
+    doc = await task.promise;
+    setBusy(70);
+    await renderDocument(file);
+    setBusy(100);
+    setTimeout(() => setBusy(null), 400);
+  } catch (err) {
+    setBusy(null);
+    const msg = /password/i.test(err.message || '')
+      ? 'This PDF needs a password'
+      : 'Could not read this PDF — it may be damaged';
+    setStatus('err', msg);
+    LintApp.toast(msg);
+    resetView();
+  }
+}
+
+async function renderDocument(file) {
+  renderedPages.clear();
+  const host = $('pages');
+  host.innerHTML = '';
+  host.style.display = 'flex';
+
+  const first = await doc.getPage(1);
+  if (fitMode) scale = fitScale(first);
+
+  /* Lay out every page at its true size first, then fill them in as they
+     scroll into view — a 400-page file must not render 400 canvases. */
+  for (let n = 1; n <= doc.numPages; n++) {
+    const page = n === 1 ? first : null;
+    const vp = (page || first).getViewport({ scale });
+    const wrap = document.createElement('div');
+    wrap.className = 'page-wrap pending';
+    wrap.dataset.page = String(n);
+    wrap.style.width = Math.round(vp.width) + 'px';
+    wrap.style.height = Math.round(vp.height) + 'px';
+    host.appendChild(wrap);
+  }
+
+  /* Pages are rendered from the scroll position rather than an
+     IntersectionObserver: observing a thousand-plus elements at once simply
+     does not deliver callbacks, so nothing ever rendered. Because every page
+     is the same height we can find the visible range arithmetically. */
+  renderVisible();
+
+  enableControls(true);
+  $('pageTotal').textContent = String(doc.numPages);
+  sizePageBox(doc.numPages);
+  syncPageIndicator(1);
+  const size = LintApp.fmtBytes(file.size);
+  setStatus('ok', `${doc.numPages} page${doc.numPages === 1 ? '' : 's'} · ${size}`);
+  $('pathBox').textContent = file.name;
+  buildOutline();
+  await buildInfo(file);
+}
+
+/* Fit the page to the window, but never beyond a comfortable reading width —
+   a page stretched across a wide monitor is both hard to read and expensive:
+   at scale 2.3 with a retina buffer each canvas is ~10 megapixels, which is
+   enough to lock the tab up. */
+const MAX_PAGE_WIDTH = 900;    // css px, about a printed page at 100%
+
+/* Render whatever the viewport covers, plus a screen either side. */
+function renderVisible() {
+  if (!doc) return;
+  const host = $('pages');
+  const wraps = host.querySelectorAll('.page-wrap');
+  if (!wraps.length) return;
+
+  const top = host.scrollTop - host.clientHeight;
+  const bottom = host.scrollTop + host.clientHeight * 2;
+
+  /* uniform page heights let us jump straight to the range */
+  const first = wraps[0];
+  const stride = wraps.length > 1
+    ? wraps[1].offsetTop - first.offsetTop
+    : first.offsetHeight;
+  if (stride > 0) {
+    const from = Math.max(1, Math.floor((top - first.offsetTop) / stride) + 1);
+    const to = Math.min(doc.numPages, Math.ceil((bottom - first.offsetTop) / stride) + 1);
+    for (let n = from; n <= to; n++) renderPage(n);
+    return;
+  }
+  /* mixed page sizes — fall back to measuring each one */
+  wraps.forEach((el) => {
+    if (el.offsetTop < bottom && el.offsetTop + el.offsetHeight > top) {
+      renderPage(+el.dataset.page);
+    }
+  });
+}
+
+/* Size the position controls from the widest number this document can show,
+   measured in the face actually rendering it, so nothing clips and the
+   toolbar does not shift as the page count grows a digit. */
+function sizePageBox(total) {
+  const widest = String(total);
+  /* the shorthand `font` reads back empty in Chrome, so build it from the
+     parts that actually matter for width */
+  const src = getComputedStyle($('pagePos'));
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;' +
+    'font-family:' + src.fontFamily + ';font-size:' + src.fontSize +
+    ';font-weight:' + src.fontWeight + ';font-variant-numeric:tabular-nums';
+  probe.textContent = widest;
+  document.body.appendChild(probe);
+  const w = Math.ceil(probe.getBoundingClientRect().width);
+  probe.remove();
+
+  $('pageCur').style.minWidth = w + 'px';
+  /* the field carries 8px of padding each side, a 1px border each side, and
+     needs room for the caret — plus a little slack so nothing ever touches */
+  $('pageNum').style.width = (w + 40) + 'px';
+}
+
+function fitScale(page) {
+  const avail = Math.min($('pages').clientWidth - 64, MAX_PAGE_WIDTH);
+  const base = page.getViewport({ scale: 1 });
+  return Math.max(0.3, Math.min(2, avail / base.width));
+}
+
+async function renderPage(n) {
+  if (renderedPages.has(n)) return;
+  renderedPages.set(n, true);
+  const wrap = $('pages').querySelector(`.page-wrap[data-page="${n}"]`);
+  if (!wrap) return;
+
+  try {
+    const page = await doc.getPage(n);
+    const vp = page.getViewport({ scale });
+    /* keep the backing buffer within what a browser will happily allocate;
+       above roughly 4 megapixels the gain is invisible and the cost is not */
+    const MAX_PIXELS = 4e6;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const budget = Math.sqrt(MAX_PIXELS / (vp.width * vp.height));
+    if (budget < dpr) dpr = Math.max(1, budget);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(vp.width * dpr);
+    canvas.height = Math.floor(vp.height * dpr);
+    canvas.style.width = Math.round(vp.width) + 'px';
+    canvas.style.height = Math.round(vp.height) + 'px';
+
+    await page.render({
+      canvasContext: canvas.getContext('2d', { alpha: false }),
+      viewport: vp,
+      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
+    }).promise;
+
+    wrap.classList.remove('pending');
+    wrap.style.width = '';
+    wrap.style.height = '';
+    wrap.innerHTML = '';
+    wrap.appendChild(canvas);
+    if (findTerm.trim()) paintHighlightsFor(n);
+    paintLinksFor(n);
+  } catch (e) {
+    renderedPages.delete(n);
+    /* a page that will not render should say so rather than stay blank */
+    console.error('renderPage(' + n + ') failed:', e && (e.message || e));
+    wrap.classList.remove('pending');
+    wrap.innerHTML = '<div class="page-error">This page could not be rendered.</div>';
+  }
+}
+
+async function rerender() {
+  if (!doc) return;
+  const host = $('pages');
+  const anchor = host.scrollTop / Math.max(1, host.scrollHeight);
+  renderedPages.clear();
+  const first = await doc.getPage(1);
+  for (let n = 1; n <= doc.numPages; n++) {
+    const wrap = host.querySelector(`.page-wrap[data-page="${n}"]`);
+    if (!wrap) continue;
+    const vp = first.getViewport({ scale });
+    wrap.className = 'page-wrap pending';
+    wrap.style.width = Math.round(vp.width) + 'px';
+    wrap.style.height = Math.round(vp.height) + 'px';
+    wrap.innerHTML = '';
+  }
+  host.scrollTop = anchor * host.scrollHeight;
+  renderVisible();
+}
+
+function resetView() {
+  doc = null;
+  renderedPages.clear();
+  textCache.clear();
+  linkCache.clear();
+  matches = []; matchIdx = -1; findTerm = '';
+  $('findBar').classList.add('hidden');
+  $('btnFind').setAttribute('aria-pressed', 'false');
+  $('findInput').value = '';
+  $('findCount').textContent = '';
+  $('pageTotal').textContent = '1';
+  $('pageCur').textContent = '1';
+  $('contents').innerHTML = '';
+  $('contents').classList.remove('open');
+  $('btnContents').setAttribute('aria-pressed', 'false');
+  enableControls(false);
+  $('drawer').classList.remove('open');
+  $('pathBox').textContent = '';
+  showEmpty();
+}
+
+/* ==========================================================================
+   Search
+   A page's text is cached as one string plus the item boxes that produced it,
+   so a match can be mapped back to the rectangles it spans. Highlights are
+   DOM boxes over the page, not painted into the canvas, so they survive
+   re-renders and are unaffected by the page filters.
+   ========================================================================== */
+const textCache = new Map();     // page -> { text, items }
+let matches = [];                // { page, start, end }
+let matchIdx = -1;
+let findTerm = '';
+
+async function pageText(n) {
+  if (textCache.has(n)) return textCache.get(n);
+  const page = await doc.getPage(n);
+  const tc = await page.getTextContent();
+  let text = '';
+  const items = [];
+  for (const it of tc.items) {
+    if (!it.str) continue;
+    items.push({ start: text.length, end: text.length + it.str.length, t: it });
+    text += it.str;
+    if (it.hasEOL) text += '\n';
+  }
+  const entry = { text, items, lower: text.toLowerCase() };
+  textCache.set(n, entry);
+  return entry;
+}
+
+/* Search runs in two waves so typing never blocks: the pages you can see are
+   scanned first and highlighted immediately, then the rest of the document
+   streams in as idle chunks while the counter climbs to the real total.
+   Extracted text is cached, so only the first search pays for it. */
+let findRun = 0;                 // increments to cancel a superseded search
+
+async function runFind(term) {
+  const run = ++findRun;
+  findTerm = term;
+  matches = [];
+  matchIdx = -1;
+  clearHighlights();
+
+  const q = term.trim().toLowerCase();
+  if (!q) { setFindProgress(false); updateFindCount(); return; }
+
+  const here = currentPage();
+  const near = [];
+  for (let d = 0; d < 3; d++) {
+    if (here + d <= doc.numPages) near.push(here + d);
+    if (d && here - d >= 1) near.push(here - d);
+  }
+
+  /* wave one: what the reader is looking at */
+  for (const n of near) {
+    try { await collectMatches(n, q); } catch (e) { /* skip a bad page */ }
+    if (run !== findRun) return;
+  }
+  matches.sort(byPosition);
+  updateFindCount();
+  /* isolated: a failure jumping to the first hit must not stop the scan below */
+  try {
+    if (matches.length) await gotoMatch(0, true);
+    else await paintHighlightsFor(here);
+  } catch (e) { /* keep scanning regardless */ }
+
+  /* wave two: everything else, in chunks that yield to the browser */
+  setFindProgress(true);
+  const seen = new Set(near);
+  const CHUNK = 12;
+  for (let n = 1; n <= doc.numPages; n++) {
+    if (seen.has(n)) continue;
+    try {
+      await collectMatches(n, q);
+    } catch (e) { /* a damaged page should not end the search */ }
+    if (run !== findRun) return;
+    if (n % CHUNK === 0) {
+      matches.sort(byPosition);
+      updateFindCount();
+      await new Promise((r) => setTimeout(r, 0));
+      if (run !== findRun) return;
+    }
+  }
+
+  matches.sort(byPosition);
+  setFindProgress(false);
+  updateFindCount();
+  /* the first wave may have landed on a later match than the true first */
+  if (matches.length && matchIdx < 0) gotoMatch(0, true);
+  else if (matches.length) {
+    const cur = matches[matchIdx];
+    matchIdx = Math.max(0, matches.indexOf(cur));
+    updateFindCount();
+  }
+}
+
+/* The counter says what is actually known: a total while idle, and a total
+   with an ellipsis while the background pass is still adding to it. */
+function updateFindCount() {
+  const el = $('findCount');
+  const scanning = $('findBar').classList.contains('scanning');
+  if (!findTerm.trim()) { el.textContent = ''; el.classList.remove('none'); return; }
+  if (!matches.length) {
+    el.textContent = scanning ? 'searching…' : 'no matches';
+    el.classList.toggle('none', !scanning);
+    return;
+  }
+  el.classList.remove('none');
+  el.textContent = (matchIdx >= 0 ? (matchIdx + 1) + ' of ' : '') +
+    LintApp.fmtNum(matches.length) + (scanning ? '…' : '');
+}
+
+function byPosition(a, b) {
+  return a.page - b.page || a.start - b.start;
+}
+
+async function collectMatches(n, q) {
+  const { lower } = await pageText(n);
+  let i = 0, at;
+  while ((at = lower.indexOf(q, i)) !== -1) {
+    matches.push({ page: n, start: at, end: at + q.length });
+    i = at + q.length;
+    if (matches.length > 8000) return;
+  }
+}
+
+function setFindProgress(on) {
+  $('findBar').classList.toggle('scanning', on);
+}
+
+/* Move to a match with a single scroll, and only when one is needed. Jumping
+   to the page first and then to the highlight made every step within a page
+   bounce to the top and back down. */
+async function gotoMatch(i, quiet) {
+  if (!matches.length) return;
+  matchIdx = (i + matches.length) % matches.length;
+  const m = matches[matchIdx];
+  const host = $('pages');
+
+  /* the page has to exist and be painted before the highlight can be located */
+  await renderPage(m.page);
+  await paintHighlightsFor(m.page);
+  updateFindCount();
+  syncPageIndicator(m.page);
+
+  const wrap = host.querySelector(`.page-wrap[data-page="${m.page}"]`);
+  if (!wrap) return;
+  const box = wrap.querySelector('.hl-box.current:not(.word)');
+
+  /* without a box to aim at, fall back to the top of the page */
+  const target = box
+    ? wrap.offsetTop - host.offsetTop + parseFloat(box.style.top || '0')
+    : wrap.offsetTop - host.offsetTop;
+
+  const viewTop = host.scrollTop;
+  const viewBottom = viewTop + host.clientHeight;
+  const boxH = box ? parseFloat(box.style.height || '0') : 0;
+
+  /* already comfortably on screen — leave the view alone */
+  const margin = 80;
+  if (target >= viewTop + margin && target + boxH <= viewBottom - margin) return;
+
+  scrollHost(target - host.clientHeight / 2 + boxH / 2, !quiet);
+}
+
+function clearHighlights() {
+  $('pages').querySelectorAll('.hl-box').forEach((b) => b.remove());
+}
+
+/* Map a match's character range back onto the text items it covers, then
+   place one box per item. Coordinates come from the page's own viewport, the
+   same transform used to paint the canvas — deriving them by hand meant
+   double-applying the zoom and the device pixel ratio. */
+async function paintHighlightsFor(n) {
+  const wrap = $('pages').querySelector(`.page-wrap[data-page="${n}"]`);
+  if (!wrap || wrap.classList.contains('pending')) return;
+  wrap.querySelectorAll('.hl-box').forEach((b) => b.remove());
+
+  const entry = textCache.get(n);
+  if (!entry || !findTerm.trim()) return;
+  const canvas = wrap.querySelector('canvas');
+  if (!canvas) return;
+
+  const onPage = matches.filter((m) => m.page === n);
+  if (!onPage.length) return;
+
+  const page = await doc.getPage(n);
+  const vp = page.getViewport({ scale });
+  /* the canvas may be laid out smaller than the viewport (max-width on
+     narrow windows), so map viewport units onto displayed pixels */
+  const shown = canvas.clientWidth / vp.width;
+
+  onPage.forEach((m) => {
+    const isCurrent = matchIdx >= 0 && matches[matchIdx] === m;
+    const word = wordAround(entry.text, m.start, m.end);
+
+    /* the surrounding word first, so the exact match paints on top of it */
+    if (word.start < m.start || word.end > m.end) {
+      drawRange(wrap, entry, vp, shown, word, 'hl-box word' + (isCurrent ? ' current' : ''));
+    }
+    drawRange(wrap, entry, vp, shown, m, 'hl-box' + (isCurrent ? ' current' : ''));
+  });
+}
+
+/* Proportional text needs real glyph widths. The browser can measure them on
+   a scratch canvas; results are normalised to the item's own width so the
+   actual PDF font's metrics still govern the total. */
+const measureCanvas = document.createElement('canvas').getContext('2d');
+const ratioCache = new Map();
+
+function measureRatio(str, fontName, size) {
+  /* no 2d context (rare, but possible) — fall back to even spacing rather
+     than losing highlights altogether */
+  if (!measureCanvas) {
+    return (sub) => (str.length ? (sub || '').length / str.length : 0);
+  }
+
+  const key = fontName + '|' + size + '|' + str;
+  let cached = ratioCache.get(key);
+  if (cached) return cached;
+
+  /* the embedded face is not available to canvas, so a metrically similar
+     generic stands in — relative widths are what matter here, not absolutes */
+  const serif = /times|serif|roman|georgia|book/i.test(fontName || '');
+  const mono = /mono|courier|consol/i.test(fontName || '');
+  measureCanvas.font = size + 'px ' + (mono ? 'monospace' : serif ? 'serif' : 'sans-serif');
+  const total = measureCanvas.measureText(str).width || 1;
+
+  const fn = (sub) => (sub ? measureCanvas.measureText(sub).width / total : 0);
+  /* keep the font set for the closure's later calls */
+  const font = measureCanvas.font;
+  const wrapped = (sub) => {
+    measureCanvas.font = font;
+    return fn(sub);
+  };
+  if (ratioCache.size > 4000) ratioCache.clear();
+  ratioCache.set(key, wrapped);
+  return wrapped;
+}
+
+/* Grow a match outward to the word it sits inside, so "refere" boxes the whole
+   of "reference" rather than a clipped fragment. */
+const WORD_CHAR = /[\p{L}\p{N}_'’-]/u;
+
+function wordAround(text, start, end) {
+  let a = start, b = end;
+  while (a > 0 && WORD_CHAR.test(text[a - 1])) a--;
+  while (b < text.length && WORD_CHAR.test(text[b])) b++;
+  /* a runaway span means the text has no separators — keep the exact match */
+  if (b - a > (end - start) + 60) return { start, end };
+  return { start: a, end: b };
+}
+
+function drawRange(wrap, entry, vp, shown, range, className) {
+  entry.items.forEach(({ start, end, t }) => {
+      if (end <= range.start || start >= range.end) return;   // no overlap
+      const m = range;
+      const tr = t.transform;
+      const fontH = Math.hypot(tr[1], tr[3]) || t.height || 10;
+
+      /* The slice of this item the match covers. Averaging the item's width
+         over its characters overshoots badly in proportional text (a run of
+         narrow letters and spaces is not the mean), so measure the actual
+         substrings and normalise against the item's known width. */
+      const chars = Math.max(1, end - start);
+      const from = Math.max(0, m.start - start);
+      const to = Math.min(chars, m.end - start);
+      const str = t.str;
+      const unit = measureRatio(str, t.fontName, fontH);
+      const lead = unit(str.slice(0, from));
+      const span = unit(str.slice(from, to));
+      const pdfX = tr[4] + lead * t.width;
+      const pdfW = Math.max(t.width / chars, span * t.width);
+
+      /* convert through the viewport so rotation and zoom are handled once */
+      const topLeft = vp.convertToViewportPoint(pdfX, tr[5] + fontH);
+      const botRight = vp.convertToViewportPoint(pdfX + pdfW, tr[5] - fontH * 0.22);
+
+      const x = Math.min(topLeft[0], botRight[0]) * shown;
+      const y = Math.min(topLeft[1], botRight[1]) * shown;
+      const w = Math.abs(botRight[0] - topLeft[0]) * shown;
+      const h = Math.abs(botRight[1] - topLeft[1]) * shown;
+
+      const box = document.createElement('div');
+      box.className = className;
+      box.style.left = x + 'px';
+      box.style.top = y + 'px';
+      box.style.width = Math.max(2, w) + 'px';
+      box.style.height = Math.max(2, h) + 'px';
+      wrap.appendChild(box);
+  });
+}
+
+/* ==========================================================================
+   Navigation
+   ========================================================================== */
+function currentPage() {
+  const host = $('pages');
+  const mid = host.scrollTop + host.offsetTop + host.clientHeight / 3;
+  let best = 1;
+  host.querySelectorAll('.page-wrap').forEach((el) => {
+    if (el.offsetTop <= mid) best = +el.dataset.page;
+  });
+  return best;
+}
+
+/* Scrolling is animated by hand for two reasons. Chrome silently refuses
+   `behavior:'smooth'` inside a container this tall — a thousand-page book is
+   over a million pixels — so the built-in never ran. And a move should take
+   the same short moment whether it is one page or nine hundred: distance is
+   expressed by arriving, not by travelling through everything in between. */
+const SMOOTH_LIMIT = () => $('pages').clientHeight * 2;
+const GLIDE_MS = 260;
+
+let glide = null;
+
+function stopGlide() {
+  if (glide) { cancelAnimationFrame(glide); glide = null; }
+}
+
+function scrollHost(top, smooth) {
+  const host = $('pages');
+  const want = Math.max(0, Math.min(top, host.scrollHeight - host.clientHeight));
+  const from = host.scrollTop;
+  const delta = want - from;
+  const near = Math.abs(delta) <= SMOOTH_LIMIT();
+
+  stopGlide();
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!smooth || !near || still || Math.abs(delta) < 2) {
+    host.scrollTop = want;
+    return near;
+  }
+
+  /* ease-out: quick to leave, gentle to settle */
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / GLIDE_MS);
+    host.scrollTop = from + delta * (1 - Math.pow(1 - p, 3));
+    glide = p < 1 ? requestAnimationFrame(step) : null;
+  };
+  glide = requestAnimationFrame(step);
+  return near;
+}
+
+/* a manual scroll should win over an animation already in flight */
+['wheel', 'touchstart', 'pointerdown'].forEach((ev) =>
+  document.addEventListener(ev, stopGlide, { passive: true }));
+
+/* one settling cue, only when the move was too far to animate */
+function markArrival(n) {
+  const el = $('pages').querySelector(`.page-wrap[data-page="${n}"]`);
+  if (!el) return;
+  el.classList.remove('arrived');
+  void el.offsetWidth;                 // restart the animation
+  el.classList.add('arrived');
+  setTimeout(() => el.classList.remove('arrived'), 400);
+}
+
+async function scrollToPage(n, smooth = true) {
+  if (!doc) return;
+  n = Math.min(doc.numPages, Math.max(1, n));
+  const host = $('pages');
+  const el = host.querySelector(`.page-wrap[data-page="${n}"]`);
+  if (!el) return;
+
+  const wasNear = scrollHost(el.offsetTop - host.offsetTop - 16, smooth);
+  syncPageIndicator(n);
+  if (!wasNear) markArrival(n);
+  /* render it now rather than waiting for the scroll handler, so a jump never
+     lands on an empty placeholder */
+  renderPage(n);
+}
+
+function syncPageIndicator(n) {
+  if ($('pageNum').hidden) $('pageCur').textContent = String(n);
+  const rail = $('contents');
+  if (!rail.classList.contains('open')) return;
+  /* mark the contents entry covering this page, if we know one */
+  rail.querySelectorAll('.bm button[data-page]').forEach((b) => {
+    b.classList.toggle('here', +b.dataset.page === n);
+  });
+}
+
+/* ---------- cross-reference links ----------
+   A PDF's internal references already carry their targets; the viewer just
+   has to surface them. Nothing is fetched — an internal link resolves to a
+   page index locally, and an external one is a plain anchor. */
+const linkCache = new Map();          // page -> annotation list
+
+async function pageLinks(n) {
+  if (linkCache.has(n)) return linkCache.get(n);
+  const page = await doc.getPage(n);
+  const annots = await page.getAnnotations().catch(() => []);
+  const links = annots.filter((a) => a.subtype === 'Link' && (a.dest || a.url));
+  linkCache.set(n, links);
+  return links;
+}
+
+async function paintLinksFor(n) {
+  const wrap = $('pages').querySelector(`.page-wrap[data-page="${n}"]`);
+  if (!wrap || wrap.classList.contains('pending')) return;
+  wrap.querySelectorAll('.lnk').forEach((a) => a.remove());
+
+  const links = await pageLinks(n);
+  if (!links.length) return;
+  const canvas = wrap.querySelector('canvas');
+  if (!canvas) return;
+
+  const page = await doc.getPage(n);
+  const vp = page.getViewport({ scale });
+  /* against the viewport, not canvas.width — that is the device-pixel buffer,
+     which would halve every box on a retina screen */
+  const shown = canvas.clientWidth / vp.width;
+
+  links.forEach((l) => {
+    /* The annotation rect is in PDF space (origin bottom-left). Convert both
+       corners through the viewport, which also handles page rotation. */
+    const a1 = vp.convertToViewportPoint(l.rect[0], l.rect[1]);
+    const a2 = vp.convertToViewportPoint(l.rect[2], l.rect[3]);
+    const x1 = Math.min(a1[0], a2[0]) * shown;
+    const y1 = Math.min(a1[1], a2[1]) * shown;
+    const w = Math.abs(a2[0] - a1[0]) * shown;
+    const h = Math.abs(a2[1] - a1[1]) * shown;
+    if (w < 2 || h < 2) return;
+
+    const a = document.createElement('a');
+    a.className = 'lnk';
+    a.style.left = x1 + 'px';
+    a.style.top = y1 + 'px';
+    a.style.width = w + 'px';
+    a.style.height = h + 'px';
+
+    if (l.url) {
+      a.href = l.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.title = l.url;
+    } else {
+      a.href = '#';
+      a.title = 'Go to reference';
+      /* resolve the target lazily — 958 destinations need not be looked up
+         before the reader clicks one */
+      a.addEventListener('click', (e) => { e.preventDefault(); jumpToDest(l.dest); });
+      resolveDestLabel(l.dest).then((label) => { if (label) a.title = label; });
+    }
+    wrap.appendChild(a);
+  });
+}
+
+async function resolveDestPage(dest) {
+  try {
+    const d = typeof dest === 'string' ? await doc.getDestination(dest) : dest;
+    if (!d) return null;
+    return (await doc.getPageIndex(d[0])) + 1;
+  } catch (e) { return null; }
+}
+
+async function resolveDestLabel(dest) {
+  try {
+    const d = typeof dest === 'string' ? await doc.getDestination(dest) : dest;
+    if (!d) return null;
+    return 'Go to page ' + (await doc.getPageIndex(d[0]) + 1);
+  } catch (e) { return null; }
+}
+
+/* ---------- bookmarks ---------- */
+async function buildOutline() {
+  const panel = $('contents');
+  const outline = await doc.getOutline().catch(() => null);
+
+  if (!outline || !outline.length) {
+    panel.innerHTML =
+      '<div class="rail-head">Contents</div>' +
+      '<p class="hint">This document carries no contents list. Use the page ' +
+      'number or find to move around.</p>';
+    $('btnContents').disabled = true;
+    return;
+  }
+
+  const build = (items) => {
+    const ul = document.createElement('ul');
+    ul.className = 'bm';
+    items.forEach((it) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.textContent = it.title || '(untitled)';
+      b.addEventListener('click', () => jumpToDest(it.dest));
+      /* resolve lazily so the rail opens instantly on a 958-entry book */
+      resolveDestPage(it.dest).then((n) => { if (n) b.dataset.page = String(n); });
+      li.appendChild(b);
+      if (it.items && it.items.length) li.appendChild(build(it.items));
+      ul.appendChild(li);
+    });
+    return ul;
+  };
+
+  panel.innerHTML = '<div class="rail-head">Contents</div>';
+  panel.appendChild(build(outline));
+  $('btnContents').disabled = false;
+}
+
+async function jumpToDest(dest) {
+  try {
+    const d = typeof dest === 'string' ? await doc.getDestination(dest) : dest;
+    if (!d) return;
+    const idx = await doc.getPageIndex(d[0]);
+    scrollToPage(idx + 1);
+  } catch (e) {
+    LintApp.toast('Could not follow that bookmark');
+  }
+}
+
+/* ==========================================================================
+   Info drawer
+   ========================================================================== */
+async function buildInfo(file) {
+  const info = await doc.getMetadata().catch(() => ({ info: {}, metadata: null }));
+  const d = info.info || {};
+  const perms = await doc.getPermissions().catch(() => null);
+
+  const fmtDate = (s) => {
+    if (!s) return null;
+    const m = /^D:(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?/.exec(s);
+    if (!m) return s;
+    return `${m[1]}-${m[2]}-${m[3]}` + (m[4] ? ` ${m[4]}:${m[5]}` : '');
+  };
+
+  const first = await doc.getPage(1);
+  const vp = first.getViewport({ scale: 1 });
+  const mm = (pt) => Math.round(pt * 0.3528);
+
+  const rows = [
+    ['Title', d.Title],
+    ['Author', d.Author],
+    ['Subject', d.Subject],
+    ['Keywords', d.Keywords],
+    ['Created', fmtDate(d.CreationDate)],
+    ['Modified', fmtDate(d.ModDate)],
+    ['Producer', d.Producer],
+    ['Creator', d.Creator],
+    ['PDF version', d.PDFFormatVersion],
+    ['Pages', String(doc.numPages)],
+    ['Page 1 size', `${mm(vp.width)} × ${mm(vp.height)} mm`],
+    ['File size', LintApp.fmtBytes(file.size)]
+  ];
+
+  $('panelAbout').innerHTML =
+    '<dl class="meta">' +
+    rows.map(([k, v]) => `<div><dt>${k}</dt><dd${v ? '' : ' class="none"'}>${
+      v ? esc(String(v)) : 'not set'}</dd></div>`).join('') +
+    '</dl>' +
+    '<div class="menu-label" style="padding-top:var(--s4)">Contents</div>' +
+    flagsHTML(d, perms);
+
+  buildFonts();
+}
+
+function flagsHTML(d, perms) {
+  const flags = [
+    { on: !!d.IsAcroFormPresent, yes: 'Has form fields',
+      no: 'No form fields', note: 'Fillable fields that can hold data.' },
+    { on: !!d.IsXFAPresent, yes: 'Uses XFA forms',
+      no: 'No XFA forms', note: 'A legacy Adobe form format.' },
+    { on: !!doc.isPureXfa, yes: 'XFA only',
+      no: '', note: '' },
+    { on: !!d.IsCollectionPresent, yes: 'Is a portfolio',
+      no: '', note: 'Contains other files inside it.' },
+    { on: perms !== null, yes: 'Has usage restrictions',
+      no: 'No usage restrictions', note: 'Printing or copying may be limited.' },
+    { on: !!d.IsSignaturesPresent, yes: 'Contains a signature',
+      no: 'Not signed', note: 'A digital signature is present — this tool does not verify it.' }
+  ].filter((f) => f.on || f.no);
+
+  return flags.map((f) => `
+    <div class="flag ${f.on ? 'yes' : 'no'}">
+      <span class="dot"></span>
+      <span class="what">${f.on ? f.yes : f.no}${
+        f.note && f.on ? `<small>${f.note}</small>` : ''}</span>
+    </div>`).join('');
+}
+
+async function buildFonts() {
+  $('panelFonts').innerHTML = '<p class="hint">Reading fonts…</p>';
+  const seen = new Map();
+  const limit = Math.min(doc.numPages, 30);
+  for (let n = 1; n <= limit; n++) {
+    try {
+      const page = await doc.getPage(n);
+      const ops = await page.getOperatorList();
+      const objs = page.commonObjs._objs || {};
+      Object.keys(objs).forEach((k) => {
+        const data = objs[k] && objs[k].data;
+        if (data && data.loadedName && data.name) {
+          seen.set(data.name, data.type || 'embedded');
+        }
+      });
+    } catch (e) { /* a page that will not parse should not stop the list */ }
+  }
+
+  if (!seen.size) {
+    $('panelFonts').innerHTML =
+      '<p class="hint">No embedded fonts found in the first ' + limit +
+      ' page' + (limit === 1 ? '' : 's') +
+      '. The document may use standard fonts only, or be page images.</p>';
+    return;
+  }
+
+  $('panelFonts').innerHTML =
+    `<p class="hint">${seen.size} font${seen.size === 1 ? '' : 's'} used in the first ` +
+    `${limit} page${limit === 1 ? '' : 's'}.</p>` +
+    [...seen.entries()].map(([name, kind]) =>
+      `<div class="font-row"><span>${esc(name)}</span><span class="kind">${esc(kind)}</span></div>`
+    ).join('');
+}
+
+async function extractText() {
+  const out = $('textOut');
+  if (!out) return;
+  out.value = 'Extracting…';
+  const parts = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const page = await doc.getPage(n);
+    const tc = await page.getTextContent();
+    const line = tc.items.map((i) => i.str).join(' ').replace(/\s+/g, ' ').trim();
+    parts.push(`── page ${n} ──\n${line || '(no text — this page may be an image)'}`);
+    if (n % 10 === 0) out.value = parts.join('\n\n');
+  }
+  out.value = parts.join('\n\n');
+  const chars = parts.join('').length;
+  $('textMeta').textContent = LintApp.fmtNum(chars) + ' characters';
+}
+
+$('panelText').innerHTML = `
+  <p class="hint">Text is pulled out of the page in reading order. Scanned
+     documents hold no text layer, so they come back empty.</p>
+  <textarea id="textOut" spellcheck="false" readonly
+            placeholder="Press Extract to read the text out of this document…"></textarea>
+  <div class="drawer-actions">
+    <button id="btnExtract" class="primary">Extract</button>
+    <button id="btnCopyText" class="bordered">Copy</button>
+    <span class="spacer"></span>
+    <span id="textMeta" style="font-size:var(--fs-small);color:var(--muted);align-self:center"></span>
+  </div>`;
+
+$('btnExtract').addEventListener('click', () => { if (doc) extractText(); });
+$('btnCopyText').addEventListener('click', () => {
+  const v = $('textOut').value;
+  if (v && !/^Extracting/.test(v)) LintApp.copy(v, 'Text');
+});
+
+/* drawer tabs */
+[['tabAbout', 'panelAbout'], ['tabFonts', 'panelFonts'], ['tabText', 'panelText']]
+  .forEach(([tab, panel], _, all) => {
+    $(tab).addEventListener('click', () => {
+      all.forEach(([t, p]) => {
+        $(t).setAttribute('aria-selected', String(t === tab));
+        $(p).classList.toggle('active', p === panel);
+      });
+    });
+  });
+
+/* ==========================================================================
+   Toolbar
+   ========================================================================== */
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => {
+  if (e.target.files[0]) openFile(e.target.files[0]);
+  e.target.value = '';
+});
+$('btnClose').addEventListener('click', () => { resetView(); setStatus('', 'Ready'); });
+
+$('btnInfo').addEventListener('click', () => {
+  const open = $('drawer').classList.toggle('open');
+  $('btnInfo').setAttribute('aria-pressed', String(open));
+});
+
+$('btnIn').addEventListener('click', () => { fitMode = false; scale = Math.min(3, scale * 1.2); rerender(); });
+$('btnOut').addEventListener('click', () => { fitMode = false; scale = Math.max(0.3, scale / 1.2); rerender(); });
+$('btnFit').addEventListener('click', async () => {
+  if (!doc) return;
+  fitMode = true;
+  scale = fitScale(await doc.getPage(1));
+  rerender();
+});
+
+/* ---------- navigation controls ---------- */
+$('btnContents').addEventListener('click', () => {
+  const open = $('contents').classList.toggle('open');
+  $('btnContents').setAttribute('aria-pressed', String(open));
+  if (open) syncPageIndicator(currentPage());
+});
+
+$('btnPrev').addEventListener('click', () => scrollToPage(currentPage() - 1));
+$('btnNext').addEventListener('click', () => scrollToPage(currentPage() + 1));
+
+/* the position label turns into a field only when you mean to jump */
+function openPageInput() {
+  const inp = $('pageNum');
+  $('pagePos').hidden = true;
+  inp.hidden = false;
+  inp.value = $('pageCur').textContent;
+  inp.focus();
+  inp.select();
+}
+function closePageInput(commit) {
+  const inp = $('pageNum');
+  if (commit) {
+    const n = parseInt(inp.value, 10);
+    if (n >= 1 && n <= doc.numPages) { $('pageCur').textContent = String(n); scrollToPage(n); }
+  }
+  inp.hidden = true;
+  $('pagePos').hidden = false;
+}
+$('pagePos').addEventListener('click', openPageInput);
+$('pageNum').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); closePageInput(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); closePageInput(false); }
+});
+$('pageNum').addEventListener('blur', () => closePageInput(true));
+
+/* keep the indicator honest while scrolling */
+let scrollTick;
+$('pages').addEventListener('scroll', () => {
+  if (!doc) return;
+  clearTimeout(scrollTick);
+  scrollTick = setTimeout(() => {
+    syncPageIndicator(currentPage());
+    renderVisible();
+  }, 90);
+}, { passive: true });
+
+/* ---------- find ---------- */
+function openFind() {
+  $('findBar').hidden = false;
+  $('btnFind').setAttribute('aria-pressed', 'true');
+  $('findInput').focus();
+  $('findInput').select();
+}
+function closeFind() {
+  $('findBar').hidden = true;
+  $('btnFind').setAttribute('aria-pressed', 'false');
+  findTerm = '';
+  matches = []; matchIdx = -1;
+  clearHighlights();
+  $('findCount').textContent = '';
+}
+
+$('btnFind').addEventListener('click', () =>
+  $('findBar').hidden ? openFind() : closeFind());
+$('findClose').addEventListener('click', closeFind);
+
+let findTimer;
+$('findInput').addEventListener('input', () => {
+  clearTimeout(findTimer);
+  const v = $('findInput').value;
+  findTimer = setTimeout(() => { if (doc) runFind(v); }, 260);
+});
+$('findInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); gotoMatch(matchIdx + (e.shiftKey ? -1 : 1)); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+});
+$('findNext').addEventListener('click', () => gotoMatch(matchIdx + 1));
+$('findPrev').addEventListener('click', () => gotoMatch(matchIdx - 1));
+
+/* Holding the modifier reveals every reference at once. */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Alt') document.body.classList.add('show-links');
+});
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Alt') document.body.classList.remove('show-links');
+});
+window.addEventListener('blur', () => document.body.classList.remove('show-links'));
+
+/* drag and drop */
+['dragover', 'dragenter'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dragover');
+  }));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+/* keyboard */
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('fileInput').click(); }
+  else if (mod && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); $('btnInfo').click(); }
+  else if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); $('btnIn').click(); }
+  else if (mod && e.key === '-') { e.preventDefault(); $('btnOut').click(); }
+  else if (mod && e.key === '0') { e.preventDefault(); $('btnFit').click(); }
+  else if (mod && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); if (doc) openFind(); }
+  else if (mod && (e.key === 'g' || e.key === 'G')) {
+    e.preventDefault();
+    /* while find is open ⌘G steps matches, as it does everywhere else;
+       otherwise it does what it does in an editor — go to a line, or here,
+       a page */
+    if (!$('findBar').hidden && matches.length) {
+      gotoMatch(matchIdx + (e.shiftKey ? -1 : 1));
+    } else if (doc) {
+      openPageInput();
+    }
+  }
+  else if (!doc) return;
+  /* paging keys stay out of the way while a field has focus */
+  else if (/^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '')) return;
+  else if (e.key === 'PageDown') { e.preventDefault(); scrollToPage(Math.min(doc.numPages, currentPage() + 1)); }
+  else if (e.key === 'PageUp') { e.preventDefault(); scrollToPage(Math.max(1, currentPage() - 1)); }
+  else if (e.key === 'Home') { e.preventDefault(); scrollToPage(1); }
+  else if (e.key === 'End') { e.preventDefault(); scrollToPage(doc.numPages); }
+});
+
+/* refit on resize while in fit mode */
+let resizeTimer;
+window.addEventListener('resize', () => {
+  if (!doc || !fitMode) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(async () => {
+    scale = fitScale(await doc.getPage(1));
+    rerender();
+  }, 220);
+});
+</script>
+</body>
+</html>

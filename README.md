@@ -10,8 +10,9 @@
 | `<>` | **[xml.lint.uz](https://xml.lint.uz)** | Element/attribute/text tree, XPath for any node, XML → JSON |
 | `—` | **[yaml.lint.uz](https://yaml.lint.uz)** | Indentation validation, multi-document manifests, YAML ↔ JSON |
 | `⌸` | **[csv.lint.uz](https://csv.lint.uz)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
+| `P` | **[pdf.lint.uz](https://pdf.lint.uz)** | Page reader, text extraction, fonts, metadata, and what the file contains |
 
-The landing page at **[lint.uz](https://lint.uz)** links all four.
+The landing page at **[lint.uz](https://lint.uz)** links all five.
 
 ---
 
@@ -60,9 +61,9 @@ All five properties share one system in [`shared/`](shared/):
 mark and the favicon — so a tab is identifiable at a glance while the suite
 still reads as one product:
 
-| JSON | XML | YAML | CSV |
-| :-- | :-- | :-- | :-- |
-| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#9333EA` plum |
+| JSON | XML | YAML | CSV | PDF |
+| :-- | :-- | :-- | :-- | :-- |
+| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#9333EA` plum | `#BE123C` crimson |
 
 **Themes:** System, Daylight, Slate, Paper, Midnight, Contrast (WCAG AAA).
 To add one, copy a block in `theme.css`, rename the selector, and register it
@@ -70,6 +71,15 @@ in `THEMES[]` in `app.js`.
 
 A tool's own `index.html` holds only what is genuinely format-specific: its
 parser, syntax highlighter, tree adapter, sample document and toolbar actions.
+
+**PDF is the exception.** A rendered page is the content, so it has no
+editor/tree split and builds its own single-pane frame from `LintApp.mountChrome`
+rather than `shell.js`. It also cannot be *themed* the way text can — a page is
+an image the author fixed. The chrome is themed like everything else, and the
+sheet gets an explicit **Normal / Dim / Invert** control, defaulting to Dim on
+dark themes until the reader chooses otherwise. It bundles PDF.js (Apache-2.0,
+`pdf/public/vendor/`); the worker and fonts load only once a file is opened,
+so the initial page weight stays close to the other tools.
 
 ---
 

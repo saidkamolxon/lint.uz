@@ -51,7 +51,8 @@ var SUITE = [
   { id: 'json', name: 'JSON', host: 'https://json.lint.uz' },
   { id: 'xml',  name: 'XML',  host: 'https://xml.lint.uz'  },
   { id: 'yaml', name: 'YAML', host: 'https://yaml.lint.uz' },
-  { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.uz'  }
+  { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.uz'  },
+  { id: 'pdf',  name: 'PDF',  host: 'https://pdf.lint.uz'  }
 ];
 
 /* ---------- small helpers ---------- */
@@ -1071,8 +1072,19 @@ function kbd(key) {
   return '<kbd>' + (IS_MAC ? out.join('') : out.join('+')) + '</kbd>';
 }
 
+/* A tool with no editor/tree (PDF) builds its own frame, so it needs the
+   suite switcher and theme picker on their own. */
+function mountChrome(slot, activeId) {
+  buildSuiteMenu(slot, activeId);
+  buildThemeMenu(slot);
+}
+
 global.LintApp = {
   init: init,
+  mountChrome: mountChrome,
+  wireMenu: wireMenu,
+  closeMenus: closeAllMenus,
+  isMac: IS_MAC,
   copyAndOffer: copyAndOffer,
   kbd: kbd,
   esc: esc,

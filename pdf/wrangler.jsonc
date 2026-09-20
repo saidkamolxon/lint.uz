@@ -1,0 +1,13 @@
+{
+  "name": "pdfviewer",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    {
+      "pattern": "pdf.lint.uz/*",
+      "zone_name": "lint.uz"
+    }
+  ]
+}
