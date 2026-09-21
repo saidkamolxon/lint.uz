@@ -294,11 +294,30 @@ const SEVERITIES = ['error', 'warn', 'info', 'debug'];
 /* Word-boundary matching, most severe first: a line saying "no errors" should
    not be filed under ERROR, but "ERROR" or "[error]" or "level=error" should. */
 const SEV_RE = [
-  ['error', /\b(?:FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|EMERG|ALERT)\b/i],
+  ['error', /\b(?:FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|EMERG|ALERT|FAIL|FAILED|FAILURE)\b/i],
   ['warn',  /\b(?:WARNING|WARN)\b/i],
   ['info',  /\b(?:INFO|NOTICE|INFORMATION)\b/i],
-  ['debug', /\b(?:DEBUG|TRACE|VERBOSE|FINE)\b/i]
+  ['debug', /\b(?:DEBUG|TRACE|TRCE|DBUG|VERBOSE|FINE)\b/i]
 ];
+
+/* .NET's ILogger console writes the level as a four-character prefix —
+   "fail:", "warn:", "crit:", "dbug:", "trce:" — with the message on the
+   indented lines below. Checked first so the prefix wins over any word that
+   happens to appear later in the line. */
+const DOTNET_RE = /^(trce|dbug|info|warn|fail|crit)\s*:/i;
+const DOTNET_MAP = { trce: 'debug', dbug: 'debug', info: 'info',
+                     warn: 'warn', fail: 'error', crit: 'error' };
+
+/* timestamp <tab|space> level <tab|space> message — Istio, zap, and most Go
+   services. Where a line states its level, that wins: a config value like
+   --logLevel="misc:error" must not make an info line look like a failure. */
+const LEADING_LEVEL_RE =
+  /^\S+[ \t]+(trace|debug|info|warn|warning|error|fatal|panic|dpanic)\b/i;
+
+const LEVEL_MAP = {
+  trace: 'debug', debug: 'debug', info: 'info', warn: 'warn', warning: 'warn',
+  error: 'error', fatal: 'error', panic: 'error', dpanic: 'error'
+};
 
 /* A continuation line belongs to the event above it: stack frames, "Caused
    by", and anything indented under a parent. */
@@ -308,6 +327,12 @@ const JSON_LEVEL_KEYS = ['level', 'severity', 'lvl', 'levelname', 'log.level'];
 
 function classify(line) {
   if (!line) return 'none';
+
+  const dn = DOTNET_RE.exec(line);
+  if (dn) return DOTNET_MAP[dn[1].toLowerCase()];
+
+  const ll = LEADING_LEVEL_RE.exec(line);
+  if (ll) return LEVEL_MAP[ll[1].toLowerCase()];
 
   /* structured logs say what they are — trust the field over the text */
   if (line.charCodeAt(0) === 123 /* { */) {
@@ -365,7 +390,7 @@ function accessStatus(line) {
    thorough where classification cannot.
    ========================================================================== */
 const TIME_RE = /^(\[?)((?:\d{4}-\d{2}-\d{2}[T ])?\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?)(\]?)/;
-const SEV_WORD_RE = /\b(FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|WARNING|WARN|INFO|NOTICE|DEBUG|TRACE|VERBOSE)\b/;
+const SEV_WORD_RE = /\b(FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|FAILED|FAIL|WARNING|WARN|INFO|NOTICE|DEBUG|TRACE|TRCE|DBUG|VERBOSE)\b/;
 
 function render(line, query) {
   if (line.length > 4000) line = line.slice(0, 4000) + ' …';
@@ -588,17 +613,20 @@ function applyFilters() {
 
   const out = [];
   const n = lines.length;
-  const anySev = on.error || on.warn || on.info || on.debug;
+  const allOn = on.error && on.warn && on.info && on.debug;
 
   for (let i = 0; i < n; i++) {
     /* a folded event hides its children but keeps itself */
     const p = parent[i];
     if (p >= 0 && folded.has(p)) continue;
 
+    /* Once the reader has narrowed to particular severities, lines carrying
+       no level at all are noise too — a banner or a config dump is not an
+       error. They stay visible only while every severity is on. */
     const code = sev[i];
-    if (anySev && code) {
-      const name = SEVERITIES[code - 1];
-      if (!on[name]) continue;
+    if (!allOn) {
+      if (!code) continue;
+      if (!on[SEVERITIES[code - 1]]) continue;
     }
 
     if (inc.length || exc.length) {
