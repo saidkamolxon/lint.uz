@@ -19,7 +19,8 @@
     "deploy:pdf": "node build.mjs pdf && cd pdf && npx wrangler deploy",
     "dev:pdf": "node build.mjs pdf && cd pdf && npx wrangler dev",
     "deploy:log": "node build.mjs log && cd log && npx wrangler deploy",
-    "dev:log": "node build.mjs log && cd log && npx wrangler dev"
+    "dev:log": "node build.mjs log && cd log && npx wrangler dev",
+    "deploy:redirect": "cd redirect && npx wrangler deploy"
   },
   "keywords": [
     "json",

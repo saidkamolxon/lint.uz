@@ -17,6 +17,7 @@ jobs:
       csv: ${{ steps.changes.outputs.csv }}
       pdf: ${{ steps.changes.outputs.pdf }}
       log: ${{ steps.changes.outputs.log }}
+      redirect: ${{ steps.changes.outputs.redirect }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -60,6 +61,9 @@ jobs:
               - 'build.mjs'
               - '.github/workflows/deploy.yml'
               - 'log/**'
+            redirect:
+              - 'redirect/**'
+              - '.github/workflows/deploy.yml'
 
   deploy:
     name: Deploy ${{ matrix.tool }}.lint.one
@@ -83,6 +87,8 @@ jobs:
             changed: ${{ needs.filter.outputs.pdf }}
           - tool: log
             changed: ${{ needs.filter.outputs.log }}
+          - tool: redirect
+            changed: ${{ needs.filter.outputs.redirect }}
     steps:
       - uses: actions/checkout@v4
         if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
