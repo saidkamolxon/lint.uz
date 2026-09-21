@@ -177,68 +177,109 @@ body {
   .demo-src { border-right: none; border-bottom: var(--hairline) solid var(--line); }
 }
 
-/* ---------- the four tools ---------- */
+/* ---------- the tools, one row ----------
+   Six formats is a set, and a set reads best all at once. The tiles are
+   trimmed to what identifies a tool — its mark, its name, its address — so
+   all six sit on one line on a desktop. Below that the row scrolls, and only
+   then does it drift, as a hint that it continues past the edge. */
+.tools-rail { margin: 48px 0 68px; position: relative; }
+
 .tools {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 1px;
-  margin: 52px 0 72px;
-  background: var(--line);
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding: 2px;
+  scrollbar-width: none;
+}
+.tools::-webkit-scrollbar { display: none; }
+
+.tool {
+  flex: 1 1 0;
+  min-width: 148px;
+  scroll-snap-align: start;
+  position: relative;
+  display: flex; flex-direction: column;
+  padding: 16px 14px 14px;
+  background: var(--raised);
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-.tool {
-  display: block;
-  position: relative;
-  padding: 26px 22px 24px;
-  background: var(--raised);
   text-decoration: none; color: inherit;
-  transition: background-color var(--t-fast);
+  transition: border-color var(--t-fast), background-color var(--t-fast);
 }
-.tool:hover { background: var(--row-hover); }
-.tool:focus-visible { outline: 2px solid var(--tool-hue); outline-offset: -3px; }
+.tool:hover {
+  border-color: color-mix(in srgb, var(--tool-hue) 60%, var(--line));
+  background: color-mix(in srgb, var(--tool-hue) 4%, var(--raised));
+}
+.tool:focus-visible { outline: 2px solid var(--tool-hue); outline-offset: 2px; }
 
 /* the hue stripe — the same device as each tool's editor gutter */
 .tool::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
-  width: 4px; background: var(--tool-hue);
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 0 2px 2px 0;
+  background: var(--tool-hue);
 }
 .tool-mark {
   display: grid; place-items: center;
-  width: 34px; height: 34px; border-radius: 9px;
+  width: 28px; height: 28px; border-radius: 8px;
   background: var(--tool-hue); color: #fff;
-  font-family: var(--mono); font-weight: 700; font-size: 14px;
+  font-family: var(--mono); font-weight: 700; font-size: 12.5px;
   letter-spacing: -0.06em;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .tool h2 {
-  margin: 0 0 6px;
-  font-size: 17px; font-weight: 640; letter-spacing: -0.015em;
+  margin: 0 0 3px;
+  font-size: 14.5px; font-weight: 640; letter-spacing: -0.015em;
 }
 .tool .host {
-  font-family: var(--mono); font-size: 12px;
-  color: var(--tool-hue); display: block; margin-bottom: 12px;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--tool-hue);
+  display: block; margin-bottom: 8px;
 }
+/* the one thing each tool is for, in a handful of words */
 .tool p {
-  margin: 0; font-size: 13.5px; line-height: 1.55;
+  margin: 0; font-size: 12px; line-height: 1.45;
   color: var(--muted);
 }
-.tool ul {
-  margin: 13px 0 0; padding: 0; list-style: none;
-  display: flex; flex-wrap: wrap; gap: 5px;
-}
-.tool li {
-  font-size: 11.5px; color: var(--muted);
-  border: var(--hairline) solid var(--line);
-  border-radius: 5px; padding: 2px 7px;
-  background: var(--sunken);
-}
+.tool ul { display: none; }   /* the tags belong on the tool, not here */
 
 .t-json { --tool-hue: #4F46E5; }
 .t-xml  { --tool-hue: #0F766E; }
 .t-yaml { --tool-hue: #B45309; }
 .t-csv  { --tool-hue: #9333EA; }
+.t-pdf  { --tool-hue: #BE123C; }
+.t-log  { --tool-hue: #0369A1; }
+
+/* Controls appear only when the row actually scrolls — on a wide screen
+   every tool is visible and there is nothing to page through. */
+.rail-foot {
+  display: none;
+  align-items: center; gap: var(--s3);
+  margin-top: var(--s3);
+}
+.tools-rail.scrolls .rail-foot { display: flex; }
+.rail-dots { display: flex; gap: 6px; }
+.rail-dots button {
+  width: 6px; height: 6px; padding: 0; border: none; border-radius: 50%;
+  background: var(--line-strong); cursor: pointer;
+  transition: background-color var(--t-fast), transform var(--t-fast);
+}
+.rail-dots button[aria-current="true"] { background: var(--ink); transform: scale(1.4); }
+.rail-pause {
+  font: inherit; font-size: 12px; color: var(--muted);
+  background: none; border: none; cursor: pointer;
+  padding: 2px 6px; border-radius: 5px; margin-left: auto;
+}
+.rail-pause:hover { color: var(--ink); background: var(--row-hover); }
+
+@media (max-width: 1040px) {
+  .tools { scroll-snap-type: x mandatory; }
+  .tool { flex: 0 0 176px; }
+}
+@media (max-width: 560px) {
+  .tool { flex: 0 0 62%; }
+  .tool p { font-size: 12.5px; }
+}
 
 /* ---------- privacy section ---------- */
 .why {
@@ -354,12 +395,13 @@ footer .sp { flex: 1; }
     </div>
   </section>
 
-  <nav class="tools" aria-label="Tools">
+  <div class="tools-rail">
+  <nav class="tools" id="tools" aria-label="Tools">
     <a class="tool t-json" href="https://json.lint.uz">
       <span class="tool-mark">{}</span>
       <h2>JSON Viewer</h2>
       <span class="host">json.lint.uz</span>
-      <p>Collapsible tree, path copying, and errors pinned to the exact line.</p>
+      <p>Collapsible tree, paths, errors pinned to the line.</p>
       <ul><li>Format</li><li>Minify</li><li>Unescape</li><li>Search</li></ul>
     </a>
 
@@ -367,7 +409,7 @@ footer .sp { flex: 1; }
       <span class="tool-mark">&lt;&gt;</span>
       <h2>XML Viewer</h2>
       <span class="host">xml.lint.uz</span>
-      <p>Elements, attributes and text as one tree, with XPath for any node.</p>
+      <p>Elements, attributes and XPath for any node.</p>
       <ul><li>Format</li><li>Minify</li><li>XPath</li><li>To JSON</li></ul>
     </a>
 
@@ -375,7 +417,7 @@ footer .sp { flex: 1; }
       <span class="tool-mark">&mdash;</span>
       <h2>YAML Viewer</h2>
       <span class="host">yaml.lint.uz</span>
-      <p>Indentation checked as you type. Multi-document manifests load as a list.</p>
+      <p>Indentation checked as you type. Multi-document.</p>
       <ul><li>Format</li><li>To JSON</li><li>From JSON</li><li>Multi-doc</li></ul>
     </a>
 
@@ -383,7 +425,7 @@ footer .sp { flex: 1; }
       <span class="tool-mark">&#9016;</span>
       <h2>CSV Viewer</h2>
       <span class="host">csv.lint.uz</span>
-      <p>Sortable table with the delimiter detected for you and ragged rows flagged.</p>
+      <p>Sortable table, delimiter detected, ragged rows flagged.</p>
       <ul><li>Sort</li><li>Filter</li><li>To JSON</li><li>Tab &amp; semicolon</li></ul>
     </a>
 
@@ -391,7 +433,7 @@ footer .sp { flex: 1; }
       <span class="tool-mark">&#8801;</span>
       <h2>Log Viewer</h2>
       <span class="host">log.lint.uz</span>
-      <p>Filter a gigabyte of logs by severity, fold stack traces, find the failure.</p>
+      <p>Filter by severity, fold stack traces, find the failure.</p>
       <ul><li>Severity</li><li>Filter</li><li>Fold traces</li><li>1M+ lines</li></ul>
     </a>
 
@@ -399,10 +441,15 @@ footer .sp { flex: 1; }
       <span class="tool-mark">P</span>
       <h2>PDF Viewer</h2>
       <span class="host">pdf.lint.uz</span>
-      <p>Read pages, pull out the text, and see what the file actually contains.</p>
+      <p>Read pages, pull out text, see what the file contains.</p>
       <ul><li>Read</li><li>Extract text</li><li>Fonts</li><li>Dark page</li></ul>
     </a>
   </nav>
+  <div class="rail-foot">
+    <div class="rail-dots" id="railDots"></div>
+    <button class="rail-pause" id="railPause" aria-pressed="false">Pause</button>
+  </div>
+  </div>
 
   <section class="why">
     <div>
@@ -499,6 +546,101 @@ THEMES.forEach(function (t) {
   menu.appendChild(item);
 });
 
+
+/* ---------- the tools rail ----------
+   On a wide screen all six tools are visible and nothing moves: motion with
+   nowhere to go is just noise. When the row does overflow it drifts one tile
+   at a time, and stops the instant anyone reaches for it. */
+(function () {
+  const wrap = document.querySelector('.tools-rail');
+  const rail = document.getElementById('tools');
+  const dots = document.getElementById('railDots');
+  const pause = document.getElementById('railPause');
+  if (!rail || !wrap) return;
+
+  const cards = [...rail.querySelectorAll('.tool')];
+  const STEP_MS = 3600;
+  let timer = null;
+  let stopped = false;
+
+  cards.forEach((card, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const name = (card.querySelector('h2') || {}).textContent || ('tool ' + (i + 1));
+    b.setAttribute('aria-label', 'Show ' + name);
+    b.addEventListener('click', () => { halt(); scrollToCard(i); });
+    dots.appendChild(b);
+  });
+
+  const overflows = () => rail.scrollWidth - rail.clientWidth > 8;
+
+  function current() {
+    let best = 0, min = Infinity;
+    cards.forEach((c, i) => {
+      const d = Math.abs(c.offsetLeft - rail.scrollLeft);
+      if (d < min) { min = d; best = i; }
+    });
+    return best;
+  }
+
+  function markDots() {
+    const cur = current();
+    [...dots.children].forEach((d, i) => d.setAttribute('aria-current', String(i === cur)));
+  }
+
+  function scrollToCard(i) {
+    const card = cards[Math.max(0, Math.min(cards.length - 1, i))];
+    rail.scrollTo({ left: card.offsetLeft - rail.offsetLeft, behavior: 'smooth' });
+  }
+
+  function advance() {
+    const atEnd = rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 8;
+    scrollToCard(atEnd ? 0 : current() + 1);
+  }
+
+  function start() {
+    if (stopped || timer || !overflows()) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    timer = setInterval(advance, STEP_MS);
+  }
+  function stop() { clearInterval(timer); timer = null; }
+
+  /* a deliberate stop, distinct from pausing while the pointer rests on it */
+  function halt() {
+    stopped = true;
+    stop();
+    pause.textContent = 'Play';
+    pause.setAttribute('aria-pressed', 'true');
+  }
+
+  pause.addEventListener('click', () => {
+    if (stopped) {
+      stopped = false;
+      pause.textContent = 'Pause';
+      pause.setAttribute('aria-pressed', 'false');
+      start();
+    } else halt();
+  });
+
+  ['pointerenter', 'focusin'].forEach((e) => rail.addEventListener(e, stop));
+  ['pointerleave', 'focusout'].forEach((e) => rail.addEventListener(e, start));
+  rail.addEventListener('wheel', halt, { passive: true });
+  rail.addEventListener('touchstart', halt, { passive: true });
+  document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+  rail.addEventListener('scroll', markDots, { passive: true });
+
+  /* the controls exist only while there is somewhere to scroll to */
+  function sync() {
+    const many = overflows();
+    wrap.classList.toggle('scrolls', many);
+    if (many) start(); else { stop(); rail.scrollLeft = 0; }
+    markDots();
+  }
+
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(sync, 150); });
+  sync();
+})();
 
 /* ---------- the hero demo ----------
    Deliberately not a video or a mock: the text is typed into the page,
