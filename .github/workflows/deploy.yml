@@ -62,7 +62,7 @@ jobs:
               - 'log/**'
 
   deploy:
-    name: Deploy ${{ matrix.tool }}.lint.uz
+    name: Deploy ${{ matrix.tool }}.lint.one
     needs: filter
     runs-on: ubuntu-latest
     strategy:

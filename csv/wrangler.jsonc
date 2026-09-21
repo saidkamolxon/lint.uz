@@ -6,8 +6,8 @@
   },
   "routes": [
     {
-      "pattern": "csv.lint.uz/*",
-      "zone_name": "lint.uz"
+      "pattern": "csv.lint.one/*",
+      "zone_name": "lint.one"
     }
   ]
 }

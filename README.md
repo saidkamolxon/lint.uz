@@ -1,4 +1,4 @@
-# lint.uz
+# lint.one
 
 > Client-side viewers, formatters and validators for the formats you actually
 > paste at 2 a.m. — production manifests, API payloads, exported spreadsheets.
@@ -6,14 +6,17 @@
 
 | | Subdomain | What it does |
 | :-- | :-- | :-- |
-| `{}` | **[json.lint.uz](https://json.lint.uz)** | Collapsible tree, path copying, minify, unescape, errors pinned to the line |
-| `<>` | **[xml.lint.uz](https://xml.lint.uz)** | Element/attribute/text tree, XPath for any node, XML → JSON |
-| `—` | **[yaml.lint.uz](https://yaml.lint.uz)** | Indentation validation, multi-document manifests, YAML ↔ JSON |
-| `⌸` | **[csv.lint.uz](https://csv.lint.uz)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
-| `P` | **[pdf.lint.uz](https://pdf.lint.uz)** | Page reader, text extraction, fonts, metadata, and what the file contains |
-| `≡` | **[log.lint.uz](https://log.lint.uz)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
+| `{}` | **[json.lint.one](https://json.lint.one)** | Collapsible tree, path copying, minify, unescape, errors pinned to the line |
+| `<>` | **[xml.lint.one](https://xml.lint.one)** | Element/attribute/text tree, XPath for any node, XML → JSON |
+| `—` | **[yaml.lint.one](https://yaml.lint.one)** | Indentation validation, multi-document manifests, YAML ↔ JSON |
+| `⌸` | **[csv.lint.one](https://csv.lint.one)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
+| `P` | **[pdf.lint.one](https://pdf.lint.one)** | Page reader, text extraction, fonts, metadata, and what the file contains |
+| `≡` | **[log.lint.one](https://log.lint.one)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
 
-The landing page at **[lint.uz](https://lint.uz)** links all six.
+The landing page at **[lint.one](https://lint.one)** links all six.
+
+The original domain, `lint.uz`, redirects here: every path and subdomain is
+preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
 
 ---
 
@@ -30,7 +33,7 @@ The landing page at **[lint.uz](https://lint.uz)** links all six.
 - **Verify it yourself.** Open DevTools → Network, paste a production secret,
   and watch nothing happen.
 
-Two cookies, both on `.lint.uz`, neither carrying document data:
+Two cookies, both on `.lint.one`, neither carrying document data:
 `lintuz_theme` remembers the theme you picked so all four tools agree, and
 `lintuz_from` lives for two minutes after you click "Open JSON viewer" so the
 destination can say *which* format is waiting on your clipboard. Nothing else

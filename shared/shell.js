@@ -1,5 +1,5 @@
 /* ==========================================================================
-   lint.uz — shared chrome markup
+   lint.one — shared chrome markup
    Each tool declares LINT_CONFIG before loading this file; the shell renders
    the identical frame so no tool can drift structurally from the others.
    ========================================================================== */
@@ -40,7 +40,7 @@ var actions = (c.actions || []).map(function (a) {
 
 document.getElementById('app').innerHTML =
 '<header class="toolbar">' +
-  '<a class="brand" href="https://lint.uz" title="All lint.uz tools">' +
+  '<a class="brand" href="https://lint.one" title="All lint.one tools">' +
     '<span class="mark">' + c.mark + '</span>' +
     '<span class="brand-text">' +
       '<span class="brand-name">' + c.name + '</span>' +

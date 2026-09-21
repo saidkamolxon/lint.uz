@@ -6,8 +6,8 @@
   },
   "routes": [
     {
-      "pattern": "yaml.lint.uz/*",
-      "zone_name": "lint.uz"
+      "pattern": "yaml.lint.one/*",
+      "zone_name": "lint.one"
     }
   ]
 }

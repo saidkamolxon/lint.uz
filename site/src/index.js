@@ -1,15 +1,15 @@
-/* lint.uz — the landing worker.
+/* lint.one — the landing worker.
    Its only job beyond serving the page is to send /json and friends to the
    subdomain that actually hosts each tool, so a shortened URL someone types
    or remembers still lands in the right place. */
 
 const TOOLS = {
-  json: 'https://json.lint.uz/',
-  xml: 'https://xml.lint.uz/',
-  yaml: 'https://yaml.lint.uz/',
-  csv: 'https://csv.lint.uz/',
-  pdf: 'https://pdf.lint.uz/',
-  log: 'https://log.lint.uz/'
+  json: 'https://json.lint.one/',
+  xml: 'https://xml.lint.one/',
+  yaml: 'https://yaml.lint.one/',
+  csv: 'https://csv.lint.one/',
+  pdf: 'https://pdf.lint.one/',
+  log: 'https://log.lint.one/'
 };
 
 export default {

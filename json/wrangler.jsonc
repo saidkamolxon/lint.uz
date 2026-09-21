@@ -6,8 +6,8 @@
   },
   "routes": [
     {
-      "pattern": "json.lint.uz/*",
-      "zone_name": "lint.uz"
+      "pattern": "json.lint.one/*",
+      "zone_name": "lint.one"
     }
   ]
 }

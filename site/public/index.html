@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lint.uz — format viewers that never send your data anywhere</title>
+<title>lint.one — format viewers that never send your data anywhere</title>
 <meta name="description" content="Client-side JSON, XML, YAML, CSV, PDF and log viewers, formatters and validators. Everything runs in your browser — open DevTools and watch: zero outbound requests.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -355,7 +355,7 @@ footer .sp { flex: 1; }
   <header class="top">
     <a class="logo" href="/">
       <span class="logo-mark">L</span>
-      <span>lint.uz</span>
+      <span>lint.one</span>
     </a>
     <div class="top-right">
       <a class="ghost" href="https://github.com/saidkamolxon/lint.uz">Source</a>
@@ -385,7 +385,7 @@ footer .sp { flex: 1; }
     <div class="demo" aria-hidden="true">
       <div class="demo-chrome">
         <span class="demo-mark">{}</span>
-        <span class="demo-host">json.lint.uz</span>
+        <span class="demo-host">json.lint.one</span>
         <span class="demo-state" id="demoState">valid</span>
       </div>
       <div class="demo-body">
@@ -397,50 +397,50 @@ footer .sp { flex: 1; }
 
   <div class="tools-rail">
   <nav class="tools" id="tools" aria-label="Tools">
-    <a class="tool t-json" href="https://json.lint.uz">
+    <a class="tool t-json" href="https://json.lint.one">
       <span class="tool-mark">{}</span>
       <h2>JSON Viewer</h2>
-      <span class="host">json.lint.uz</span>
+      <span class="host">json.lint.one</span>
       <p>Collapsible tree, paths, errors pinned to the line.</p>
       <ul><li>Format</li><li>Minify</li><li>Unescape</li><li>Search</li></ul>
     </a>
 
-    <a class="tool t-xml" href="https://xml.lint.uz">
+    <a class="tool t-xml" href="https://xml.lint.one">
       <span class="tool-mark">&lt;&gt;</span>
       <h2>XML Viewer</h2>
-      <span class="host">xml.lint.uz</span>
+      <span class="host">xml.lint.one</span>
       <p>Elements, attributes and XPath for any node.</p>
       <ul><li>Format</li><li>Minify</li><li>XPath</li><li>To JSON</li></ul>
     </a>
 
-    <a class="tool t-yaml" href="https://yaml.lint.uz">
+    <a class="tool t-yaml" href="https://yaml.lint.one">
       <span class="tool-mark">&mdash;</span>
       <h2>YAML Viewer</h2>
-      <span class="host">yaml.lint.uz</span>
+      <span class="host">yaml.lint.one</span>
       <p>Indentation checked as you type. Multi-document.</p>
       <ul><li>Format</li><li>To JSON</li><li>From JSON</li><li>Multi-doc</li></ul>
     </a>
 
-    <a class="tool t-csv" href="https://csv.lint.uz">
+    <a class="tool t-csv" href="https://csv.lint.one">
       <span class="tool-mark">&#9016;</span>
       <h2>CSV Viewer</h2>
-      <span class="host">csv.lint.uz</span>
+      <span class="host">csv.lint.one</span>
       <p>Sortable table, delimiter detected, ragged rows flagged.</p>
       <ul><li>Sort</li><li>Filter</li><li>To JSON</li><li>Tab &amp; semicolon</li></ul>
     </a>
 
-    <a class="tool t-log" href="https://log.lint.uz">
+    <a class="tool t-log" href="https://log.lint.one">
       <span class="tool-mark">&#8801;</span>
       <h2>Log Viewer</h2>
-      <span class="host">log.lint.uz</span>
+      <span class="host">log.lint.one</span>
       <p>Filter by severity, fold stack traces, find the failure.</p>
       <ul><li>Severity</li><li>Filter</li><li>Fold traces</li><li>1M+ lines</li></ul>
     </a>
 
-    <a class="tool t-pdf" href="https://pdf.lint.uz">
+    <a class="tool t-pdf" href="https://pdf.lint.one">
       <span class="tool-mark">P</span>
       <h2>PDF Viewer</h2>
-      <span class="host">pdf.lint.uz</span>
+      <span class="host">pdf.lint.one</span>
       <p>Read pages, pull out text, see what the file contains.</p>
       <ul><li>Read</li><li>Extract text</li><li>Fonts</li><li>Dark page</li></ul>
     </a>
@@ -482,12 +482,12 @@ footer .sp { flex: 1; }
     <span>MIT licensed · no cookies beyond your theme choice</span>
     <span class="sp"></span>
     <a href="https://github.com/saidkamolxon/lint.uz">GitHub</a>
-    <a href="https://json.lint.uz">JSON</a>
-    <a href="https://xml.lint.uz">XML</a>
-    <a href="https://yaml.lint.uz">YAML</a>
-    <a href="https://csv.lint.uz">CSV</a>
-    <a href="https://pdf.lint.uz">PDF</a>
-    <a href="https://log.lint.uz">Log</a>
+    <a href="https://json.lint.one">JSON</a>
+    <a href="https://xml.lint.one">XML</a>
+    <a href="https://yaml.lint.one">YAML</a>
+    <a href="https://csv.lint.one">CSV</a>
+    <a href="https://pdf.lint.one">PDF</a>
+    <a href="https://log.lint.one">Log</a>
   </footer>
 
 </div>
@@ -513,7 +513,7 @@ function readTheme() {
 }
 
 function writeTheme(id) {
-  var domain = /(^|\.)lint\.uz$/.test(location.hostname) ? '; domain=.lint.uz' : '';
+  var domain = /(^|\.)lint\.one$/.test(location.hostname) ? '; domain=.lint.one' : '';
   var secure = location.protocol === 'https:' ? '; secure' : '';
   try {
     document.cookie = 'lintuz_theme=' + encodeURIComponent(id) +

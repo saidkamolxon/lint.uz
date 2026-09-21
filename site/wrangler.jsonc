@@ -7,7 +7,7 @@
     "binding": "ASSETS"
   },
   "routes": [
-    { "pattern": "lint.uz/*", "zone_name": "lint.uz" },
-    { "pattern": "www.lint.uz/*", "zone_name": "lint.uz" }
+    { "pattern": "lint.one/*", "zone_name": "lint.one" },
+    { "pattern": "www.lint.one/*", "zone_name": "lint.one" }
   ]
 }

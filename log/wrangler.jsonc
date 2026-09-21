@@ -5,6 +5,6 @@
     "directory": "./public"
   },
   "routes": [
-    { "pattern": "log.lint.uz/*", "zone_name": "lint.uz" }
+    { "pattern": "log.lint.one/*", "zone_name": "lint.one" }
   ]
 }

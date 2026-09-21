@@ -1,5 +1,5 @@
 /* ==========================================================================
-   lint.uz — shared runtime
+   lint.one — shared runtime
    Every tool calls LintApp.init() with format-specific hooks; everything
    below (themes, tree, search, editor, file I/O, clipboard) is generic.
    ========================================================================== */
@@ -16,7 +16,7 @@ var THEMES = [
   { id: 'contrast',  name: 'Contrast', bg: '#FFFFFF',        fg: '#000000' }
 ];
 
-/* Themes persist across subdomains via a cookie on .lint.uz — localStorage
+/* Themes persist across subdomains via a cookie on .lint.one — localStorage
    is origin-scoped, so json. and yaml. would otherwise not agree. */
 var THEME_COOKIE = 'lintuz_theme';
 var THEME_LS = 'lintuz-theme';
@@ -29,7 +29,7 @@ function readTheme() {
 
 function writeTheme(id) {
   var host = location.hostname;
-  var domain = /(^|\.)lint\.uz$/.test(host) ? '; domain=.lint.uz' : '';
+  var domain = /(^|\.)lint\.one$/.test(host) ? '; domain=.lint.one' : '';
   var secure = location.protocol === 'https:' ? '; secure' : '';
   try {
     document.cookie = THEME_COOKIE + '=' + encodeURIComponent(id) +
@@ -48,12 +48,12 @@ applyTheme(readTheme());
 
 /* ---------- the four tools, for the suite switcher ---------- */
 var SUITE = [
-  { id: 'json', name: 'JSON', host: 'https://json.lint.uz' },
-  { id: 'xml',  name: 'XML',  host: 'https://xml.lint.uz'  },
-  { id: 'yaml', name: 'YAML', host: 'https://yaml.lint.uz' },
-  { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.uz'  },
-  { id: 'pdf',  name: 'PDF',  host: 'https://pdf.lint.uz'  },
-  { id: 'log',  name: 'Log',  host: 'https://log.lint.uz'  }
+  { id: 'json', name: 'JSON', host: 'https://json.lint.one' },
+  { id: 'xml',  name: 'XML',  host: 'https://xml.lint.one'  },
+  { id: 'yaml', name: 'YAML', host: 'https://yaml.lint.one' },
+  { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.one'  },
+  { id: 'pdf',  name: 'PDF',  host: 'https://pdf.lint.one'  },
+  { id: 'log',  name: 'Log',  host: 'https://log.lint.one'  }
 ];
 
 /* ---------- small helpers ---------- */
@@ -158,13 +158,13 @@ function showToast(msg, action) {
 }
 
 /* ---------- cross-tool handoff ----------
-   A short-lived cookie on .lint.uz naming the tool the user just left, so the
+   A short-lived cookie on .lint.one naming the tool the user just left, so the
    destination can say "your JSON from YAML is on the clipboard" instead of a
    generic hint. The document itself never leaves the clipboard. */
 var HANDOFF_COOKIE = 'lintuz_from';
 
 function writeHandoff(fromId, format) {
-  var domain = /(^|\.)lint\.uz$/.test(location.hostname) ? '; domain=.lint.uz' : '';
+  var domain = /(^|\.)lint\.one$/.test(location.hostname) ? '; domain=.lint.one' : '';
   var secure = location.protocol === 'https:' ? '; secure' : '';
   try {
     document.cookie = HANDOFF_COOKIE + '=' +
@@ -179,7 +179,7 @@ function readHandoff() {
   var parts = decodeURIComponent(m[1]).split(':');
   var id = parts[0], format = parts[1] || '';
   /* one-shot: clear it so a later visit does not show a stale prompt */
-  var domain = /(^|\.)lint\.uz$/.test(location.hostname) ? '; domain=.lint.uz' : '';
+  var domain = /(^|\.)lint\.one$/.test(location.hostname) ? '; domain=.lint.one' : '';
   try {
     document.cookie = HANDOFF_COOKIE + '=; path=/; max-age=0' + domain;
   } catch (e) {}
@@ -309,7 +309,7 @@ function buildSuiteMenu(container, activeId) {
 
   var btn = document.createElement('button');
   btn.className = 'icon-btn';
-  btn.title = 'Other lint.uz tools';
+  btn.title = 'Other lint.one tools';
   btn.setAttribute('aria-label', 'Switch tool');
   btn.setAttribute('aria-haspopup', 'true');
   btn.innerHTML = svg(ICONS.grid);
@@ -343,7 +343,7 @@ function buildSuiteMenu(container, activeId) {
   menu.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
   var home = document.createElement('a');
   home.className = 'menu-item';
-  home.href = 'https://lint.uz';
+  home.href = 'https://lint.one';
   home.innerHTML = '<span>All tools</span><span class="ext">↗</span>';
   menu.appendChild(home);
 
