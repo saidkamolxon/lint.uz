@@ -52,7 +52,8 @@ var SUITE = [
   { id: 'xml',  name: 'XML',  host: 'https://xml.lint.uz'  },
   { id: 'yaml', name: 'YAML', host: 'https://yaml.lint.uz' },
   { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.uz'  },
-  { id: 'pdf',  name: 'PDF',  host: 'https://pdf.lint.uz'  }
+  { id: 'pdf',  name: 'PDF',  host: 'https://pdf.lint.uz'  },
+  { id: 'log',  name: 'Log',  host: 'https://log.lint.uz'  }
 ];
 
 /* ---------- small helpers ---------- */

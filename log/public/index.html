@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log Viewer &amp; Filter · lint.uz</title>
+<meta name="description" content="A fast, private log reader. Open a gigabyte of logs, filter by severity, fold stack traces, and find the failure — all in your browser. Nothing is uploaded.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="shared/theme.css">
+<link rel="stylesheet" href="shared/app.css">
+<style>
+/* ==========================================================================
+   Reading a log is triage: you are looking for the moment something broke.
+   The layout puts the lines front and centre, severity on the left edge, and
+   the whole file's shape in one strip down the right.
+   ========================================================================== */
+.log-main { flex: 1; min-height: 0; position: relative; display: flex; }
+
+/* ---------- the lines ---------- */
+#viewport {
+  flex: 1; min-width: 0; overflow: auto;
+  background: var(--surface);
+  position: relative;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: var(--row-h);
+  --row-h: 21px;
+}
+#spacer { position: relative; width: 100%; }
+#rows { position: absolute; top: 0; left: 0; right: 0; }
+
+.row {
+  display: flex; align-items: baseline;
+  height: var(--row-h);
+  padding-right: var(--s3);
+  white-space: pre;
+  position: relative;
+}
+/* banding gives the eye a rail to follow across a dense file */
+.row.odd { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.row:hover { background: var(--row-hover); }
+.row.hit { background: color-mix(in srgb, var(--hue) 12%, transparent); }
+
+/* severity as an edge, never as coloured body text — at this density
+   colouring whole lines is exhausting to read */
+.row::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: transparent;
+}
+.row.sev-error::before { background: var(--bad); }
+.row.sev-warn::before  { background: var(--warn); }
+.row.sev-info::before  { background: color-mix(in srgb, var(--hue) 55%, transparent); }
+.row.sev-debug::before { background: var(--line-strong); }
+
+.ln {
+  flex: none; width: var(--ln-w, 64px);
+  padding: 0 var(--s3) 0 var(--s2);
+  text-align: right;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.row.sev-error .ln { color: var(--bad); }
+.row.sev-warn .ln  { color: var(--warn); }
+
+.fold {
+  flex: none; width: 16px; text-align: center;
+  color: var(--faint); cursor: pointer; user-select: none;
+}
+.fold:hover { color: var(--hue); }
+.fold.none { visibility: hidden; cursor: default; }
+
+.body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#viewport.wrap .row { height: auto; min-height: var(--row-h); white-space: pre-wrap; }
+#viewport.wrap .body { overflow-wrap: anywhere; }
+
+/* the parts of a line, weighted by how much they carry */
+.g-time { color: var(--faint); }        /* structure, not content */
+.g-sev  { font-weight: 650; }
+.row.sev-error .g-sev { color: var(--bad); }
+.row.sev-warn .g-sev  { color: var(--warn); }
+.row.sev-info .g-sev  { color: var(--muted); }
+.row.sev-debug .g-sev { color: var(--faint); }
+.g-key  { color: var(--muted); }
+.g-str  { color: var(--t-str); }
+.g-num  { color: var(--t-num); }
+.g-path { color: var(--t-cont); }
+.g-dim  { color: var(--faint); }
+.g-trace { color: var(--muted); }
+
+.fold-note {
+  color: var(--faint); font-style: italic;
+  font-family: var(--ui); font-size: var(--fs-small);
+  margin-left: var(--s2);
+}
+
+mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
+
+/* ---------- density strip: the whole file in one column ---------- */
+#density {
+  width: 14px; flex: none;
+  background: var(--sunken);
+  border-left: var(--hairline) solid var(--line);
+  position: relative; cursor: pointer;
+}
+#density canvas { display: block; width: 100%; height: 100%; }
+#densityThumb {
+  position: absolute; left: 0; right: 0;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+  pointer-events: none;
+  min-height: 2px;
+}
+
+/* ---------- severity filters carry their counts ---------- */
+.sev-filters { display: flex; align-items: center; gap: 2px; }
+.sev-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px var(--s2);
+  border-radius: var(--radius);
+  font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sev-chip .pip { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.sev-chip[data-sev="error"] .pip { background: var(--bad); }
+.sev-chip[data-sev="warn"]  .pip { background: var(--warn); }
+.sev-chip[data-sev="info"]  .pip { background: color-mix(in srgb, var(--hue) 55%, transparent); }
+.sev-chip[data-sev="debug"] .pip { background: var(--line-strong); }
+.sev-chip:hover { background: var(--row-hover); color: var(--ink); }
+.sev-chip[aria-pressed="false"] { opacity: 0.38; }
+.sev-chip[aria-pressed="false"] .pip { background: var(--faint); }
+.sev-chip .n { font-size: var(--fs-small); }
+.sev-filters[hidden] { display: none; }
+
+/* ---------- filter field ---------- */
+.filter-wrap { display: flex; align-items: center; flex: 1; max-width: 420px; }
+#filter {
+  width: 100%;
+  font-family: var(--mono); font-size: 12.5px;
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px var(--s3);
+}
+#filter::placeholder { color: var(--faint); font-family: var(--ui); }
+#filter:focus { background: var(--raised); border-color: color-mix(in srgb, var(--hue) 45%, var(--line)); outline: none; }
+#filterCount {
+  font-family: var(--mono); font-size: var(--fs-small);
+  color: var(--muted); white-space: nowrap;
+  padding: 0 var(--s2); min-width: 92px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#filterCount.none { color: var(--bad); }
+
+/* ---------- progress while indexing ---------- */
+#progress {
+  position: absolute; left: 0; top: 0; height: 2px;
+  background: var(--hue); width: 0; z-index: 30;
+  transition: width 120ms linear;
+}
+
+/* ---------- empty state ---------- */
+.log-empty {
+  margin: auto; text-align: center; max-width: 46ch;
+  color: var(--muted); padding: var(--s5) var(--s4);
+  font-family: var(--ui);
+}
+.log-empty .big {
+  font-size: var(--fs-large); color: var(--ink);
+  font-weight: 600; margin-bottom: var(--s2); letter-spacing: -0.015em;
+}
+.log-empty p { margin: 0 0 var(--s3); line-height: 1.6; font-size: 13.5px; }
+.log-empty kbd {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: 4px; padding: 1px 5px; color: var(--muted);
+}
+
+body.dragover #viewport::after {
+  content: ""; position: absolute; inset: var(--s2);
+  border: 2px dashed var(--hue); border-radius: var(--radius-lg);
+  background: var(--hue-wash); pointer-events: none; z-index: 20;
+}
+
+@media (max-width: 760px) {
+  .brand-text { display: none; }
+  .sev-chip .n { display: none; }
+  #density { width: 10px; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'log',
+  name: 'Log Viewer',
+  host: 'log.lint.uz',
+  label: 'log',
+  mark: '≡',
+  hue: '#0369A1',
+  hueInk: '#FFFFFF',
+  accept: '.log,.txt,.out,.err,.jsonl,.ndjson,text/plain'
+};
+</script>
+<script src="shared/theme-boot.js"></script>
+<script src="shared/app.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = LintApp.esc;
+const c = window.LINT_CONFIG;
+
+document.documentElement.style.setProperty('--hue', c.hue);
+document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+
+/* ==========================================================================
+   Chrome
+   ========================================================================== */
+$('app').innerHTML = `
+  <header class="toolbar">
+    <a class="brand" href="https://lint.uz" title="All lint.uz tools">
+      <span class="mark">${c.mark}</span>
+      <span class="brand-text">
+        <span class="brand-name">${c.name}</span>
+        <span class="brand-host">${c.host}</span>
+      </span>
+    </a>
+    <button id="btnOpen" class="primary" title="Open a log — or drop one anywhere">Open</button>
+
+    <label class="filter-wrap">
+      <input id="filter" type="text" spellcheck="false" autocomplete="off"
+             placeholder="Filter lines…  -exclude to hide" aria-label="Filter lines">
+    </label>
+    <span id="filterCount"></span>
+
+    <div class="sev-filters" id="sevFilters" hidden></div>
+
+    <span class="spacer"></span>
+    <button id="btnWrap" class="icon-btn" title="Wrap long lines"
+            aria-label="Wrap long lines" aria-pressed="false" disabled></button>
+    <button id="btnTail" class="icon-btn" title="Jump to the end"
+            aria-label="Jump to the end" disabled></button>
+    <div class="group" id="chromeSlot"></div>
+    <button id="btnMore" class="icon-btn" title="More" aria-label="More" aria-haspopup="true"></button>
+    <div class="menu" id="moreMenu" role="menu">
+      <button class="menu-item" id="btnCopyVisible" role="menuitem" disabled>Copy filtered lines</button>
+      <button class="menu-item" id="btnClose" role="menuitem" disabled>Close log</button>
+    </div>
+    <input type="file" id="fileInput" accept="${c.accept}" hidden>
+  </header>
+
+  <main class="log-main">
+    <div id="progress"></div>
+    <div id="viewport">
+      <div id="spacer"><div id="rows"></div></div>
+    </div>
+    <div id="density" title="Click to jump — red marks are errors">
+      <canvas id="densityCanvas"></canvas>
+      <div id="densityThumb"></div>
+    </div>
+  </main>
+
+  <footer class="status" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusMsg">Ready</span>
+    <span id="pathBox"></span>
+  </footer>
+`;
+
+LintApp.mountChrome($('chromeSlot'), 'log');
+
+const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+$('btnWrap').innerHTML = I('<path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-3m0 0 2.5-2.5M12 18l2.5 2.5M4 18h4"/>');
+$('btnTail').innerHTML = I('<path d="M12 5v14M6 13l6 6 6-6"/>');
+$('btnMore').innerHTML = I('<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
+  '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
+  '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>');
+LintApp.wireMenu($('btnMore'), $('moreMenu'));
+
+/* ==========================================================================
+   Parsing
+   A log line is classified once, at index time, into a severity and a set of
+   spans. Everything downstream — colour, filtering, the density strip — reads
+   that classification rather than re-examining the text.
+   ========================================================================== */
+const SEVERITIES = ['error', 'warn', 'info', 'debug'];
+
+/* Word-boundary matching, most severe first: a line saying "no errors" should
+   not be filed under ERROR, but "ERROR" or "[error]" or "level=error" should. */
+const SEV_RE = [
+  ['error', /\b(?:FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|EMERG|ALERT)\b/i],
+  ['warn',  /\b(?:WARNING|WARN)\b/i],
+  ['info',  /\b(?:INFO|NOTICE|INFORMATION)\b/i],
+  ['debug', /\b(?:DEBUG|TRACE|VERBOSE|FINE)\b/i]
+];
+
+/* A continuation line belongs to the event above it: stack frames, "Caused
+   by", and anything indented under a parent. */
+const CONT_RE = /^(?:\s+at\s|\s+\.\.\.|\s*Caused by:|\s*Suppressed:|\s+File "|\s{2,}\S|\t)/;
+
+const JSON_LEVEL_KEYS = ['level', 'severity', 'lvl', 'levelname', 'log.level'];
+
+function classify(line) {
+  if (!line) return 'none';
+
+  /* structured logs say what they are — trust the field over the text */
+  if (line.charCodeAt(0) === 123 /* { */) {
+    const lv = jsonLevel(line);
+    if (lv) return lv;
+  }
+
+  /* an access log's status code is its severity */
+  const st = accessStatus(line);
+  if (st !== null) {
+    if (st >= 500) return 'error';
+    if (st >= 400) return 'warn';
+    return 'info';
+  }
+
+  for (const [name, re] of SEV_RE) if (re.test(line)) return name;
+  return 'none';
+}
+
+/* Pull the level out of a JSON line without parsing the whole object —
+   at a million lines, JSON.parse on every one is far too slow. */
+function jsonLevel(line) {
+  for (const k of JSON_LEVEL_KEYS) {
+    const i = line.indexOf('"' + k + '"');
+    if (i === -1) continue;
+    const m = /^\s*:\s*"?([A-Za-z]+)"?/.exec(line.slice(i + k.length + 2));
+    if (!m) continue;
+    const v = m[1].toLowerCase();
+    if (/^(fatal|critical|error|err|panic)/.test(v)) return 'error';
+    if (/^(warn)/.test(v)) return 'warn';
+    if (/^(info|notice)/.test(v)) return 'info';
+    if (/^(debug|trace|verbose)/.test(v)) return 'debug';
+    /* numeric levels, as used by pino and bunyan */
+    const n = parseInt(m[1], 10);
+    if (!isNaN(n)) {
+      if (n >= 50) return 'error';
+      if (n >= 40) return 'warn';
+      if (n >= 30) return 'info';
+      return 'debug';
+    }
+  }
+  return null;
+}
+
+/* nginx/apache combined: ... "GET /x HTTP/1.1" 200 1234 ... */
+const ACCESS_RE = /"(?:GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS|TRACE|CONNECT)\s[^"]*"\s+(\d{3})\b/;
+function accessStatus(line) {
+  const m = ACCESS_RE.exec(line);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/* ==========================================================================
+   Highlighting a single line
+   Only ever called for the ~100 rows on screen, so it can afford to be
+   thorough where classification cannot.
+   ========================================================================== */
+const TIME_RE = /^(\[?)((?:\d{4}-\d{2}-\d{2}[T ])?\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?)(\]?)/;
+const SEV_WORD_RE = /\b(FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|WARNING|WARN|INFO|NOTICE|DEBUG|TRACE|VERBOSE)\b/;
+
+function render(line, query) {
+  if (line.length > 4000) line = line.slice(0, 4000) + ' …';
+
+  let out = '';
+  let rest = line;
+
+  /* a leading timestamp is structure, not content — dim it */
+  const t = TIME_RE.exec(rest);
+  if (t) {
+    out += '<span class="g-time">' + esc(t[0]) + '</span>';
+    rest = rest.slice(t[0].length);
+  }
+
+  /* the severity word itself carries the row's colour */
+  const sv = SEV_WORD_RE.exec(rest);
+  if (sv && sv.index < 40) {
+    out += esc(rest.slice(0, sv.index));
+    out += '<span class="g-sev">' + esc(sv[0]) + '</span>';
+    rest = rest.slice(sv.index + sv[0].length);
+  }
+
+  out += highlightBody(rest);
+  return query ? markQuery(out, query) : out;
+}
+
+/* Colour marks what is exceptional, not everything measurable. A log where
+   every integer is tinted is unreadable, so bare numbers and thread ids stay
+   plain — only durations with units, quoted values, paths and exception
+   names are lifted out. */
+const BODY_RE = /("(?:[^"\\]|\\.)*")|(\b[\w.]+=)|(\b\d+(?:\.\d+)?(?:ms|s|m|h|MB|KB|GB|%)\b)|((?:\/[\w.\-]+){2,}\/?)|(\b[A-Za-z][\w.]*(?:Exception|Error)\b)/g;
+
+function highlightBody(s) {
+  let out = '', last = 0, m;
+  BODY_RE.lastIndex = 0;
+  while ((m = BODY_RE.exec(s)) !== null) {
+    if (m.index > last) out += esc(s.slice(last, m.index));
+    const cls = m[1] ? 'g-str' : m[2] ? 'g-key' : m[3] ? 'g-num'
+              : m[4] ? 'g-path' : 'g-sev';
+    out += '<span class="' + cls + '">' + esc(m[0]) + '</span>';
+    last = m.index + m[0].length;
+  }
+  return out + esc(s.slice(last));
+}
+
+/* mark matches without breaking the spans already emitted */
+function markQuery(html, q) {
+  const parts = html.split(/(<[^>]+>)/);
+  const needle = q.toLowerCase();
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].startsWith('<')) continue;
+    const lower = parts[i].toLowerCase();
+    if (lower.indexOf(needle) === -1) continue;
+    let built = '', at = 0, idx;
+    while ((idx = lower.indexOf(needle, at)) !== -1) {
+      built += parts[i].slice(at, idx) + '<mark>' +
+               parts[i].slice(idx, idx + q.length) + '</mark>';
+      at = idx + q.length;
+    }
+    parts[i] = built + parts[i].slice(at);
+  }
+  return parts.join('');
+}
+
+/* ==========================================================================
+   The document
+   lines[]     every line, as text
+   sev[]       one severity per line, as a byte
+   parent[]    for a continuation line, the index of the event it belongs to
+   visible[]   the indices currently shown, after severity and text filters
+   ========================================================================== */
+const SEV_CODE = { error: 1, warn: 2, info: 3, debug: 4, none: 0 };
+let lines = [];
+let sev = null;
+let parent = null;
+let childCount = null;
+let visible = [];
+let folded = new Set();
+let counts = { error: 0, warn: 0, info: 0, debug: 0, none: 0 };
+let on = { error: true, warn: true, info: true, debug: true };
+let query = '';
+let excludes = [];
+let fileName = '';
+
+const ROW_H = 21;
+
+/* ==========================================================================
+   Loading
+   Read in chunks so a gigabyte never becomes one giant string, and so the
+   progress bar means something.
+   ========================================================================== */
+async function openFile(file) {
+  if (!file) return;
+  reset();
+  fileName = file.name;
+  setStatus('', 'Reading ' + file.name + '…');
+  $('progress').style.width = '2%';
+
+  const started = performance.now();
+  try {
+    const stream = file.stream().pipeThrough(new TextDecoderStream());
+    const reader = stream.getReader();
+    let carry = '';
+    let read = 0;
+    let lastYield = performance.now();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      read += value.length;
+      const text = carry + value;
+      const parts = text.split('\n');
+      carry = parts.pop();
+      for (let i = 0; i < parts.length; i++) {
+        lines.push(parts[i].endsWith('\r') ? parts[i].slice(0, -1) : parts[i]);
+      }
+      /* Yield on a time budget, not per chunk: a stream delivers thousands of
+         chunks and awaiting a timer on each one costs a frame apiece, which
+         stalled an 80 MB file for minutes. */
+      const now = performance.now();
+      if (now - lastYield > 120) {
+        lastYield = now;
+        $('progress').style.width = Math.min(96, (read / file.size) * 100) + '%';
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }
+    if (carry) lines.push(carry);
+
+    await index();
+    $('progress').style.width = '100%';
+    setTimeout(() => { $('progress').style.width = '0'; }, 400);
+
+    const ms = Math.round(performance.now() - started);
+    setStatus('ok', `${LintApp.fmtNum(lines.length)} lines · ${LintApp.fmtBytes(file.size)} · ${ms} ms`);
+    $('pathBox').textContent = file.name;
+    enable(true);
+    applyFilters();
+    drawDensity();
+    $('viewport').scrollTop = 0;
+  } catch (e) {
+    $('progress').style.width = '0';
+    setStatus('err', 'Could not read that file');
+    LintApp.toast('Could not read that file');
+  }
+}
+
+/* one pass: severity per line, and which lines belong to the event above */
+async function index() {
+  const n = lines.length;
+  sev = new Uint8Array(n);
+  parent = new Int32Array(n);
+  childCount = new Uint32Array(n);
+  counts = { error: 0, warn: 0, info: 0, debug: 0, none: 0 };
+
+  let lastEvent = -1;
+  for (let i = 0; i < n; i++) {
+    const line = lines[i];
+    if (lastEvent >= 0 && CONT_RE.test(line)) {
+      /* a continuation inherits its parent's severity so filtering keeps
+         a stack trace with the error that produced it */
+      parent[i] = lastEvent;
+      sev[i] = sev[lastEvent];
+      childCount[lastEvent]++;
+      continue;
+    }
+    parent[i] = -1;
+    const s = classify(line);
+    sev[i] = SEV_CODE[s];
+    counts[s]++;
+    lastEvent = i;
+
+    /* a million lines is a second of work; hand the frame back periodically
+       so the progress bar keeps moving */
+    if ((i & 0x1ffff) === 0x1ffff) {
+      $('progress').style.width = (96 + (i / n) * 3) + '%';
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+  paintSevFilters();
+}
+
+function reset() {
+  lines = []; sev = null; parent = null; childCount = null;
+  visible = []; folded = new Set();
+  counts = { error: 0, warn: 0, info: 0, debug: 0, none: 0 };
+  query = ''; excludes = [];
+  $('filter').value = '';
+  $('filterCount').textContent = '';
+  $('rows').innerHTML = '';
+  $('spacer').style.height = '0px';
+  $('sevFilters').hidden = true;
+  $('pathBox').textContent = '';
+  enable(false);
+}
+
+function enable(v) {
+  ['btnWrap', 'btnTail', 'btnClose', 'btnCopyVisible']
+    .forEach((id) => { $(id).disabled = !v; });
+  if (!v) showEmpty();
+}
+
+/* ==========================================================================
+   Filtering
+   ========================================================================== */
+function parseQuery(raw) {
+  const inc = [];
+  const exc = [];
+  raw.split(/\s+/).forEach((t) => {
+    if (!t) return;
+    if (t[0] === '-' && t.length > 1) exc.push(t.slice(1).toLowerCase());
+    else inc.push(t.toLowerCase());
+  });
+  return { inc, exc };
+}
+
+function applyFilters() {
+  if (!lines.length) return;
+  const { inc, exc } = parseQuery($('filter').value);
+  query = inc.length === 1 ? inc[0] : '';
+
+  const out = [];
+  const n = lines.length;
+  const anySev = on.error || on.warn || on.info || on.debug;
+
+  for (let i = 0; i < n; i++) {
+    /* a folded event hides its children but keeps itself */
+    const p = parent[i];
+    if (p >= 0 && folded.has(p)) continue;
+
+    const code = sev[i];
+    if (anySev && code) {
+      const name = SEVERITIES[code - 1];
+      if (!on[name]) continue;
+    }
+
+    if (inc.length || exc.length) {
+      const low = lines[i].toLowerCase();
+      let keep = true;
+      for (let k = 0; k < inc.length && keep; k++) if (low.indexOf(inc[k]) === -1) keep = false;
+      for (let k = 0; k < exc.length && keep; k++) if (low.indexOf(exc[k]) !== -1) keep = false;
+      /* a continuation line rides along with its parent when it matched */
+      if (!keep && p >= 0 && matchedParents.has(p)) keep = true;
+      if (!keep) continue;
+      if (p < 0) matchedParents.add(i);
+    }
+    out.push(i);
+  }
+
+  visible = out;
+  $('spacer').style.height = (visible.length * ROW_H) + 'px';
+  /* the count reflects any narrowing, whether by text or by severity —
+     hiding INFO is a filter too, and the reader wants to know what is left */
+  const narrowed = inc.length || exc.length || visible.length !== lines.length;
+  paintCount(narrowed);
+  draw();
+}
+
+let matchedParents = new Set();
+function applyFiltersFresh() {
+  matchedParents = new Set();
+  applyFilters();
+}
+
+function paintCount(filtering) {
+  const el = $('filterCount');
+  if (!filtering) {
+    el.textContent = '';
+    el.classList.remove('none');
+    return;
+  }
+  if (!visible.length) {
+    el.textContent = 'no matches';
+    el.classList.add('none');
+    return;
+  }
+  el.classList.remove('none');
+  el.textContent = LintApp.fmtNum(visible.length) + ' of ' + LintApp.fmtNum(lines.length);
+}
+
+/* ==========================================================================
+   Virtual scrolling — only the rows on screen exist in the DOM
+   ========================================================================== */
+function draw() {
+  const vp = $('viewport');
+  const rows = $('rows');
+  if (!visible.length) {
+    rows.innerHTML = '';
+    if (lines.length) rows.innerHTML = '<div class="log-empty">' +
+      '<div class="big">Nothing matches</div>' +
+      '<p>No line passes the current filter. Clear the box or turn a severity back on.</p></div>';
+    return;
+  }
+
+  const first = Math.max(0, Math.floor(vp.scrollTop / ROW_H) - 8);
+  const count = Math.ceil(vp.clientHeight / ROW_H) + 16;
+  const last = Math.min(visible.length, first + count);
+
+  const lnWidth = String(lines.length).length;
+  rows.style.setProperty('--ln-w', (lnWidth * 8 + 26) + 'px');
+  rows.style.transform = 'translateY(' + (first * ROW_H) + 'px)';
+
+  let html = '';
+  for (let r = first; r < last; r++) {
+    const i = visible[r];
+    const code = sev[i];
+    const name = code ? SEVERITIES[code - 1] : '';
+    const kids = childCount[i];
+    const isFolded = folded.has(i);
+    const cont = parent[i] >= 0;
+
+    html += '<div class="row' + (r % 2 ? ' odd' : '') +
+      (name ? ' sev-' + name : '') + '" data-i="' + i + '">' +
+      '<span class="ln">' + (i + 1) + '</span>' +
+      '<span class="fold' + (kids ? '' : ' none') + '" data-fold="' + i + '">' +
+        (kids ? (isFolded ? '▸' : '▾') : '') + '</span>' +
+      '<span class="body' + (cont ? ' g-trace' : '') + '">' +
+        render(lines[i], query) +
+        (isFolded && kids ? '<span class="fold-note">' + kids + ' more lines</span>' : '') +
+      '</span></div>';
+  }
+  rows.innerHTML = html;
+  positionThumb();
+}
+
+$('viewport').addEventListener('scroll', () => {
+  /* the thumb tracks every frame; the rows only need redrawing when the
+     visible window actually changes */
+  positionThumb();
+  draw();
+}, { passive: true });
+
+/* ==========================================================================
+   Density strip — the shape of the whole file in one column
+   ========================================================================== */
+function drawDensity() {
+  const cv = $('densityCanvas');
+  const box = $('density').getBoundingClientRect();
+  if (!box.height || !lines.length) return;
+
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = Math.max(1, Math.floor(box.width * dpr));
+  cv.height = Math.max(1, Math.floor(box.height * dpr));
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  const css = getComputedStyle(document.body);
+  const colour = {
+    1: css.getPropertyValue('--bad').trim(),
+    2: css.getPropertyValue('--warn').trim()
+  };
+
+  /* one pixel row per band; a band takes the worst severity it contains, so
+     a single error in a sea of info is never averaged away */
+  const bands = cv.height;
+  const per = lines.length / bands;
+  for (let b = 0; b < bands; b++) {
+    const from = Math.floor(b * per);
+    const to = Math.min(lines.length, Math.floor((b + 1) * per) + 1);
+    let worst = 0;
+    for (let i = from; i < to; i++) {
+      const s = sev[i];
+      if (s === 1) { worst = 1; break; }
+      if (s === 2 && worst !== 1) worst = 2;
+    }
+    if (!worst) continue;
+    ctx.fillStyle = colour[worst];
+    ctx.fillRect(0, b, cv.width, 1);
+  }
+  positionThumb();
+}
+
+function positionThumb() {
+  const vp = $('viewport');
+  const strip = $('density').clientHeight;
+  if (!visible.length || !strip) return;
+  const total = visible.length * ROW_H;
+  const top = (vp.scrollTop / total) * strip;
+  const h = Math.max(2, (vp.clientHeight / total) * strip);
+  const thumb = $('densityThumb');
+  thumb.style.top = top + 'px';
+  thumb.style.height = h + 'px';
+}
+
+$('density').addEventListener('click', (e) => {
+  if (!visible.length) return;
+  const box = $('density').getBoundingClientRect();
+  const frac = (e.clientY - box.top) / box.height;
+  /* the strip maps the whole file; find the nearest visible row to that point */
+  const target = Math.floor(frac * lines.length);
+  let lo = 0, hi = visible.length - 1, best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (visible[mid] <= target) { best = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  $('viewport').scrollTop = Math.max(0, best * ROW_H - $('viewport').clientHeight / 2);
+  draw();
+  positionThumb();
+});
+
+/* ==========================================================================
+   Severity chips
+   ========================================================================== */
+function paintSevFilters() {
+  const box = $('sevFilters');
+  box.hidden = false;
+  box.innerHTML = SEVERITIES.map((s) => {
+    const n = counts[s];
+    return `<button class="sev-chip" data-sev="${s}" aria-pressed="${on[s]}"
+              title="${n ? LintApp.fmtNum(n) : 'No'} ${s} line${n === 1 ? '' : 's'} — click to show or hide">
+      <span class="pip"></span><span>${s}</span>
+      <span class="n">${n ? LintApp.fmtNum(n) : '—'}</span>
+    </button>`;
+  }).join('');
+
+  box.querySelectorAll('.sev-chip').forEach((b) => {
+    b.addEventListener('click', () => {
+      const s = b.dataset.sev;
+      on[s] = !on[s];
+      b.setAttribute('aria-pressed', String(on[s]));
+      applyFiltersFresh();
+      $('viewport').scrollTop = 0;
+    });
+  });
+}
+
+/* ==========================================================================
+   Folding
+   ========================================================================== */
+$('rows').addEventListener('click', (e) => {
+  const f = e.target.closest('[data-fold]');
+  if (!f) return;
+  const i = +f.dataset.fold;
+  if (folded.has(i)) folded.delete(i); else folded.add(i);
+  applyFiltersFresh();
+});
+
+/* ==========================================================================
+   Controls
+   ========================================================================== */
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => {
+  if (e.target.files[0]) openFile(e.target.files[0]);
+  e.target.value = '';
+});
+$('btnClose').addEventListener('click', () => { reset(); setStatus('', 'Ready'); });
+
+let filterTimer;
+$('filter').addEventListener('input', () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => {
+    applyFiltersFresh();
+    $('viewport').scrollTop = 0;
+  }, 180);
+});
+$('filter').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { $('filter').value = ''; applyFiltersFresh(); }
+});
+
+$('btnWrap').addEventListener('click', () => {
+  const w = $('viewport').classList.toggle('wrap');
+  $('btnWrap').setAttribute('aria-pressed', String(w));
+  /* wrapped rows are no longer a fixed height, so virtual scrolling is off */
+  if (w) LintApp.toast('Wrapped — scrolling is slower while on');
+  draw();
+});
+
+$('btnTail').addEventListener('click', () => {
+  $('viewport').scrollTop = $('viewport').scrollHeight;
+  draw();
+});
+
+$('btnCopyVisible').addEventListener('click', () => {
+  if (!visible.length) return;
+  const LIMIT = 50000;
+  const take = visible.slice(0, LIMIT);
+  const text = take.map((i) => lines[i]).join('\n');
+  LintApp.copy(text, take.length < visible.length
+    ? 'First ' + LintApp.fmtNum(LIMIT) + ' lines' : LintApp.fmtNum(take.length) + ' lines');
+});
+
+/* drag and drop */
+['dragover', 'dragenter'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dragover');
+  }));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+/* keyboard */
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  const typing = /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '');
+  if (mod && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('fileInput').click(); }
+  else if (mod && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); $('filter').focus(); $('filter').select(); }
+  else if (!lines.length || typing) return;
+  else if (e.key === 'End') { e.preventDefault(); $('btnTail').click(); }
+  else if (e.key === 'Home') { e.preventDefault(); $('viewport').scrollTop = 0; draw(); }
+});
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { draw(); drawDensity(); }, 150);
+});
+
+function setStatus(kind, msg) {
+  $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusMsg').textContent = msg;
+}
+
+function showEmpty() {
+  $('rows').innerHTML = `
+    <div class="log-empty">
+      <div class="big">Open a log to read it</div>
+      <p>Lines render here and never leave your browser. Severity is detected
+         from the text, stack traces fold into the error that produced them,
+         and the strip on the right shows where the trouble is.</p>
+      <p>Handles files up to about a gigabyte.
+         <kbd>${LintApp.isMac ? '⌘O' : 'Ctrl+O'}</kbd> to open · or drop one anywhere</p>
+    </div>`;
+  $('spacer').style.height = '0px';
+}
+
+showEmpty();
+$('filter').focus();
+</script>
+</body>
+</html>

@@ -11,8 +11,9 @@
 | `—` | **[yaml.lint.uz](https://yaml.lint.uz)** | Indentation validation, multi-document manifests, YAML ↔ JSON |
 | `⌸` | **[csv.lint.uz](https://csv.lint.uz)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
 | `P` | **[pdf.lint.uz](https://pdf.lint.uz)** | Page reader, text extraction, fonts, metadata, and what the file contains |
+| `≡` | **[log.lint.uz](https://log.lint.uz)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
 
-The landing page at **[lint.uz](https://lint.uz)** links all five.
+The landing page at **[lint.uz](https://lint.uz)** links all six.
 
 ---
 
@@ -64,6 +65,8 @@ still reads as one product:
 | JSON | XML | YAML | CSV | PDF |
 | :-- | :-- | :-- | :-- | :-- |
 | `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#9333EA` plum | `#BE123C` crimson |
+
+Plus `log` at `#0369A1` signal blue.
 
 **Themes:** System, Daylight, Slate, Paper, Midnight, Contrast (WCAG AAA).
 To add one, copy a block in `theme.css`, rename the selector, and register it

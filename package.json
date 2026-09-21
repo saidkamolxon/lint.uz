@@ -17,7 +17,9 @@
     "dev:yaml": "node build.mjs yaml && cd yaml && npx wrangler dev",
     "dev:csv": "node build.mjs csv && cd csv && npx wrangler dev",
     "deploy:pdf": "node build.mjs pdf && cd pdf && npx wrangler deploy",
-    "dev:pdf": "node build.mjs pdf && cd pdf && npx wrangler dev"
+    "dev:pdf": "node build.mjs pdf && cd pdf && npx wrangler dev",
+    "deploy:log": "node build.mjs log && cd log && npx wrangler deploy",
+    "dev:log": "node build.mjs log && cd log && npx wrangler dev"
   },
   "keywords": [
     "json",
@@ -27,7 +29,8 @@
     "linter",
     "viewer",
     "formatter",
-    "pdf"
+    "pdf",
+    "log"
   ],
   "author": "saidkamolxon",
   "license": "MIT"

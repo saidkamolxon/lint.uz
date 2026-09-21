@@ -1,0 +1,10 @@
+{
+  "name": "logviewer",
+  "compatibility_date": "2026-09-18",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    { "pattern": "log.lint.uz/*", "zone_name": "lint.uz" }
+  ]
+}
