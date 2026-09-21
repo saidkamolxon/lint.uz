@@ -8,7 +8,8 @@ const TOOLS = {
   xml: 'https://xml.lint.uz/',
   yaml: 'https://yaml.lint.uz/',
   csv: 'https://csv.lint.uz/',
-  pdf: 'https://pdf.lint.uz/'
+  pdf: 'https://pdf.lint.uz/',
+  log: 'https://log.lint.uz/'
 };
 
 export default {
