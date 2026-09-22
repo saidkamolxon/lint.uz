@@ -90,6 +90,9 @@ var ICONS = {
   wrap: '<path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-4m0 0 2.5-2.5M12 18l2.5 2.5M3 18h5"/>',
   theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  filter: '<path d="M4 5h16l-6.2 7.4V19l-3.6 1.6v-8.2z"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
   more: '<circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/>'
 };
 
@@ -561,6 +564,7 @@ function Tree(opts) {
   var autoDepth = opts.autoDepth || 3;
 
   var info = new WeakMap();
+  var chains = new WeakMap();     // row -> child indices leading to it from the root
   var selected = null;
   var root = null;
   this.hasData = false;
@@ -584,22 +588,31 @@ function Tree(opts) {
       return;
     }
     var q = self.query();
-    if (q) { renderFiltered(q); return; }
+    hits = []; hitIdx = -1;
+    stepNav.hidden = true;
+    if (q && !stepMode) { renderFiltered(q); return; }
     matchCount.textContent = '';
-    var node = makeNode(adapter.rootEntry(root), q);
+    var node = makeNode(adapter.rootEntry(root), q, []);
     el.appendChild(node);
     autoExpand(node, autoDepth);
+    if (q) {
+      collectHits(q);
+      stepNav.hidden = !hits.length;
+      if (hits.length) gotoHit(0);
+      else matchCount.textContent = 'no matches';
+    }
   };
 
   this.markStale = function () { el.classList.add('stale'); };
 
-  function makeNode(entry, q) {
+  function makeNode(entry, q, chain) {
     var node = document.createElement('div');
     node.className = 'node';
     var row = document.createElement('div');
     row.className = 'row';
     row.tabIndex = 0;
     info.set(row, entry);
+    chains.set(row, chain);
 
     var kids = adapter.childCount(entry);
     var caret = document.createElement('span');
@@ -634,9 +647,10 @@ function Tree(opts) {
       node.appendChild(box);
     }
     var entries = adapter.children(entry);
+    var chain = chains.get(node.querySelector(':scope > .row')) || [];
     var start = from || 0;
     var end = Math.min(start + CHUNK, entries.length);
-    for (var i = start; i < end; i++) box.appendChild(makeNode(entries[i], q));
+    for (var i = start; i < end; i++) box.appendChild(makeNode(entries[i], q, chain.concat([i])));
     if (end < entries.length) {
       var more = document.createElement('button');
       more.className = 'more-btn';
@@ -675,19 +689,19 @@ function Tree(opts) {
   function renderFiltered(q) {
     var matches = 0, rendered = 0, clipped = false;
 
-    function build(entry) {
+    function build(entry, chain) {
       if (rendered > ROW_BUDGET) { clipped = true; return null; }
       var selfMatch = adapter.matches(entry, q);
       var kids = [];
       var children = adapter.children(entry);
       for (var i = 0; i < children.length; i++) {
-        var c = build(children[i]);
+        var c = build(children[i], chain.concat([i]));
         if (c) kids.push(c);
       }
       if (!selfMatch && kids.length === 0) return null;
       if (selfMatch) matches++;
       rendered++;
-      var node = makeNode(entry, q);
+      var node = makeNode(entry, q, chain);
       if (kids.length) {
         var box = document.createElement('div');
         box.className = 'children';
@@ -699,7 +713,7 @@ function Tree(opts) {
       return node;
     }
 
-    var node = build(adapter.rootEntry(root));
+    var node = build(adapter.rootEntry(root), []);
     if (node) el.appendChild(node);
     else el.innerHTML = '<div class="empty">No matches for “' + esc(q) + '”.</div>';
     matchCount.textContent = matches
@@ -713,15 +727,171 @@ function Tree(opts) {
     }
   }
 
-  /* interaction */
-  el.addEventListener('click', function (e) {
+  /* ---------- stepping through matches in the full tree ----------
+     The other way to search: nothing is hidden, and each match is opened
+     and scrolled to in turn — for when the surroundings matter as much as
+     the match. Matches are held as child-index chains, so reaching one
+     only renders the branches on the way to it. */
+  var MODE_KEY = 'lintuz-search-mode';
+  var HIT_CAP = 10000;
+  var stepMode = false;
+  try { stepMode = localStorage.getItem(MODE_KEY) === 'step'; } catch (e) {}
+  var hits = [], hitIdx = -1, hitsClipped = false;
+  var stepNav = $('stepNav');
+  var btnMode = $('btnSearchMode');
+
+  function collectHits(q) {
+    hitsClipped = false;
+    (function walk(entry, chain) {
+      if (hits.length >= HIT_CAP) { hitsClipped = true; return; }
+      if (adapter.matches(entry, q)) hits.push(chain);
+      var kids = adapter.children(entry);
+      for (var i = 0; i < kids.length; i++) walk(kids[i], chain.concat([i]));
+    })(adapter.rootEntry(root), []);
+  }
+
+  /* open every branch on the way to a node and return its row */
+  function reveal(chain) {
+    var node = el.querySelector(':scope > .node');
+    for (var d = 0; node && d < chain.length; d++) {
+      toggle(node, true);
+      var box = node.querySelector(':scope > .children');
+      if (!box) return null;
+      var more;
+      while (box.querySelectorAll(':scope > .node').length <= chain[d] &&
+             (more = box.querySelector(':scope > .more-btn'))) more.click();
+      node = box.children[chain[d]];
+    }
+    return node ? node.querySelector(':scope > .row') : null;
+  }
+
+  function gotoHit(i) {
+    if (!hits.length) return;
+    hitIdx = (i + hits.length) % hits.length;
+    var prev = el.querySelector('.row.current-hit');
+    if (prev) prev.classList.remove('current-hit');
+    var row = reveal(hits[hitIdx]);
+    if (row) {
+      row.classList.add('current-hit');
+      selectRow(row);
+      row.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }
+    matchCount.textContent = (hitIdx + 1) + ' / ' + fmtNum(hits.length) + (hitsClipped ? '+' : '');
+  }
+
+  function setMode(step) {
+    stepMode = step;
+    btnMode.setAttribute('aria-pressed', String(!step));
+    btnMode.title = step
+      ? 'Showing the full tree — click to show only the matches'
+      : 'Showing only the matches — click to step through them in the full tree';
+    btnMode.setAttribute('aria-label', btnMode.title);
+    try { localStorage.setItem(MODE_KEY, step ? 'step' : 'filter'); } catch (e) {}
+  }
+
+  btnMode.innerHTML = svg(ICONS.filter);
+  $('btnPrevHit').innerHTML = svg(ICONS.up);
+  $('btnNextHit').innerHTML = svg(ICONS.down);
+  setMode(stepMode);
+  if (opts.ownsSearch) btnMode.hidden = true;
+
+  btnMode.addEventListener('click', function () {
+    setMode(!stepMode);
+    if (self.query()) self.render();
+  });
+  $('btnPrevHit').addEventListener('click', function () { gotoHit(hitIdx - 1); });
+  $('btnNextHit').addEventListener('click', function () { gotoHit(hitIdx + 1); });
+
+  document.addEventListener('keydown', function (e) {
+    if (!stepMode || !hits.length) return;
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'g' || e.key === 'G')) {
+      e.preventDefault();
+      gotoHit(hitIdx + (e.shiftKey ? -1 : 1));
+    }
+  });
+
+  /* from a filtered result to the same node with everything around it */
+  function showInTree(chain) {
+    setMode(true);
+    self.render();
+    var key = chain.join('/');
+    for (var i = 0; i < hits.length; i++) {
+      if (hits[i].join('/') === key) { gotoHit(i); return; }
+    }
+    /* an ancestor kept only for its matching children */
+    var row = reveal(chain);
+    if (row) {
+      var prev = el.querySelector('.row.current-hit');
+      if (prev) prev.classList.remove('current-hit');
+      selectRow(row);
+      row.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }
+  }
+
+  /* ---------- row menu ---------- */
+  var ctxWrap = document.createElement('div');
+  ctxWrap.className = 'menu-wrap';
+  var ctxMenu = document.createElement('div');
+  ctxMenu.className = 'menu ctx-menu';
+  ctxMenu.setAttribute('role', 'menu');
+  ctxWrap.appendChild(ctxMenu);
+  document.body.appendChild(ctxWrap);
+  ctxMenu.addEventListener('click', function (e) { e.stopPropagation(); });
+
+  el.addEventListener('contextmenu', function (e) {
     var row = e.target.closest('.row');
-    if (!row || !el.contains(row) || e.target.closest('button')) return;
+    if (!row || !el.contains(row)) return;
+    var entry = info.get(row);
+    if (!entry) return;
+    e.preventDefault();
+    selectRow(row);
+
+    ctxMenu.innerHTML = '';
+    function item(label, run) {
+      var b = document.createElement('button');
+      b.className = 'menu-item';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = label;
+      b.addEventListener('click', function () { closeAllMenus(); run(); });
+      ctxMenu.appendChild(b);
+    }
+    if (self.query() && !stepMode) {
+      var chain = chains.get(row);
+      item('Show in full tree', function () { showInTree(chain); });
+      var sep = document.createElement('div');
+      sep.className = 'menu-sep';
+      ctxMenu.appendChild(sep);
+    }
+    adapter.actions(entry).forEach(function (a) {
+      item(a.title, function () { copyText(a.get(), a.toastLabel || a.label); });
+    });
+
+    closeAllMenus();
+    ctxMenu.classList.add('open');
+    /* from the keyboard the event has no pointer position — use the row */
+    var x = e.clientX, y = e.clientY;
+    if (!x && !y) { var r = row.getBoundingClientRect(); x = r.left + 24; y = r.bottom; }
+    var w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
+    ctxMenu.style.left = Math.max(4, Math.min(x, window.innerWidth - w - 4)) + 'px';
+    ctxMenu.style.top = Math.max(4, Math.min(y, window.innerHeight - h - 4)) + 'px';
+    var first = ctxMenu.querySelector('.menu-item');
+    if (first) first.focus();
+  });
+  el.addEventListener('scroll', function () { closeAllMenus(); }, { passive: true });
+
+  /* interaction */
+  function selectRow(row) {
     if (selected) selected.classList.remove('selected');
     selected = row;
     row.classList.add('selected');
     var entry = info.get(row);
     pathBox.textContent = entry ? adapter.path(entry) : '';
+  }
+
+  el.addEventListener('click', function (e) {
+    var row = e.target.closest('.row');
+    if (!row || !el.contains(row) || e.target.closest('button')) return;
+    selectRow(row);
     toggle(row.parentElement);
   });
 
@@ -784,10 +954,22 @@ function Tree(opts) {
   /* A tool that renders its own right-hand pane (CSV's table) owns search
      too — otherwise both listeners fire and the shared tree overwrites it. */
   if (!opts.ownsSearch) {
-    var searchTimer;
+    var searchTimer = null;
     searchBox.addEventListener('input', function () {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(self.render, 220);
+      searchTimer = setTimeout(function () { searchTimer = null; self.render(); }, 220);
+    });
+    /* Enter steps to the next match — and settles a query still being typed */
+    searchBox.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || !stepMode) return;
+      e.preventDefault();
+      if (searchTimer !== null) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+        self.render();
+        return;
+      }
+      gotoHit(hitIdx + (e.shiftKey ? -1 : 1));
     });
   }
 }

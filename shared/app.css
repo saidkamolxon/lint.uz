@@ -372,6 +372,8 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
   padding: 0 var(--s1);
 }
 .treebar .icon-btn { width: 28px; height: 26px; }
+.step-nav { display: inline-flex; }
+.step-nav[hidden] { display: none; }
 
 #tree {
   flex: 1; overflow: auto;
@@ -410,6 +412,11 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
 }
 .row:hover { background: var(--row-hover); }
 .row.selected { background: var(--row-active); }
+/* the match being stepped to, marked apart from the others it highlights */
+.row.current-hit { background: var(--hue-wash); box-shadow: inset 2px 0 0 var(--hue); }
+
+/* the row menu opens where the pointer is, not under a button */
+.ctx-menu { position: fixed; right: auto; top: 0; left: 0; min-width: 220px; }
 
 .caret {
   flex: none; width: 15px; align-self: center;

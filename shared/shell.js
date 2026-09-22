@@ -92,6 +92,11 @@ document.getElementById('app').innerHTML =
           'aria-label="Search the structure">' +
       '</label>' +
       '<span id="matchCount"></span>' +
+      '<span class="step-nav" id="stepNav" hidden>' +
+        '<button id="btnPrevHit" class="icon-btn" title="Previous match (⇧↵)" aria-label="Previous match"></button>' +
+        '<button id="btnNextHit" class="icon-btn" title="Next match (↵)" aria-label="Next match"></button>' +
+      '</span>' +
+      '<button id="btnSearchMode" class="icon-btn" aria-pressed="true"></button>' +
       '<button id="btnWrap" class="icon-btn" title="Wrap long values" aria-pressed="false" aria-label="Wrap long values"></button>' +
       '<button id="btnExpand" class="icon-btn" title="Expand everything" aria-label="Expand everything"></button>' +
       '<button id="btnCollapse" class="icon-btn" title="Collapse everything" aria-label="Collapse everything"></button>' +
