@@ -1,24 +1,24 @@
-/* Everything that is not lint.one itself redirects to a path on it.
+/* Everything that is not lint.one itself redirects to a path on it: the old
+   domain, and any subdomain of either. Paths are canonical because a search
+   engine pools a domain's authority across them, where subdomains split it.
 
-   That covers the old domain (lint.uz and its subdomains) and the lint.one
-   subdomains that were live briefly before the tools moved to paths. Paths
-   are canonical because a search engine pools a domain's authority across
-   them, where subdomains split it. */
-
-const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log'];
+   This worker only rewrites the address. Whether a path is a tool, a format
+   worth a waitlist, or nothing at all is decided by the site worker, so both
+   ways of guessing give the same answer. */
 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
     const host = url.hostname.replace(/^www\./, '');
 
-    /* json.lint.uz and json.lint.one both mean lint.one/json. A subdomain we
-       do not serve — 3js.lint.one, say — is someone guessing at a tool, so
-       send them to that path: lint.one answers it with the waitlist page. */
-    const label = host.split('.')[0];
-    const looksLikeFormat = /^(?=.*[a-z])[a-z0-9]{1,12}$/.test(label);
-    const tool = (TOOLS.includes(label) || (looksLikeFormat && host !== 'lint.one'
-                  && host !== 'lint.uz')) ? '/' + label : '';
+    /* Every subdomain becomes the matching path: json.lint.uz is lint.one/json,
+       and anything.lint.one is lint.one/anything. What that path means is not
+       decided here — lint.one answers a format-looking name with a waitlist
+       and everything else with a plain not-found. Keeping that judgement in
+       one place means the two ways of guessing agree. */
+    const isApex = host === 'lint.one' || host === 'lint.uz';
+    const label = isApex ? '' : host.split('.')[0];
+    const tool = label ? '/' + encodeURIComponent(label) : '';
 
     /* A path starting // (or a backslash, which browsers fold to /) parses as
        protocol-relative: "lint.uz//evil.com" would send visitors to evil.com,
