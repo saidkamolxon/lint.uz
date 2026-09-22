@@ -12,9 +12,13 @@ export default {
     const url = new URL(request.url);
     const host = url.hostname.replace(/^www\./, '');
 
-    /* json.lint.uz and json.lint.one both mean lint.one/json */
+    /* json.lint.uz and json.lint.one both mean lint.one/json. A subdomain we
+       do not serve — 3js.lint.one, say — is someone guessing at a tool, so
+       send them to that path: lint.one answers it with the waitlist page. */
     const label = host.split('.')[0];
-    const tool = TOOLS.includes(label) ? '/' + label : '';
+    const looksLikeFormat = /^(?=.*[a-z])[a-z0-9]{1,12}$/.test(label);
+    const tool = (TOOLS.includes(label) || (looksLikeFormat && host !== 'lint.one'
+                  && host !== 'lint.uz')) ? '/' + label : '';
 
     /* A path starting // (or a backslash, which browsers fold to /) parses as
        protocol-relative: "lint.uz//evil.com" would send visitors to evil.com,
