@@ -28,7 +28,10 @@
   position: relative;
   flex: 1; min-width: 0; overflow: auto;
   padding: var(--s5) var(--s4) 40vh;
-  display: flex; flex-direction: column; align-items: center;
+  /* `safe` keeps a page wider than the window reachable: plain centring
+     pushes its left edge past the start of the scroll area */
+  display: flex; flex-direction: column;
+  align-items: center; align-items: safe center;
   gap: var(--s5);
   scroll-padding-top: var(--s4);
   background: var(--sunken);
@@ -38,14 +41,15 @@
    element's shadow too, so an inverted page would turn its own dark shadow
    into a bright halo. */
 .page-wrap {
-  position: relative; flex: none; max-width: 100%;
+  position: relative; flex: none;
   box-shadow: var(--shadow);
   border-radius: 2px;
   line-height: 0;
 }
 .page-wrap canvas {
+  /* sized only from script: a max-width here clamped the width of a zoomed
+     page while its height stayed put, squashing it */
   display: block;
-  max-width: 100%; height: auto;
   background: #fff;
   border-radius: 2px;
 }
@@ -628,6 +632,7 @@ let doc = null;
 let scale = 1.2;
 let fitMode = true;
 let renderedPages = new Map();
+let firstPage = null;    // every slot is laid out from page 1's size
 
 const EMPTY = `
   <div class="pdf-empty">
@@ -715,7 +720,7 @@ async function renderDocument(file) {
   host.innerHTML = '';
   host.style.display = 'flex';
 
-  const first = await doc.getPage(1);
+  const first = firstPage = await doc.getPage(1);
   if (fitMode) scale = fitScale(first);
 
   /* Lay out every page at its true size first, then fill them in as they
@@ -818,9 +823,10 @@ async function renderPage(n) {
   const wrap = $('pages').querySelector(`.page-wrap[data-page="${n}"]`);
   if (!wrap) return;
 
+  const at = scale;
   try {
     const page = await doc.getPage(n);
-    const vp = page.getViewport({ scale });
+    const vp = page.getViewport({ scale: at });
     /* keep the backing buffer within what a browser will happily allocate;
        above roughly 4 megapixels the gain is invisible and the cost is not */
     const MAX_PIXELS = 4e6;
@@ -838,6 +844,8 @@ async function renderPage(n) {
       viewport: vp,
       transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
     }).promise;
+    /* zoomed again while this was drawing — a newer render owns the slot */
+    if (at !== scale) return;
 
     wrap.classList.remove('pending');
     wrap.style.width = '';
@@ -855,23 +863,54 @@ async function renderPage(n) {
   }
 }
 
-async function rerender() {
-  if (!doc) return;
+/* Re-lay every slot at the current scale, keeping the point at (x, y) —
+   the cursor for a pinch, the middle of the view otherwise — where it was.
+   A page already drawn keeps its canvas, stretched, until the sharp render
+   replaces it, so zooming never flashes to blank. */
+function rerender(x, y, draw = true) {
+  if (!doc || !firstPage) return;
   const host = $('pages');
-  const anchor = host.scrollTop / Math.max(1, host.scrollHeight);
-  renderedPages.clear();
-  const first = await doc.getPage(1);
-  for (let n = 1; n <= doc.numPages; n++) {
-    const wrap = host.querySelector(`.page-wrap[data-page="${n}"]`);
-    if (!wrap) continue;
-    const vp = first.getViewport({ scale });
-    wrap.className = 'page-wrap pending';
-    wrap.style.width = Math.round(vp.width) + 'px';
-    wrap.style.height = Math.round(vp.height) + 'px';
-    wrap.innerHTML = '';
+  const box = host.getBoundingClientRect();
+  if (x == null) { x = box.left + host.clientWidth / 2; y = box.top + host.clientHeight / 2; }
+
+  /* remember where on which page the anchor falls */
+  const under = document.elementFromPoint(x, y);
+  let anchor = under && under.closest && under.closest('.page-wrap');
+  if (!anchor || !host.contains(anchor)) anchor = null;
+  let fx = 0, fy = 0;
+  if (anchor) {
+    const r = anchor.getBoundingClientRect();
+    fx = (x - r.left) / r.width;
+    fy = (y - r.top) / r.height;
   }
-  host.scrollTop = anchor * host.scrollHeight;
-  renderVisible();
+  const frac = host.scrollTop / Math.max(1, host.scrollHeight);
+
+  renderedPages.clear();
+  const vp = firstPage.getViewport({ scale });
+  const w = Math.round(vp.width) + 'px', h = Math.round(vp.height) + 'px';
+  host.querySelectorAll('.page-wrap').forEach((wrap) => {
+    const canvas = wrap.querySelector('canvas');
+    wrap.style.width = w;
+    wrap.style.height = h;
+    if (canvas) {
+      /* overlays are placed in pixels, so they go and are redrawn after */
+      [...wrap.children].forEach((c) => { if (c !== canvas) c.remove(); });
+      canvas.style.width = w;
+      canvas.style.height = h;
+    } else {
+      wrap.className = 'page-wrap pending';
+      wrap.innerHTML = '';
+    }
+  });
+
+  if (anchor) {
+    const r = anchor.getBoundingClientRect();
+    host.scrollLeft += r.left + fx * r.width - x;
+    host.scrollTop += r.top + fy * r.height - y;
+  } else {
+    host.scrollTop = frac * host.scrollHeight;
+  }
+  if (draw) renderVisible();
 }
 
 function resetView() {
@@ -1571,8 +1610,32 @@ $('btnInfo').addEventListener('click', () => {
   $('btnInfo').setAttribute('aria-pressed', String(open));
 });
 
-$('btnIn').addEventListener('click', () => { fitMode = false; scale = Math.min(3, scale * 1.2); rerender(); });
-$('btnOut').addEventListener('click', () => { fitMode = false; scale = Math.max(0.3, scale / 1.2); rerender(); });
+const MIN_SCALE = 0.3, MAX_SCALE = 3;
+function zoomTo(next, x, y, draw) {
+  next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
+  if (Math.abs(next - scale) < 1e-3) return;
+  fitMode = false;
+  scale = next;
+  rerender(x, y, draw);
+}
+$('btnIn').addEventListener('click', () => zoomTo(scale * 1.2));
+$('btnOut').addEventListener('click', () => zoomTo(scale / 1.2));
+
+/* ctrl + wheel, and a trackpad pinch (which arrives as the same thing),
+   zoom the document around the cursor instead of the whole page. The
+   listener cannot be passive, or the browser zooms regardless. Each step
+   only re-lays the slots; the pages are drawn once the gesture settles. */
+let wheelZoomTimer;
+$('pages').addEventListener('wheel', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  if (!doc) return;
+  const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  const d = Math.max(-60, Math.min(60, px));
+  zoomTo(scale * Math.exp(-d * 0.006), e.clientX, e.clientY, false);
+  clearTimeout(wheelZoomTimer);
+  wheelZoomTimer = setTimeout(renderVisible, 140);
+}, { passive: false });
 $('btnFit').addEventListener('click', async () => {
   if (!doc) return;
   fitMode = true;
