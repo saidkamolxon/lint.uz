@@ -41,6 +41,13 @@
 .row.odd { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 .row:hover { background: var(--row-hover); }
 .row.hit { background: color-mix(in srgb, var(--hue) 12%, transparent); }
+/* the line a go-to landed on flashes once, long enough for the eye to find
+   it, then settles back into the file */
+.row.target { animation: target-fade 1.6s ease-in; }
+@keyframes target-fade {
+  0%, 40% { background: color-mix(in srgb, var(--hue) 18%, transparent); }
+  100%    { background: transparent; }
+}
 
 /* severity as an edge, never as coloured body text — at this density
    colouring whole lines is exhausting to read */
@@ -155,6 +162,30 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
 }
 #filterCount.none { color: var(--bad); }
 
+/* ---------- go to line ---------- */
+.goto {
+  position: absolute; top: var(--s3); left: 50%; transform: translateX(-50%);
+  z-index: 25;
+  display: flex; align-items: center; gap: var(--s2);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--s1) var(--s1) var(--s1) var(--s3);
+  font-family: var(--ui); font-size: var(--fs-small); color: var(--muted);
+}
+.goto[hidden] { display: none; }
+.goto input {
+  width: 14ch;
+  font-family: var(--mono); font-size: 12.5px;
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  padding: 4px var(--s2);
+  font-variant-numeric: tabular-nums;
+}
+.goto input:focus { outline: none; border-color: color-mix(in srgb, var(--hue) 45%, var(--line)); }
+
 /* ---------- progress while indexing ---------- */
 #progress {
   position: absolute; left: 0; top: 0; height: 2px;
@@ -256,6 +287,10 @@ $('app').innerHTML = `
 
   <main class="log-main">
     <div id="progress"></div>
+    <label class="goto" id="gotoBox" hidden>Go to line
+      <input id="gotoInput" type="text" inputmode="numeric" autocomplete="off"
+             spellcheck="false" aria-label="Line number">
+    </label>
     <div id="viewport">
       <div id="spacer"><div id="rows"></div></div>
     </div>
@@ -476,6 +511,8 @@ let excludes = [];
 let fileName = '';
 
 const ROW_H = 21;
+let target = -1;         // the line a go-to landed on, while it flashes
+let targetTimer;
 
 /* ==========================================================================
    Loading
@@ -574,7 +611,8 @@ async function index() {
 
 function reset() {
   lines = []; sev = null; parent = null; childCount = null;
-  visible = []; folded = new Set();
+  visible = []; folded = new Set(); target = -1;
+  $('gotoBox').hidden = true;
   counts = { error: 0, warn: 0, info: 0, debug: 0, none: 0 };
   query = ''; excludes = [];
   $('filter').value = '';
@@ -705,7 +743,8 @@ function draw() {
     const cont = parent[i] >= 0;
 
     html += '<div class="row' + (r % 2 ? ' odd' : '') +
-      (name ? ' sev-' + name : '') + '" data-i="' + i + '">' +
+      (name ? ' sev-' + name : '') + (i === target ? ' target' : '') +
+      '" data-i="' + i + '">' +
       '<span class="ln">' + (i + 1) + '</span>' +
       '<span class="fold' + (kids ? '' : ' none') + '" data-fold="' + i + '">' +
         (kids ? (isFolded ? '▸' : '▾') : '') + '</span>' +
@@ -860,6 +899,59 @@ $('btnWrap').addEventListener('click', () => {
   draw();
 });
 
+/* ---------- go to line ----------
+   Numbers are file line numbers, the ones in the gutter, not positions in
+   the filtered view. */
+function openGoto() {
+  const inp = $('gotoInput');
+  inp.placeholder = '1–' + LintApp.fmtNum(lines.length);
+  inp.value = '';
+  $('gotoBox').hidden = false;
+  inp.focus();
+}
+function closeGoto() {
+  $('gotoBox').hidden = true;
+}
+
+function gotoLine(n) {
+  const i = Math.min(lines.length, Math.max(1, n)) - 1;
+  /* inside a folded event — open it rather than land on its header */
+  const p = parent[i];
+  if (p >= 0 && folded.has(p)) { folded.delete(p); applyFilters(); }
+  if (!visible.length) { LintApp.toast('Nothing is visible — clear the filter first'); return; }
+
+  /* the nearest visible line, in case a filter hides this one */
+  let lo = 0, hi = visible.length - 1, r = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (visible[mid] <= i) { r = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  if (r + 1 < visible.length && visible[r] < i && visible[r + 1] - i < i - visible[r]) r++;
+  if (visible[r] !== i) {
+    LintApp.toast('Line ' + LintApp.fmtNum(i + 1) + ' is filtered out — showing ' +
+      LintApp.fmtNum(visible[r] + 1));
+  }
+  target = visible[r];
+  clearTimeout(targetTimer);
+  targetTimer = setTimeout(() => { target = -1; }, 1600);
+  const vp = $('viewport');
+  vp.scrollTop = Math.max(0, r * ROW_H - vp.clientHeight / 3);
+  draw();
+}
+
+$('gotoInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const n = parseInt($('gotoInput').value.replace(/[^\d]/g, ''), 10);
+    closeGoto();
+    if (n > 0) gotoLine(n);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeGoto();
+  }
+});
+$('gotoInput').addEventListener('blur', closeGoto);
+
 $('btnTail').addEventListener('click', () => {
   $('viewport').scrollTop = $('viewport').scrollHeight;
   draw();
@@ -893,6 +985,7 @@ document.addEventListener('keydown', (e) => {
   const typing = /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '');
   if (mod && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('fileInput').click(); }
   else if (mod && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); $('filter').focus(); $('filter').select(); }
+  else if (mod && (e.key === 'g' || e.key === 'G')) { e.preventDefault(); if (lines.length) openGoto(); }
   else if (!lines.length || typing) return;
   else if (e.key === 'End') { e.preventDefault(); $('btnTail').click(); }
   else if (e.key === 'Home') { e.preventDefault(); $('viewport').scrollTop = 0; draw(); }
