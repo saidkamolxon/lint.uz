@@ -545,6 +545,9 @@ mark {
   color: var(--muted); cursor: pointer;
   direction: rtl;
 }
+/* rtl only so a long path loses its start, not its end; the marks keep
+   its punctuation in reading order — without them "$.a[0]" shows as "a[0].$" */
+#pathBox:not(:empty)::before, #pathBox:not(:empty)::after { content: "\200E"; }
 #pathBox:hover { color: var(--hue); }
 #pathBox:empty { cursor: default; }
 
