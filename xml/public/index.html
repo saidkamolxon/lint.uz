@@ -209,7 +209,15 @@ var adapter = {
 
   matches: function (e, q) {
     var n = e.node;
-    if (e.kind === 'el') return n.nodeName.toLowerCase().indexOf(q) !== -1;
+    if (e.kind === 'el') {
+      if (n.nodeName.toLowerCase().indexOf(q) !== -1) return true;
+      /* a text-only element shows its text on its own row, so that text is
+         searched here — it never becomes a child row to match on */
+      var kids = childEntries(n);
+      return isTextOnly(kids) && kids.some(function (k) {
+        return k.kind === 'text' && String(k.node.nodeValue).toLowerCase().indexOf(q) !== -1;
+      });
+    }
     if (e.kind === 'attr') {
       return n.nodeName.toLowerCase().indexOf(q) !== -1 ||
              String(n.value).toLowerCase().indexOf(q) !== -1;
