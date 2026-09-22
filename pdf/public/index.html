@@ -7,8 +7,8 @@
 <meta name="description" content="A fast, private PDF viewer and inspector. Read pages, extract text, and check what a document contains — all in your browser. Nothing is uploaded.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="shared/theme.css">
-<link rel="stylesheet" href="shared/app.css">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
 <style>
 /* ==========================================================================
    PDF is the one single-pane tool: a page is the content, so there is no
@@ -420,7 +420,7 @@ body.dragover #pages::after {
 window.LINT_CONFIG = {
   id: 'pdf',
   name: 'PDF Viewer',
-  host: 'pdf.lint.one',
+  host: 'lint.one/pdf',
   label: 'PDF',
   mark: 'P',
   hue: '#BE123C',
@@ -428,8 +428,8 @@ window.LINT_CONFIG = {
   accept: '.pdf,application/pdf'
 };
 </script>
-<script src="shared/theme-boot.js"></script>
-<script src="shared/app.js"></script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/app.js"></script>
 <script type="module">
 import * as pdfjsLib from './vendor/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs';
@@ -450,7 +450,7 @@ $('app').innerHTML = `
   <header class="toolbar">
     <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
             aria-pressed="false" disabled></button>
-    <a class="brand" href="https://lint.one" title="All lint.one tools">
+    <a class="brand" href="/" title="All tools">
       <span class="mark">${c.mark}</span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>

@@ -7,8 +7,8 @@
 <meta name="description" content="A fast, private CSV viewer, validator and CSV ↔ JSON converter. Everything runs in your browser — your data never leaves the page.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="shared/theme.css">
-<link rel="stylesheet" href="shared/app.css">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
 <style>
 /* CSV shows a table instead of a tree — the only per-tool styling
    in the suite, and it reuses the shared tokens throughout. */
@@ -63,7 +63,7 @@
 window.LINT_CONFIG = {
   id: 'csv',
   name: 'CSV Viewer',
-  host: 'csv.lint.one',
+  host: 'lint.one/csv',
   label: 'CSV',
   mark: '⌸',
   hue: '#9333EA',
@@ -78,9 +78,9 @@ window.LINT_CONFIG = {
   ]
 };
 </script>
-<script src="shared/theme-boot.js"></script>
-<script src="shared/shell.js"></script>
-<script src="shared/app.js"></script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/shell.js"></script>
+<script src="/shared/app.js"></script>
 <script>
 (function () {
 'use strict';

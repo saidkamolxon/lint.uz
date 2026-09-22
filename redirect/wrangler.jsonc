@@ -10,6 +10,12 @@
     { "pattern": "yaml.lint.uz/*", "zone_name": "lint.uz" },
     { "pattern": "csv.lint.uz/*", "zone_name": "lint.uz" },
     { "pattern": "pdf.lint.uz/*", "zone_name": "lint.uz" },
-    { "pattern": "log.lint.uz/*", "zone_name": "lint.uz" }
+    { "pattern": "log.lint.uz/*", "zone_name": "lint.uz" },
+    { "pattern": "json.lint.one/*", "zone_name": "lint.one" },
+    { "pattern": "xml.lint.one/*", "zone_name": "lint.one" },
+    { "pattern": "yaml.lint.one/*", "zone_name": "lint.one" },
+    { "pattern": "csv.lint.one/*", "zone_name": "lint.one" },
+    { "pattern": "pdf.lint.one/*", "zone_name": "lint.one" },
+    { "pattern": "log.lint.one/*", "zone_name": "lint.one" }
   ]
 }

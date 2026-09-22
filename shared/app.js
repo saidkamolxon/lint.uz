@@ -16,8 +16,9 @@ var THEMES = [
   { id: 'contrast',  name: 'Contrast', bg: '#FFFFFF',        fg: '#000000' }
 ];
 
-/* Themes persist across subdomains via a cookie on .lint.one — localStorage
-   is origin-scoped, so json. and yaml. would otherwise not agree. */
+/* The theme is remembered in a cookie rather than localStorage. Both work now
+   that every tool shares one origin, but the cookie is kept: it survives a
+   move back to separate hosts, and it is what the pages already read. */
 var THEME_COOKIE = 'lintuz_theme';
 var THEME_LS = 'lintuz-theme';
 
@@ -29,7 +30,8 @@ function readTheme() {
 
 function writeTheme(id) {
   var host = location.hostname;
-  var domain = /(^|\.)lint\.one$/.test(host) ? '; domain=.lint.one' : '';
+  /* one origin now, so the cookie needs no domain attribute */
+  var domain = '';
   var secure = location.protocol === 'https:' ? '; secure' : '';
   try {
     document.cookie = THEME_COOKIE + '=' + encodeURIComponent(id) +
@@ -47,13 +49,16 @@ function applyTheme(id) {
 applyTheme(readTheme());
 
 /* ---------- the four tools, for the suite switcher ---------- */
+/* Paths on one domain rather than a subdomain each: a search engine pools a
+   site's authority across its paths, but treats subdomains as separate sites
+   and splits it. Relative hrefs also keep local development working. */
 var SUITE = [
-  { id: 'json', name: 'JSON', host: 'https://json.lint.one' },
-  { id: 'xml',  name: 'XML',  host: 'https://xml.lint.one'  },
-  { id: 'yaml', name: 'YAML', host: 'https://yaml.lint.one' },
-  { id: 'csv',  name: 'CSV',  host: 'https://csv.lint.one'  },
-  { id: 'pdf',  name: 'PDF',  host: 'https://pdf.lint.one'  },
-  { id: 'log',  name: 'Log',  host: 'https://log.lint.one'  }
+  { id: 'json', name: 'JSON', host: '/json' },
+  { id: 'xml',  name: 'XML',  host: '/xml'  },
+  { id: 'yaml', name: 'YAML', host: '/yaml' },
+  { id: 'csv',  name: 'CSV',  host: '/csv'  },
+  { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
+  { id: 'log',  name: 'Log',  host: '/log'  }
 ];
 
 /* ---------- small helpers ---------- */
@@ -158,13 +163,13 @@ function showToast(msg, action) {
 }
 
 /* ---------- cross-tool handoff ----------
-   A short-lived cookie on .lint.one naming the tool the user just left, so the
+   A short-lived cookie naming the tool the user just left, so the
    destination can say "your JSON from YAML is on the clipboard" instead of a
    generic hint. The document itself never leaves the clipboard. */
 var HANDOFF_COOKIE = 'lintuz_from';
 
 function writeHandoff(fromId, format) {
-  var domain = /(^|\.)lint\.one$/.test(location.hostname) ? '; domain=.lint.one' : '';
+  var domain = '';
   var secure = location.protocol === 'https:' ? '; secure' : '';
   try {
     document.cookie = HANDOFF_COOKIE + '=' +
@@ -179,7 +184,7 @@ function readHandoff() {
   var parts = decodeURIComponent(m[1]).split(':');
   var id = parts[0], format = parts[1] || '';
   /* one-shot: clear it so a later visit does not show a stale prompt */
-  var domain = /(^|\.)lint\.one$/.test(location.hostname) ? '; domain=.lint.one' : '';
+  var domain = '';
   try {
     document.cookie = HANDOFF_COOKIE + '=; path=/; max-age=0' + domain;
   } catch (e) {}
@@ -309,7 +314,7 @@ function buildSuiteMenu(container, activeId) {
 
   var btn = document.createElement('button');
   btn.className = 'icon-btn';
-  btn.title = 'Other lint.one tools';
+  btn.title = 'Other tools';
   btn.setAttribute('aria-label', 'Switch tool');
   btn.setAttribute('aria-haspopup', 'true');
   btn.innerHTML = svg(ICONS.grid);
@@ -343,7 +348,7 @@ function buildSuiteMenu(container, activeId) {
   menu.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
   var home = document.createElement('a');
   home.className = 'menu-item';
-  home.href = 'https://lint.one';
+  home.href = '/';
   home.innerHTML = '<span>All tools</span><span class="ext">↗</span>';
   menu.appendChild(home);
 

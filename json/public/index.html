@@ -7,8 +7,8 @@
 <meta name="description" content="A fast, private JSON viewer, formatter, validator and minifier. Everything runs in your browser — your data never leaves the page.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="shared/theme.css">
-<link rel="stylesheet" href="shared/app.css">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
 </head>
 <body>
 <div class="app" id="app"></div>
@@ -18,7 +18,7 @@
 window.LINT_CONFIG = {
   id: 'json',
   name: 'JSON Viewer',
-  host: 'json.lint.one',
+  host: 'lint.one/json',
   label: 'JSON',
   mark: '{}',
   hue: '#4F46E5',
@@ -34,9 +34,9 @@ window.LINT_CONFIG = {
   ]
 };
 </script>
-<script src="shared/theme-boot.js"></script>
-<script src="shared/shell.js"></script>
-<script src="shared/app.js"></script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/shell.js"></script>
+<script src="/shared/app.js"></script>
 <script>
 (function () {
 'use strict';

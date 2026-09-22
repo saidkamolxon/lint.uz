@@ -7,8 +7,8 @@
 <meta name="description" content="A fast, private log reader. Open a gigabyte of logs, filter by severity, fold stack traces, and find the failure — all in your browser. Nothing is uploaded.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="shared/theme.css">
-<link rel="stylesheet" href="shared/app.css">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
 <style>
 /* ==========================================================================
    Reading a log is triage: you are looking for the moment something broke.
@@ -200,7 +200,7 @@ body.dragover #viewport::after {
 window.LINT_CONFIG = {
   id: 'log',
   name: 'Log Viewer',
-  host: 'log.lint.one',
+  host: 'lint.one/log',
   label: 'log',
   mark: '≡',
   hue: '#0369A1',
@@ -208,8 +208,8 @@ window.LINT_CONFIG = {
   accept: '.log,.txt,.out,.err,.jsonl,.ndjson,text/plain'
 };
 </script>
-<script src="shared/theme-boot.js"></script>
-<script src="shared/app.js"></script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/app.js"></script>
 <script type="module">
 const $ = (id) => document.getElementById(id);
 const esc = LintApp.esc;
@@ -223,7 +223,7 @@ document.documentElement.style.setProperty('--hue-ink', c.hueInk);
    ========================================================================== */
 $('app').innerHTML = `
   <header class="toolbar">
-    <a class="brand" href="https://lint.one" title="All lint.one tools">
+    <a class="brand" href="/" title="All tools">
       <span class="mark">${c.mark}</span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>

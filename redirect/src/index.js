@@ -1,27 +1,32 @@
-/* lint.uz — the old domain, kept alive as a redirect.
-   Every host and path maps to its lint.one equivalent, so links people have
-   already shared or bookmarked keep working and search engines move their
-   ranking across rather than splitting it. */
+/* Everything that is not lint.one itself redirects to a path on it.
+
+   That covers the old domain (lint.uz and its subdomains) and the lint.one
+   subdomains that were live briefly before the tools moved to paths. Paths
+   are canonical because a search engine pools a domain's authority across
+   them, where subdomains split it. */
+
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log'];
 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-
-    /* json.lint.uz -> json.lint.one, www.lint.uz -> lint.one, lint.uz -> lint.one */
     const host = url.hostname.replace(/^www\./, '');
-    const target = host.endsWith('.lint.uz')
-      ? host.slice(0, -'.lint.uz'.length) + '.lint.one'
-      : 'lint.one';
 
-    /* A path beginning with // (or a backslash, which browsers fold to /) is
-       read as protocol-relative, so "lint.uz//evil.com" would resolve to
-       evil.com — an open redirect wearing a trusted domain. Collapse any
-       leading slashes to exactly one before resolving. */
+    /* json.lint.uz and json.lint.one both mean lint.one/json */
+    const label = host.split('.')[0];
+    const tool = TOOLS.includes(label) ? '/' + label : '';
+
+    /* A path starting // (or a backslash, which browsers fold to /) parses as
+       protocol-relative: "lint.uz//evil.com" would send visitors to evil.com,
+       an open redirect wearing a trusted domain. Collapse leading slashes. */
     const path = '/' + url.pathname.replace(/^[/\\]+/, '');
 
-    const to = new URL(path + url.search + url.hash, 'https://' + target);
-    /* belt and braces: never leave the new domain */
-    if (to.hostname !== target) return Response.redirect('https://' + target + '/', 301);
+    /* on a tool subdomain the path is already inside that tool, so keep both:
+       pdf.lint.uz/vendor/x.mjs -> lint.one/pdf/vendor/x.mjs */
+    const target = tool + (path === '/' ? '/' : path);
+
+    const to = new URL(target + url.search + url.hash, 'https://lint.one');
+    if (to.hostname !== 'lint.one') return Response.redirect('https://lint.one/', 301);
     return Response.redirect(to.toString(), 301);
   }
 };
