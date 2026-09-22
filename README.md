@@ -95,23 +95,23 @@ so the initial page weight stays close to the other tools.
 git clone https://github.com/saidkamolxon/lint.uz.git
 cd lint.uz
 
-npm run build          # copy shared/ into every public/
-npm run dev:json       # or dev:xml, dev:yaml, dev:csv, dev:site
+npm run dev            # every tool at http://localhost:8787/<tool>/
 ```
 
-`build.mjs` copies `shared/` into each tool's `public/` so Wrangler can serve
-it as a static asset. Nothing is bundled or transpiled — the files land as-is
-and stay readable in view-source. The generated `*/public/shared/` directories
-are gitignored.
+`build.mjs` assembles `site/dist/`: the landing page at the root, each tool in
+a folder named after its path, and one copy of `shared/`. Nothing is bundled
+or transpiled — the files land as-is and stay readable in view-source.
 
 ## Deployment
 
-Each property is a Cloudflare Worker with static assets. Pushing to `main`
-runs `.github/workflows/deploy.yml`, which deploys only what changed — and
-redeploys everything when `shared/` changes, since all five embed it.
+Two Cloudflare Workers. `site` serves the landing page and every tool at
+`lint.one/<tool>`; `redirect` sends `lint.uz` and the old subdomains there.
+Pushing to `main` runs `.github/workflows/deploy.yml`, which deploys whichever
+of the two changed.
 
 ```bash
-npm run deploy:json    # or deploy:xml, deploy:yaml, deploy:csv, deploy:site
+npm run deploy           # the site
+npm run deploy:redirect  # the redirect worker
 ```
 
 ## License

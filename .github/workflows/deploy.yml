@@ -5,89 +5,49 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Two workers: the site, which serves the landing page and every tool at
+# lint.one/<tool>, and the redirect, which sends lint.uz and the old
+# subdomains there. The tools are no longer workers of their own.
+
 jobs:
   filter:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       site: ${{ steps.changes.outputs.site }}
-      json: ${{ steps.changes.outputs.json }}
-      xml: ${{ steps.changes.outputs.xml }}
-      yaml: ${{ steps.changes.outputs.yaml }}
-      csv: ${{ steps.changes.outputs.csv }}
-      pdf: ${{ steps.changes.outputs.pdf }}
-      log: ${{ steps.changes.outputs.log }}
       redirect: ${{ steps.changes.outputs.redirect }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: changes
         with:
-          # a change under shared/ (or to the build or workflow itself)
-          # redeploys every property, since all of them embed it
           filters: |
             site:
               - 'shared/**'
               - 'build.mjs'
               - '.github/workflows/deploy.yml'
               - 'site/**'
-            json:
-              - 'shared/**'
-              - 'build.mjs'
-              - '.github/workflows/deploy.yml'
               - 'json/**'
-            xml:
-              - 'shared/**'
-              - 'build.mjs'
-              - '.github/workflows/deploy.yml'
               - 'xml/**'
-            yaml:
-              - 'shared/**'
-              - 'build.mjs'
-              - '.github/workflows/deploy.yml'
               - 'yaml/**'
-            csv:
-              - 'shared/**'
-              - 'build.mjs'
-              - '.github/workflows/deploy.yml'
               - 'csv/**'
-            pdf:
-              - 'shared/**'
-              - 'build.mjs'
-              - '.github/workflows/deploy.yml'
               - 'pdf/**'
-            log:
-              - 'shared/**'
-              - 'build.mjs'
-              - '.github/workflows/deploy.yml'
               - 'log/**'
             redirect:
               - 'redirect/**'
               - '.github/workflows/deploy.yml'
 
   deploy:
-    name: Deploy ${{ matrix.tool }}.lint.one
+    name: Deploy ${{ matrix.worker }}
     needs: filter
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - tool: site
+          - worker: site
             changed: ${{ needs.filter.outputs.site }}
-          - tool: json
-            changed: ${{ needs.filter.outputs.json }}
-          - tool: xml
-            changed: ${{ needs.filter.outputs.xml }}
-          - tool: yaml
-            changed: ${{ needs.filter.outputs.yaml }}
-          - tool: csv
-            changed: ${{ needs.filter.outputs.csv }}
-          - tool: pdf
-            changed: ${{ needs.filter.outputs.pdf }}
-          - tool: log
-            changed: ${{ needs.filter.outputs.log }}
-          - tool: redirect
+          - worker: redirect
             changed: ${{ needs.filter.outputs.redirect }}
     steps:
       - uses: actions/checkout@v4
@@ -96,11 +56,11 @@ jobs:
       - uses: actions/setup-node@v4
         if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Copy shared assets into ${{ matrix.tool }}/public
-        if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
-        run: node build.mjs ${{ matrix.tool }}
+      - name: Assemble site/dist
+        if: matrix.worker == 'site' && (matrix.changed == 'true' || github.event_name == 'workflow_dispatch')
+        run: node build.mjs
 
       - name: Deploy
         if: matrix.changed == 'true' || github.event_name == 'workflow_dispatch'
@@ -108,5 +68,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: ${{ matrix.tool }}
+          # the action's default wrangler (3.x) cannot read wrangler.jsonc
+          wranglerVersion: '4'
+          workingDirectory: ${{ matrix.worker }}
           command: deploy
