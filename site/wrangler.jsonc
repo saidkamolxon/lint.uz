@@ -6,6 +6,13 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lintone-waitlist",
+      "database_id": "ebfefac3-354f-47f7-b0e7-f4f1189ca0ff"
+    }
+  ],
   "routes": [
     { "pattern": "lint.one/*", "zone_name": "lint.one" },
     { "pattern": "www.lint.one/*", "zone_name": "lint.one" }

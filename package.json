@@ -20,7 +20,8 @@
     "dev:pdf": "node build.mjs pdf && cd pdf && npx wrangler dev",
     "deploy:log": "node build.mjs log && cd log && npx wrangler deploy",
     "dev:log": "node build.mjs log && cd log && npx wrangler dev",
-    "deploy:redirect": "cd redirect && npx wrangler deploy"
+    "deploy:redirect": "cd redirect && npx wrangler deploy",
+    "waitlist": "cd site && npx wrangler d1 execute lintone-waitlist --remote --command=\"SELECT format, COUNT(*) AS people FROM interest GROUP BY format ORDER BY people DESC\""
   },
   "keywords": [
     "json",
