@@ -12,12 +12,12 @@
 <style>
 /* CSV shows a table instead of a tree — the only per-tool styling
    in the suite, and it reuses the shared tokens throughout. */
-#tree.table-mode { padding: 0; font-family: var(--ui); --empty-drop: 8px; }
+#tree.table-mode { padding: 0; font-family: var(--ui); --empty-drop: var(--s2); }
 
 .csv-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
 .csv-table th, .csv-table td {
-  font-family: var(--mono); font-size: 12px;
-  padding: 4px var(--s3);
+  font-family: var(--mono); font-size: var(--fs-small);
+  padding: var(--s1) var(--s3);
   border-bottom: var(--hairline) solid var(--line);
   border-right: var(--hairline) solid var(--line);
   text-align: left; white-space: nowrap;
@@ -27,12 +27,12 @@
   position: sticky; top: 0; z-index: 2;
   background: var(--raised);
   color: var(--t-key); font-weight: 600;
-  border-bottom: 2px solid color-mix(in srgb, var(--hue) 45%, var(--line));
-  font-family: var(--ui); font-size: 12px;
+  border-bottom: var(--hairline) solid var(--line-strong);
+  font-family: var(--ui); font-size: var(--fs-small);
   cursor: pointer; user-select: none;
 }
 .csv-table thead th:hover { background: var(--row-hover); }
-.csv-table thead th .sort { color: var(--hue); margin-left: var(--s1); font-size: 10px; }
+.csv-table thead th .sort { color: var(--hue); margin-left: var(--s1); font-size: var(--fs-micro); }
 .csv-table thead th .coltype {
   display: block; font-family: var(--mono); font-size: var(--fs-micro);
   font-weight: 400; color: var(--faint); letter-spacing: 0;
@@ -44,8 +44,8 @@
   background: color-mix(in srgb, var(--hue) var(--gutter-tint), var(--raised));
   color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted));
   text-align: right; font-variant-numeric: tabular-nums;
-  border-right: 2px solid color-mix(in srgb, var(--hue) 45%, var(--line));
-  font-size: 11px; padding: 4px var(--s2);
+  border-right: var(--hairline) solid var(--line);
+  font-size: var(--fs-micro); padding: var(--s1) var(--s2);
 }
 .csv-table thead .rn { z-index: 3; }
 .csv-table tbody tr:hover td { background: var(--row-hover); }
@@ -62,17 +62,18 @@
 <script>
 window.LINT_CONFIG = {
   id: 'csv',
-  name: 'CSV Viewer',
+  name: 'CSV',
   host: 'lint.one/csv',
   label: 'CSV',
-  hue: '#9333EA',
+  emptyLine: 'You\'ll get a sortable table, with the delimiter detected for you.',
+  hue: '#4D7C0F',
   hueInk: '#FFFFFF',
   accept: '.csv,.tsv,.txt,text/csv',
   placeholder: 'Paste CSV or drop a file…',
   searchPlaceholder: 'Filter rows…',
   actions: [
-    { id: 'btnFormat', label: 'Align', primary: true, title: 'Normalise quoting and spacing (⌘↵)' },
-    { id: 'btnToJson', label: 'To JSON', key: 'mod+shift+j', title: 'Copy the rows as a JSON array' },
+    { id: 'btnToJson', label: 'To JSON', primary: true, key: 'mod+shift+j', title: 'Copy the rows as a JSON array' },
+    { id: 'btnFormat', label: 'Fix quotes', key: 'mod+enter', title: 'Quote only the cells that need quotes, and unquote the rest' },
     { id: 'btnHeader', label: 'Header row', hide: 'md', title: 'Treat the first row as column names' }
   ]
 };
@@ -269,8 +270,8 @@ function stats(model) {
   var ragged = 0;
   for (var i = 0; i < rows.length; i++) if (rows[i].length !== cols) ragged++;
   var name = { ',': 'comma', '\t': 'tab', ';': 'semicolon', '|': 'pipe' }[model.delim];
-  return LintApp.fmtNum(Math.max(0, body)) + ' rows · ' + cols + ' columns · ' +
-    name + '-separated' + (ragged ? ' · ' + ragged + ' ragged' : '');
+  return LintApp.fmtNum(Math.max(0, body)) + ' rows, ' + cols + ' columns, ' +
+    name + '-separated' + (ragged ? ', ' + ragged + ' ragged' : '');
 }
 
 /* ==========================================================================
@@ -376,9 +377,7 @@ function colName(i) {
 var EMPTY = LintApp.emptyState({
   title: 'Paste CSV to see it as a table',
   body: 'Click a column heading to sort; the row filter searches every cell.',
-  extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
-  keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' filter · ' +
-    LintApp.kbd('mod+enter') + ' align'
+  extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
 });
 
 /* ==========================================================================
@@ -459,7 +458,7 @@ document.getElementById('btnWrap').style.display = 'none';
 
 document.getElementById('btnFormat').addEventListener('click', function () {
   var res = parse(app.editor.getValue());
-  if (!res.ok) { app.run(); LintApp.toast('Fix the CSV before aligning'); return; }
+  if (!res.ok) { app.run(); LintApp.toast('Fix the CSV before tidying quotes'); return; }
   var d = res.value.delim;
   var out = res.value.rows.map(function (row) {
     return row.map(function (cell) {
@@ -469,7 +468,7 @@ document.getElementById('btnFormat').addEventListener('click', function () {
     }).join(d);
   }).join('\n');
   app.editor.setValue(out);
-  LintApp.toast('Quoting normalised');
+  LintApp.toast('Quotes fixed');
 });
 
 document.getElementById('btnToJson').addEventListener('click', function () {

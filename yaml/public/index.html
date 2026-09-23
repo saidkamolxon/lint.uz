@@ -18,16 +18,17 @@
 <script>
 window.LINT_CONFIG = {
   id: 'yaml',
-  name: 'YAML Viewer',
+  name: 'YAML',
   host: 'lint.one/yaml',
   label: 'YAML',
+  emptyLine: 'You\'ll get indentation checked, and multi-document files as a list.',
   hue: '#B45309',
   hueInk: '#FFFFFF',
   accept: '.yaml,.yml,.txt,text/yaml,application/x-yaml',
   placeholder: 'Paste YAML or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, title: 'Normalise indentation to 2 spaces (⌘↵)' },
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'mod+enter', title: 'Normalise indentation to 2 spaces' },
     { id: 'btnToJson', label: 'To JSON', key: 'mod+shift+j', title: 'Copy this document as JSON' },
     { id: 'btnToYaml', label: 'From JSON', hide: 'md', title: 'Convert JSON in the editor into YAML' }
   ]
@@ -179,7 +180,7 @@ function stats(value) {
       else for (var k in v) walk(v[k], d + 1);
     }
   })(value, 1);
-  return LintApp.fmtNum(nodes) + ' nodes · depth ' + depth;
+  return LintApp.fmtNum(nodes) + ' nodes, depth ' + depth;
 }
 
 /* ==========================================================================
@@ -393,7 +394,7 @@ var app = LintApp.init({
   },
   stats: function (value) {
     var base = stats(value);
-    return lastMulti ? lastMulti + ' documents · ' + base : base;
+    return lastMulti ? lastMulti + ' documents, ' + base : base;
   },
   adapter: adapter,
   highlighter: highlight,
@@ -402,9 +403,7 @@ var app = LintApp.init({
     title: 'Paste YAML to see it as a tree',
     body: 'Expand it, search it and copy the path to any value. ' +
       'Multi-document files load as a list.',
-    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
-    keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' search · ' +
-      LintApp.kbd('mod+enter') + ' format'
+    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
   sample: SAMPLE
 });

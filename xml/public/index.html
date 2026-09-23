@@ -17,17 +17,18 @@
 <script>
 window.LINT_CONFIG = {
   id: 'xml',
-  name: 'XML Viewer',
+  name: 'XML',
   host: 'lint.one/xml',
   label: 'XML',
+  emptyLine: 'You\'ll get a tree of elements, with the XPath to any node.',
   hue: '#0F766E',
   hueInk: '#FFFFFF',
   accept: '.xml,.xsd,.xsl,.svg,.rss,.atom,.txt,text/xml,application/xml',
   placeholder: 'Paste XML or drop a file…',
   searchPlaceholder: 'Search elements, attributes and text…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
-    { id: 'btnMinify', label: 'Minify', title: 'Strip whitespace between tags' },
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'mod+enter', title: 'Pretty-print with 2-space indent' },
+    { id: 'btnMinify', label: 'Minify', title: 'Remove whitespace between tags' },
     { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Copy this document as JSON' }
   ]
 };
@@ -136,8 +137,8 @@ function stats(doc) {
     while (n.parentNode && n.parentNode.nodeType === 1) { d++; n = n.parentNode; }
     if (d > depth) depth = d;
   }
-  return LintApp.fmtNum(els.length) + ' elements · ' +
-         LintApp.fmtNum(attrs) + ' attributes · depth ' + (depth + 1);
+  return LintApp.fmtNum(els.length) + ' elements, ' +
+         LintApp.fmtNum(attrs) + ' attributes, depth ' + (depth + 1);
 }
 
 /* ==========================================================================
@@ -284,7 +285,7 @@ var adapter = {
       var parts = [];
       if (elCount) parts.push(elCount + (elCount === 1 ? ' child' : ' children'));
       if (attrCount) parts.push(attrCount + (attrCount === 1 ? ' attr' : ' attrs'));
-      cnt.textContent = parts.join(' · ');
+      cnt.textContent = parts.join(', ');
       badge.appendChild(cnt);
       row.appendChild(badge);
     }
@@ -469,9 +470,7 @@ var app = LintApp.init({
   emptyHTML: LintApp.emptyState({
     title: 'Paste XML to see it as a tree',
     body: 'Elements, attributes and text, each one click away from its XPath.',
-    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
-    keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' search · ' +
-      LintApp.kbd('mod+enter') + ' format'
+    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
   sample: SAMPLE
 });

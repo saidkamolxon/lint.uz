@@ -40,7 +40,7 @@ body.comparing #compare { display: flex; }
   flex: 1; min-height: 0; resize: none;
   border: 0; outline: none;
   background: var(--surface); color: var(--ink);
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.55;
   padding: var(--s2) var(--s3);
   white-space: pre; tab-size: 2;
 }
@@ -57,7 +57,7 @@ body.comparing #compare { display: flex; }
 
 .cmp-body {
   flex: 1; overflow: auto;
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.6;
   padding-bottom: 40vh;
 }
 .cmp-body .empty-state.err h2 { color: var(--bad); }
@@ -84,10 +84,10 @@ body.comparing #compare { display: flex; }
 /* where a hunk sits in the document, like a git @@ header */
 .d-hunk {
   position: sticky; top: 0; z-index: 1;
-  padding: 3px var(--s3) 3px 3ch;
+  padding: var(--s1) var(--s3) var(--s1) 3ch;
   background: color-mix(in srgb, var(--hue) 9%, var(--raised));
   border-block: var(--hairline) solid color-mix(in srgb, var(--hue) 22%, var(--line));
-  color: var(--hue); font-size: 12px;
+  color: var(--hue); font-size: var(--fs-small);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
 }
@@ -146,18 +146,19 @@ body.comparing #compare { display: flex; }
 <script>
 window.LINT_CONFIG = {
   id: 'json',
-  name: 'JSON Viewer',
+  name: 'JSON',
   host: 'lint.one/json',
   label: 'JSON',
+  emptyLine: 'You\'ll get a tree you can search, with the path to any value.',
   hue: '#4F46E5',
   hueInk: '#FFFFFF',
   accept: '.json,.jsonc,.txt,application/json',
   placeholder: 'Paste JSON or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
-    { id: 'btnMinify', label: 'Minify', title: 'Strip all whitespace' },
-    { id: 'btnEscape', label: 'Unescape', hide: 'md', title: 'Parse a JSON-encoded string into real JSON' },
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'mod+enter', title: 'Pretty-print with 2-space indent' },
+    { id: 'btnMinify', label: 'Minify', title: 'Remove all whitespace to make the document as small as possible' },
+    { id: 'btnEscape', label: 'Unescape', hide: 'md', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' },
     { id: 'btnToYaml', label: 'To YAML', hide: 'md', key: 'mod+shift+y', title: 'Copy this document as YAML' },
     { id: 'btnCompare', label: 'Compare', title: 'Compare this document with another and see what changed' }
   ]
@@ -249,7 +250,7 @@ function stats(value) {
       else for (var k in v) walk(v[k], d + 1);
     }
   })(value, 1);
-  return LintApp.fmtNum(nodes) + ' nodes · depth ' + depth;
+  return LintApp.fmtNum(nodes) + ' nodes, depth ' + depth;
 }
 
 /* ==========================================================================
@@ -544,9 +545,7 @@ var app = LintApp.init({
   emptyHTML: LintApp.emptyState({
     title: 'Paste JSON to see it as a tree',
     body: 'Expand it, search it and copy the path to any value.',
-    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
-    keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' search · ' +
-      LintApp.kbd('mod+enter') + ' format'
+    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
   sample: SAMPLE
 });
@@ -919,7 +918,7 @@ function sideState(el, res, text) {
   if (!text.trim()) { el.className = 'state'; el.textContent = ''; return; }
   if (res.ok) { el.className = 'state ok'; el.textContent = 'Valid'; return; }
   el.className = 'state err';
-  el.textContent = res.message + (res.line ? ' · line ' + res.line : '');
+  el.textContent = res.message + (res.line ? ', line ' + res.line : '');
   el.title = el.textContent;
 }
 
@@ -973,7 +972,7 @@ function paintSummary() {
   if (n.chg) bits.push('<b class="n-chg">~' + n.chg + '</b> changed');
   if (n.add) bits.push('<b class="n-add">+' + n.add + '</b> added');
   if (n.del) bits.push('<b class="n-del">−' + n.del + '</b> removed');
-  $('cmpSummary').innerHTML = bits.join(' · ');
+  $('cmpSummary').innerHTML = bits.join(', ');
 }
 
 function paint(keepShown) {
@@ -1184,7 +1183,7 @@ function fillKids(box, kids, from) {
   if (i < kids.length) {
     var more = document.createElement('button');
     more.className = 'more-btn';
-    more.textContent = 'Show ' + Math.min(TREE_CHUNK, kids.length - i) + ' more · ' + (kids.length - i) + ' left';
+    more.textContent = 'Show ' + Math.min(TREE_CHUNK, kids.length - i) + ' more (' + (kids.length - i) + ' left)';
     more.addEventListener('click', function (e) {
       e.stopPropagation();
       more.remove();
@@ -1303,6 +1302,7 @@ $('btnCompare').addEventListener('click', function () {
   document.body.classList.contains('comparing') ? closeCompare() : openCompare();
 });
 $('cmpClose').addEventListener('click', closeCompare);
+$('btnCompare').setAttribute('aria-pressed', 'false');
 
 /* while comparing, ⌘G walks changes — ahead of the tree's own ⌘G */
 window.addEventListener('keydown', function (e) {
