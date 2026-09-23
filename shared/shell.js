@@ -27,10 +27,14 @@ function keyHint(key) {
   return IS_MAC ? out.join('') : out.join('+');
 }
 
+/* Open is the one coloured button in every tool, so actions are all
+   outlined. `primary` marks the tool's main action: on a phone only Open and
+   that action stay in the toolbar, and every other action folds into the ⋮
+   menu unless it declares its own breakpoint. */
 var actions = (c.actions || []).map(function (a) {
-  return '<button id="' + a.id + '"' +
-    (a.primary ? ' class="primary"' : ' class="bordered"') +
-    (a.hide ? ' data-hide="' + a.hide + '"' : '') +
+  var hide = a.hide || (a.primary ? '' : 'sm');
+  return '<button id="' + a.id + '" class="bordered"' +
+    (hide ? ' data-hide="' + hide + '"' : '') +
     (a.key ? ' data-key="' + a.key + '"' : '') +
     ' title="' + a.title + (a.key ? ' (' + keyHint(a.key) + ')' : '') + '">' +
     a.label +
@@ -51,14 +55,12 @@ document.getElementById('app').innerHTML =
     '<button id="tabText" class="active">Text</button>' +
     '<button id="tabTree">Tree</button>' +
   '</nav>' +
-  '<div class="group">' + actions + '</div>' +
+  /* Open sits right after the brand in every tool; Copy, Sample and Clear
+     live in the ⋮ menu that app.js adds to the chrome slot */
+  '<button id="btnLoad" class="primary" data-key="mod+o" ' +
+    'title="Open a file — or drop one on the editor (' + keyHint('mod+o') + ')">Open</button>' +
   '<span class="sep hide-sm"></span>' +
-  '<div class="group hide-sm" id="fileGroup">' +
-    '<button id="btnLoad" title="Open a file — or drop one on the editor">Open</button>' +
-    '<button id="btnCopy" title="Copy the editor contents">Copy</button>' +
-    '<button id="btnSample" title="Load a sample document">Sample</button>' +
-    '<button id="btnClear" title="Empty the editor">Clear</button>' +
-  '</div>' +
+  '<div class="group">' + actions + '</div>' +
   '<span class="spacer"></span>' +
   '<div class="group" id="chromeSlot"></div>' +
   '<input type="file" id="fileInput" accept="' + c.accept + '" hidden>' +

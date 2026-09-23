@@ -12,7 +12,7 @@
 <style>
 /* CSV shows a table instead of a tree — the only per-tool styling
    in the suite, and it reuses the shared tokens throughout. */
-#tree.table-mode { padding: 0; font-family: var(--ui); }
+#tree.table-mode { padding: 0; font-family: var(--ui); --empty-drop: 8px; }
 
 .csv-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
 .csv-table th, .csv-table td {
@@ -68,7 +68,7 @@ window.LINT_CONFIG = {
   hue: '#9333EA',
   hueInk: '#FFFFFF',
   accept: '.csv,.tsv,.txt,text/csv',
-  placeholder: 'Paste CSV, drop a file, or press Sample…',
+  placeholder: 'Paste CSV or drop a file…',
   searchPlaceholder: 'Filter rows…',
   actions: [
     { id: 'btnFormat', label: 'Align', primary: true, title: 'Normalise quoting and spacing (⌘↵)' },
@@ -373,11 +373,13 @@ function colName(i) {
   return s;
 }
 
-var EMPTY =
-  '<div class="empty">Valid CSV in the editor appears here as a sortable table. ' +
-  'Click a column heading to sort; the row filter searches every cell.<br><br>' +
-  'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
-  ' to filter, ' + LintApp.kbd('mod+shift+j') + ' to copy as JSON.</div>';
+var EMPTY = LintApp.emptyState({
+  title: 'Paste CSV to see it as a table',
+  body: 'Click a column heading to sort; the row filter searches every cell.',
+  extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
+  keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' filter · ' +
+    LintApp.kbd('mod+enter') + ' align'
+});
 
 /* ==========================================================================
    Boot

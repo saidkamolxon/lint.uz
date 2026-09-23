@@ -23,7 +23,7 @@ window.LINT_CONFIG = {
   hue: '#0F766E',
   hueInk: '#FFFFFF',
   accept: '.xml,.xsd,.xsl,.svg,.rss,.atom,.txt,text/xml,application/xml',
-  placeholder: 'Paste XML, drop a file, or press Sample…',
+  placeholder: 'Paste XML or drop a file…',
   searchPlaceholder: 'Search elements, attributes and text…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
@@ -466,12 +466,13 @@ var app = LintApp.init({
   adapter: adapter,
   highlighter: highlight,
   autoDepth: 3,
-  emptyHTML:
-    '<div class="empty">Valid XML in the editor appears here as a tree of ' +
-    'elements, attributes and text — click any node to copy its XPath.<br><br>' +
-    'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
-    ' to search, ' + LintApp.kbd('mod+enter') + ' to format, ' +
-    LintApp.kbd('mod+shift+j') + ' to copy as JSON.</div>',
+  emptyHTML: LintApp.emptyState({
+    title: 'Paste XML to see it as a tree',
+    body: 'Elements, attributes and text, each one click away from its XPath.',
+    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
+    keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' search · ' +
+      LintApp.kbd('mod+enter') + ' format'
+  }),
   sample: SAMPLE
 });
 

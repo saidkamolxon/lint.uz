@@ -53,13 +53,6 @@ body.comparing #compare { display: flex; }
 .cmp-bar .n-del { color: var(--bad); }
 .cmp-bar .n-chg { color: var(--warn); }
 .cmp-bar .pos { font-variant-numeric: tabular-nums; padding: 0 var(--s1); white-space: nowrap; }
-.cmp-bar .seg {
-  display: inline-flex; gap: 2px; padding: 2px;
-  background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: var(--radius);
-}
-.cmp-bar .seg button { padding: 2px 9px; font-size: var(--fs-small); color: var(--muted); }
-.cmp-bar .seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); border-color: transparent; }
 .cmp-bar .icon-btn { width: 28px; height: 26px; }
 
 .cmp-body {
@@ -67,12 +60,7 @@ body.comparing #compare { display: flex; }
   font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
   padding-bottom: 40vh;
 }
-.cmp-empty {
-  padding: var(--s6) var(--s4); font-family: var(--ui);
-  color: var(--faint); max-width: 52ch; line-height: 1.6;
-}
-.cmp-empty .big { color: var(--ink); font-weight: 600; font-size: var(--fs-mid); margin-bottom: var(--s2); }
-.cmp-empty.err .big { color: var(--bad); }
+.cmp-body .empty-state.err h2 { color: var(--bad); }
 
 /* one diff line: sign, then the code indented by its depth */
 .d-row { display: flex; }
@@ -164,7 +152,7 @@ window.LINT_CONFIG = {
   hue: '#4F46E5',
   hueInk: '#FFFFFF',
   accept: '.json,.jsonc,.txt,application/json',
-  placeholder: 'Paste JSON, drop a file, or press Sample…',
+  placeholder: 'Paste JSON or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Pretty-print with 2-space indent (⌘↵)' },
@@ -553,12 +541,13 @@ var app = LintApp.init({
   adapter: adapter,
   highlighter: highlight,
   autoDepth: 2,
-  emptyHTML:
-    '<div class="empty">Valid JSON in the editor appears here as a tree you can ' +
-    'expand, search and copy paths from.<br><br>' +
-    'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
-    ' to search, ' + LintApp.kbd('mod+enter') + ' to format, ' +
-    LintApp.kbd('mod+shift+y') + ' to copy as YAML.</div>',
+  emptyHTML: LintApp.emptyState({
+    title: 'Paste JSON to see it as a tree',
+    body: 'Expand it, search it and copy the path to any value.',
+    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
+    keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' search · ' +
+      LintApp.kbd('mod+enter') + ' format'
+  }),
   sample: SAMPLE
 });
 
@@ -935,8 +924,8 @@ function sideState(el, res, text) {
 }
 
 function showEmpty(title, body, err) {
-  $('cmpBody').innerHTML = '<div class="cmp-empty' + (err ? ' err' : '') + '">' +
-    '<div class="big">' + title + '</div>' + body + '</div>';
+  $('cmpBody').innerHTML = LintApp.emptyState({ title: title, body: body });
+  $('cmpBody').firstChild.classList.toggle('err', !!err);
   $('cmpSummary').textContent = '';
   $('cmpPos').textContent = '';
   root = null; changes = []; lines = []; changeIdx = -1;

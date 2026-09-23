@@ -23,6 +23,7 @@
 
 /* ---------- the page column ---------- */
 #pages {
+  --empty-drop: 28px;
   /* positioned so descendants' offsetTop is measured against this scroll
      container rather than the document body */
   position: relative;
@@ -216,24 +217,9 @@ body.show-links .lnk {
 }
 #pageNum[hidden] { display: none; }
 
-/* ---------- page appearance: three states, three positions ---------- */
-.segmented {
-  display: inline-flex; padding: 2px; gap: 2px;
-  background: var(--sunken);
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
-}
-.segmented button {
-  width: 26px; height: 22px; padding: 0;
-  display: grid; place-items: center;
-  border-radius: 6px; color: var(--muted);
-}
-.segmented button svg { width: 14px; height: 14px; display: block; }
-.segmented button:hover { color: var(--ink); }
-.segmented button[aria-checked="true"] {
-  background: var(--hue); color: var(--hue-ink);
-}
-.segmented[data-disabled="true"] { opacity: 0.4; pointer-events: none; }
+/* ---------- page appearance: the shared .seg, sized for icons ---------- */
+#pageModeSeg button { width: 26px; height: 22px; padding: 0; display: grid; place-items: center; }
+#pageModeSeg[data-disabled="true"] { opacity: 0.4; pointer-events: none; }
 
 /* ---------- zoom, floating near the page ---------- */
 .zoom-pop {
@@ -376,22 +362,6 @@ body.show-links .lnk {
 .drawer-actions { display: flex; gap: var(--s1); margin-top: var(--s2); }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0 0 var(--s3); }
 
-/* ---------- empty state ---------- */
-.pdf-empty {
-  margin: auto; text-align: center; max-width: 42ch;
-  color: var(--muted); padding: var(--s4);
-}
-.pdf-empty .big {
-  font-size: var(--fs-large); color: var(--ink);
-  font-weight: 600; margin-bottom: var(--s2);
-  letter-spacing: -0.015em;
-}
-.pdf-empty p { margin: 0 0 var(--s3); line-height: 1.6; font-size: 13.5px; }
-.pdf-empty kbd {
-  font-family: var(--mono); font-size: 11px;
-  background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: 4px; padding: 1px 5px; color: var(--muted);
-}
 
 /* the shared dragover cue targets #editorPane, which this tool has none of */
 body.dragover #pages::after {
@@ -451,8 +421,6 @@ document.documentElement.style.setProperty('--hue-ink', c.hueInk);
 
 $('app').innerHTML = `
   <header class="toolbar">
-    <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
-            aria-pressed="false" disabled></button>
     <a class="brand" href="/" title="All tools">
       <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
@@ -461,6 +429,9 @@ $('app').innerHTML = `
       </span>
     </a>
     <button id="btnOpen" class="primary" title="Open a PDF — or drop one anywhere">Open</button>
+    <span class="sep hide-sm"></span>
+    <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
+            aria-pressed="false" disabled></button>
 
     <span class="spacer"></span>
 
@@ -480,15 +451,17 @@ $('app').innerHTML = `
             aria-label="Find in this document" aria-pressed="false" disabled></button>
 
     <!-- page treatment: state is the active segment, not the label -->
-    <div class="segmented" id="pageModeSeg" role="group" aria-label="Page appearance"></div>
+    <div class="seg" id="pageModeSeg" role="group" aria-label="Page appearance"></div>
 
     <button id="btnInfo" class="icon-btn" title="Document details"
             aria-label="Document details" aria-pressed="false" disabled></button>
-    <div class="group" id="chromeSlot"></div>
-    <button id="btnMore" class="icon-btn" title="More" aria-label="More" aria-haspopup="true"></button>
-    <div class="menu" id="moreMenu" role="menu">
-      <button class="menu-item" id="btnClose" role="menuitem" disabled>Close document</button>
+    <div class="menu-wrap">
+      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
+      <div class="menu" id="moreMenu" role="menu">
+        <button class="menu-item" id="btnClose" role="menuitem" disabled>Close document</button>
+      </div>
     </div>
+    <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
   </header>
 
@@ -633,15 +606,13 @@ let fitMode = true;
 let renderedPages = new Map();
 let firstPage = null;    // every slot is laid out from page 1's size
 
-const EMPTY = `
-  <div class="pdf-empty">
-    <div class="big">Open a PDF to read it</div>
-    <p>Pages render here and never leave your browser — there is no server to
-       send them to. Use <strong>Info</strong> to see what the file contains:
-       metadata, fonts, extracted text, and whether it carries JavaScript or
-       encryption.</p>
-    <p><kbd>${LintApp.isMac ? '⌘O' : 'Ctrl+O'}</kbd> to open · or drop a file anywhere</p>
-  </div>`;
+const EMPTY = LintApp.emptyState({
+  title: 'Open a PDF to read it',
+  body: 'Pages render here and never leave your browser — there is no server to ' +
+    'send them to. Use <strong>Info</strong> to see what the file contains: ' +
+    'metadata, fonts, extracted text, and whether it carries JavaScript or encryption.',
+  keys: LintApp.kbd('mod+o') + ' open · or drop a file anywhere'
+});
 
 function showEmpty() {
   $('pages').innerHTML = EMPTY;
@@ -1571,7 +1542,7 @@ $('panelText').innerHTML = `
   <textarea id="textOut" spellcheck="false" readonly
             placeholder="Press Extract to read the text out of this document…"></textarea>
   <div class="drawer-actions">
-    <button id="btnExtract" class="primary">Extract</button>
+    <button id="btnExtract" class="bordered">Extract</button>
     <button id="btnCopyText" class="bordered">Copy</button>
     <span class="spacer"></span>
     <span id="textMeta" style="font-size:var(--fs-small);color:var(--muted);align-self:center"></span>

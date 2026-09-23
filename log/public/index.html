@@ -28,7 +28,7 @@
   --row-h: 21px;
 }
 #spacer { position: relative; width: 100%; }
-#rows { position: absolute; top: 0; left: 0; right: 0; }
+#rows { position: absolute; top: 0; left: 0; right: 0; --empty-drop: 52px; }
 
 .row {
   display: flex; align-items: baseline;
@@ -271,21 +271,6 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
 }
 
 /* ---------- empty state ---------- */
-.log-empty {
-  margin: auto; text-align: center; max-width: 46ch;
-  color: var(--muted); padding: var(--s5) var(--s4);
-  font-family: var(--ui);
-}
-.log-empty .big {
-  font-size: var(--fs-large); color: var(--ink);
-  font-weight: 600; margin-bottom: var(--s2); letter-spacing: -0.015em;
-}
-.log-empty p { margin: 0 0 var(--s3); line-height: 1.6; font-size: 13.5px; }
-.log-empty kbd {
-  font-family: var(--mono); font-size: 11px;
-  background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: 4px; padding: 1px 5px; color: var(--muted);
-}
 
 body.dragover #viewport::after {
   content: ""; position: absolute; inset: var(--s2);
@@ -338,6 +323,7 @@ $('app').innerHTML = `
       </span>
     </a>
     <button id="btnOpen" class="primary" title="Open a log — or drop one anywhere">Open</button>
+    <span class="sep hide-sm"></span>
 
     <label class="filter-wrap">
       <input id="filter" type="text" spellcheck="false" autocomplete="off"
@@ -352,12 +338,14 @@ $('app').innerHTML = `
             aria-label="Wrap long lines" aria-pressed="false" disabled></button>
     <button id="btnTail" class="icon-btn" title="Jump to the end"
             aria-label="Jump to the end" disabled></button>
-    <div class="group" id="chromeSlot"></div>
-    <button id="btnMore" class="icon-btn" title="More" aria-label="More" aria-haspopup="true"></button>
-    <div class="menu" id="moreMenu" role="menu">
-      <button class="menu-item" id="btnCopyVisible" role="menuitem" disabled>Copy filtered lines</button>
-      <button class="menu-item" id="btnClose" role="menuitem" disabled>Close log</button>
+    <div class="menu-wrap">
+      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
+      <div class="menu" id="moreMenu" role="menu">
+        <button class="menu-item" id="btnCopyVisible" role="menuitem" disabled>Copy filtered lines</button>
+        <button class="menu-item" id="btnClose" role="menuitem" disabled>Close log</button>
+      </div>
     </div>
+    <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
   </header>
 
@@ -812,9 +800,10 @@ function draw() {
   const rows = $('rows');
   if (!visible.length) {
     rows.innerHTML = '';
-    if (lines.length) rows.innerHTML = '<div class="log-empty">' +
-      '<div class="big">Nothing matches</div>' +
-      '<p>No line passes the current filter. Clear the box or turn a severity back on.</p></div>';
+    if (lines.length) rows.innerHTML = LintApp.emptyState({
+      title: 'Nothing matches',
+      body: 'No line passes the current filter. Clear the box or turn a severity back on.'
+    });
     return;
   }
 
@@ -1267,15 +1256,14 @@ function setStatus(kind, msg) {
 }
 
 function showEmpty() {
-  $('rows').innerHTML = `
-    <div class="log-empty">
-      <div class="big">Open a log to read it</div>
-      <p>Lines render here and never leave your browser. Severity is detected
-         from the text, stack traces fold into the error that produced them,
-         and the strip on the right shows where the trouble is.</p>
-      <p>Handles files up to about a gigabyte.
-         <kbd>${LintApp.isMac ? '⌘O' : 'Ctrl+O'}</kbd> to open · or drop one anywhere</p>
-    </div>`;
+  $('rows').innerHTML = LintApp.emptyState({
+    title: 'Open a log to read it',
+    body: 'Lines render here and never leave your browser. Severity is detected ' +
+      'from the text, stack traces fold into the error that produced them, and ' +
+      'the strip on the right shows where the trouble is. Handles files up to ' +
+      'about a gigabyte.',
+    keys: LintApp.kbd('mod+o') + ' open · or drop a file anywhere'
+  });
   $('spacer').style.height = '0px';
 }
 

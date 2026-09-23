@@ -363,13 +363,15 @@ function buildSuiteMenu(container, activeId) {
 }
 
 
-/* ---------- overflow menu ----------
-   Narrow screens hide toolbar actions; rather than make them unreachable,
-   mirror every hidden control into a menu. Rebuilt on resize so it always
-   matches what is actually hidden. */
-function buildOverflowMenu(container) {
+/* ---------- more menu ----------
+   The ⋮ every tool ends its toolbar with, just before the suite and theme
+   menus. It holds the tool's quieter commands (`items`), and on narrow
+   screens also mirrors whatever toolbar actions got hidden — rebuilt on
+   resize so it always matches what is actually hidden. */
+function buildOverflowMenu(container, items) {
+  items = items || [];
   var wrap = document.createElement('div');
-  wrap.className = 'menu-wrap overflow-only';
+  wrap.className = 'menu-wrap';
 
   var btn = document.createElement('button');
   btn.className = 'icon-btn';
@@ -382,14 +384,27 @@ function buildOverflowMenu(container) {
   menu.className = 'menu';
   menu.setAttribute('role', 'menu');
 
+  items.forEach(function (it) {
+    var item = document.createElement('button');
+    item.className = 'menu-item';
+    item.id = it.id;
+    item.setAttribute('role', 'menuitem');
+    item.textContent = it.label;
+    if (it.title) item.title = it.title;
+    item.addEventListener('click', function () { closeAllMenus(); });
+    menu.appendChild(item);
+  });
+  var mirror = document.createElement('div');
+  menu.appendChild(mirror);
+
   wrap.appendChild(btn);
   wrap.appendChild(menu);
   container.insertBefore(wrap, container.firstChild);
   wireMenu(btn, menu);
 
   function rebuild() {
-    menu.innerHTML = '';
-    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md, #fileGroup.hide-sm button');
+    mirror.innerHTML = '';
+    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md');
     var added = 0;
     for (var i = 0; i < hidden.length; i++) {
       var src = hidden[i];
@@ -398,17 +413,22 @@ function buildOverflowMenu(container) {
         var item = document.createElement('button');
         item.className = 'menu-item';
         item.setAttribute('role', 'menuitem');
-        item.textContent = source.textContent || source.title;
+        /* the label only — not the shortcut hint rendered after it */
+        item.textContent = source.firstChild && source.firstChild.nodeType === 3
+          ? source.firstChild.textContent : source.textContent || source.title;
         item.title = source.title || '';
         item.addEventListener('click', function () {
           closeAllMenus();
           source.click();
         });
-        menu.appendChild(item);
+        if (!added && items.length) {
+          mirror.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
+        }
+        mirror.appendChild(item);
       })(src);
       added++;
     }
-    wrap.style.display = added ? '' : 'none';
+    wrap.style.display = added || items.length ? '' : 'none';
   }
 
   rebuild();
@@ -985,7 +1005,11 @@ function init(config) {
   var slot = $('chromeSlot');
   buildSuiteMenu(slot, config.id);
   buildThemeMenu(slot);
-  var refreshOverflow = buildOverflowMenu(slot);
+  var refreshOverflow = buildOverflowMenu(slot, [
+    { id: 'btnCopy', label: 'Copy ' + config.label, title: 'Copy the editor contents' },
+    { id: 'btnSample', label: 'Load a sample', title: 'Replace the editor contents with a sample document' },
+    { id: 'btnClear', label: 'Clear', title: 'Empty the editor' }
+  ]);
 
   /* icons into the treebar buttons */
   $('btnWrap').innerHTML = svg(ICONS.wrap);
@@ -1082,6 +1106,10 @@ function init(config) {
   });
 
   on('btnSample', function () { editor.setValue(config.sample.trim()); });
+  /* the empty state offers the sample too, where a first-time visitor looks */
+  $('tree').addEventListener('click', function (e) {
+    if (e.target.closest('[data-empty="sample"]')) $('btnSample').click();
+  });
 
   on('btnLoad', function () { $('fileInput').click(); });
   $('fileInput').addEventListener('change', function (e) {
@@ -1261,6 +1289,18 @@ function kbd(key) {
   return '<kbd>' + (IS_MAC ? out.join('') : out.join('+')) + '</kbd>';
 }
 
+/* The empty state every tool opens on: a heading saying what to do, one
+   sentence on what happens, optional buttons, and the keys. `extra` is raw
+   HTML placed between the sentence and the keys (a tool's own choices). */
+function emptyState(o) {
+  return '<div class="empty-state">' +
+    '<h2>' + o.title + '</h2>' +
+    (o.body ? '<p>' + o.body + '</p>' : '') +
+    (o.extra || '') +
+    (o.keys ? '<p class="keys">' + o.keys + '</p>' : '') +
+  '</div>';
+}
+
 /* A tool with no editor/tree (PDF) builds its own frame, so it needs the
    suite switcher and theme picker on their own. */
 function mountChrome(slot, activeId) {
@@ -1276,6 +1316,7 @@ global.LintApp = {
   isMac: IS_MAC,
   copyAndOffer: copyAndOffer,
   kbd: kbd,
+  emptyState: emptyState,
   esc: esc,
   copy: copyText,
   toast: showToast,

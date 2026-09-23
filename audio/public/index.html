@@ -59,15 +59,19 @@
 .now .txt { min-width: 0; }
 
 /* ---------- nothing playing yet ---------- */
+/* the shared empty state, placed over the stage and recoloured for it —
+   the stage stays dark whatever the theme */
 .au-empty {
-  position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
-  width: min(560px, calc(100% - 32px));
-  text-align: center;
+  --empty-drop: 52px;
+  position: absolute; left: 0; right: 0; top: 0;
+  pointer-events: none;
 }
+.au-empty .empty-state { max-width: 600px; pointer-events: auto; }
 .au-empty[hidden] { display: none; }
-.au-empty .big { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; margin-bottom: var(--s2); }
-.au-empty p { color: var(--st-muted); line-height: 1.6; font-size: 13.5px; margin: 0 0 var(--s4); }
-.au-empty .choices { display: flex; gap: var(--s2); justify-content: center; flex-wrap: wrap; }
+.au-empty h2 { color: var(--st-ink); }
+.au-empty p { color: var(--st-muted); }
+.au-empty .keys { color: var(--st-faint); }
+.au-empty .choices { display: flex; gap: var(--s2); justify-content: center; flex-wrap: wrap; margin: var(--s4) 0; }
 .au-empty .choice {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   width: 170px; padding: var(--s3) var(--s3) var(--s3);
@@ -81,11 +85,8 @@
 .au-empty .choice b { font-size: 13.5px; font-weight: 600; }
 .au-empty .choice span { font-size: 11.5px; color: var(--st-faint); line-height: 1.4; font-weight: 400; }
 .au-empty kbd {
-  font-family: var(--mono); font-size: 11px;
-  background: rgb(255 255 255 / 0.07); border: 1px solid var(--st-line);
-  border-radius: 4px; padding: 1px 5px; color: var(--st-muted);
+  background: rgb(255 255 255 / 0.07); border-color: var(--st-line); color: var(--st-muted);
 }
-.au-empty .hint { margin-top: var(--s4); font-size: 12px; color: var(--st-faint); }
 
 /* ---------- transport ---------- */
 .transport {
@@ -163,13 +164,6 @@ body.pseudo-full .transport {
 @media (max-width: 760px) { .narrow-only { display: flex; } .menu-label.narrow-only { display: block; } }
 
 /* ---------- toolbar controls ---------- */
-.seg {
-  display: inline-flex; gap: 2px; padding: 2px; flex: none;
-  background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: var(--radius);
-}
-.seg button { padding: 3px 10px; font-size: 12px; color: var(--muted); border-radius: 5px; }
-.seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); border-color: transparent; font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
 #inputSelect {
   max-width: 190px; font-family: var(--ui); font-size: 12px;
   color: var(--ink); background: var(--sunken);
@@ -278,6 +272,7 @@ $('app').innerHTML = `
       </span>
     </a>
     <button id="btnOpen" class="primary" title="Open an audio file — or drop one anywhere (⌘O)">Open</button>
+    <span class="sep hide-sm"></span>
     <span class="seg" role="group" aria-label="Source">
       <button id="srcFile" aria-pressed="false" title="Play an audio file">File</button>
       <button id="srcSystem" aria-pressed="false" title="Listen to another tab, or the whole system where the browser allows it">Tab / system</button>
@@ -314,8 +309,8 @@ $('app').innerHTML = `
         </div>
       </div>
 
-      <div class="au-empty" id="empty">
-        <div class="big">Listen, and watch it move</div>
+      <div class="au-empty" id="empty"><div class="empty-state">
+        <h2>Play a sound to watch it move</h2>
         <p>Play a file, or let the spectrum follow whatever your computer is
            playing. Everything stays in this tab — there is nowhere for the
            sound to go.</p>
@@ -324,8 +319,8 @@ $('app').innerHTML = `
           <button class="choice" id="chSystem"><b>Tab or system sound</b><span>Pick a tab and turn on “Share audio”</span></button>
           <button class="choice" id="chInput"><b>Microphone or input</b><span>The room, or a loopback device</span></button>
         </div>
-        <div class="hint"><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> seek · <kbd>F</kbd> full screen</div>
-      </div>
+        <p class="keys">${LintApp.kbd('mod+o')} open · <kbd>Space</kbd> play · <kbd>←</kbd> <kbd>→</kbd> seek · <kbd>F</kbd> full screen</p>
+      </div></div>
 
       <div class="transport" id="transport" hidden>
         <div class="file-row" id="fileRow">

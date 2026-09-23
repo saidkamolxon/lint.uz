@@ -117,6 +117,7 @@ button .kb {
   opacity: 0.55;
   letter-spacing: 0;
   font-weight: 500;
+  background: none; border: 0; padding: 0; color: inherit;
 }
 button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
 @media (max-width: 1100px) { button .kb { display: none; } }
@@ -131,6 +132,29 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
 }
 .icon-btn:hover { color: var(--ink); }
 .icon-btn svg { width: 15px; height: 15px; display: block; }
+
+/* Segmented control — one choice out of a few, shown as positions.
+   Every tool uses this one; the chosen segment is raised, never hued. */
+.seg {
+  display: inline-flex; gap: 2px; padding: 2px; flex: none;
+  background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+}
+.seg button { padding: 3px 10px; font-size: 12px; color: var(--muted); border-radius: 5px; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"], .seg button[aria-checked="true"] {
+  background: var(--raised); color: var(--ink);
+  border-color: transparent; font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.seg button svg { width: 14px; height: 14px; display: block; }
+
+kbd {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: 4px; padding: 1px 5px; color: var(--muted);
+}
 
 /* View tabs (mobile) */
 .tabs {
@@ -389,11 +413,30 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
   font-family: var(--ui); color: var(--faint);
   max-width: 46ch; line-height: 1.6;
 }
-.empty kbd {
-  font-family: var(--mono); font-size: 11px;
-  background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: 4px; padding: 1px 5px; color: var(--muted);
+
+/* The first thing every tool shows: what to do, in one heading, one
+   sentence and the keys that do it. Built by LintApp.emptyState, placed at
+   the same height in every tool so switching between them feels like one
+   app. */
+.empty-state {
+  /* --empty-drop lines every tool up with the tree tools, whose empty state
+     starts below the search bar: a pane that starts higher pushes it down */
+  margin: calc(14vh + var(--empty-drop, 0px)) auto 0;
+  padding: 0 var(--s4) var(--s5);
+  max-width: 50ch; text-align: center;
+  font-family: var(--ui); color: var(--muted);
 }
+.empty-state h2 {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-large); font-weight: 600;
+  letter-spacing: -0.015em; color: var(--ink);
+}
+.empty-state p { margin: 0 0 var(--s3); font-size: 13.5px; line-height: 1.6; }
+.empty-state .empty-actions {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: var(--s2); margin: var(--s4) 0;
+}
+.empty-state .keys { font-size: 12px; color: var(--faint); margin: 0; }
 
 .children {
   margin-left: 15px; padding-left: var(--s2);
@@ -609,20 +652,18 @@ body.dragover #editorPane::after {
 /* ==========================================================================
    Responsive
    ========================================================================== */
-.overflow-only { display: none; }
-
 @media (max-width: 900px) {
   .hide-md { display: none; }
 }
 
 @media (max-width: 720px) {
   .tabs { display: inline-flex; }
+  .tabs button { padding: 4px 10px; }
   #divider { display: none; }
   #editorPane { width: 100% !important; }
   body[data-view="tree"] #editorPane { display: none; }
   body[data-view="text"] #treePane { display: none; }
   .hide-sm { display: none; }
-  .overflow-only { display: flex; }
   .brand { margin-right: var(--s2); padding-right: var(--s2); }
   .brand-text { display: none; }
   :root { --gutter-w: 40px; }

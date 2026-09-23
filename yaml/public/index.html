@@ -24,7 +24,7 @@ window.LINT_CONFIG = {
   hue: '#B45309',
   hueInk: '#FFFFFF',
   accept: '.yaml,.yml,.txt,text/yaml,application/x-yaml',
-  placeholder: 'Paste YAML, drop a file, or press Sample…',
+  placeholder: 'Paste YAML or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, title: 'Normalise indentation to 2 spaces (⌘↵)' },
@@ -398,12 +398,14 @@ var app = LintApp.init({
   adapter: adapter,
   highlighter: highlight,
   autoDepth: 3,
-  emptyHTML:
-    '<div class="empty">Valid YAML in the editor appears here as a tree you can ' +
-    'expand, search and copy paths from. Multi-document files load as a list.<br><br>' +
-    'Press ' + LintApp.kbd('mod+k') + ' for the editor, ' + LintApp.kbd('mod+f') +
-    ' to search, ' + LintApp.kbd('mod+enter') + ' to format, ' +
-    LintApp.kbd('mod+shift+j') + ' to copy as JSON.</div>',
+  emptyHTML: LintApp.emptyState({
+    title: 'Paste YAML to see it as a tree',
+    body: 'Expand it, search it and copy the path to any value. ' +
+      'Multi-document files load as a list.',
+    extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>',
+    keys: LintApp.kbd('mod+o') + ' open · ' + LintApp.kbd('mod+f') + ' search · ' +
+      LintApp.kbd('mod+enter') + ' format'
+  }),
   sample: SAMPLE
 });
 
