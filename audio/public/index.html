@@ -261,6 +261,8 @@ $('app').innerHTML = `
       <button data-style="bars" aria-pressed="true" title="Spectrum along the floor">Bars</button>
       <button data-style="radial" aria-pressed="false" title="Spectrum around a circle">Radial</button>
       <button data-style="aura" aria-pressed="false" title="Soft colour that breathes with the music">Aura</button>
+      <button data-style="particles" aria-pressed="false" title="A swirl of light thrown outward on the beat">Particles</button>
+      <button data-style="wave" aria-pressed="false" title="The waveform itself, as an oscilloscope draws it">Wave</button>
     </span>
     <div class="menu-wrap">
       <button id="btnPalette" class="icon-btn" title="Colours" aria-label="Colours" aria-haspopup="true"></button>
@@ -395,7 +397,7 @@ $('paletteMenu').addEventListener('click', (e) => {
   LintApp.closeMenus();
 });
 
-const STYLES = ['bars', 'radial', 'aura'];
+const STYLES = ['bars', 'radial', 'aura', 'particles', 'wave'];
 let style = STYLES.includes(store.get('style', 'bars')) ? store.get('style', 'bars') : 'bars';
 function setStyle(s) {
   style = s;
@@ -1116,6 +1118,8 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'b' || e.key === 'B') setStyle('bars');
   else if (e.key === 'r' || e.key === 'R') setStyle('radial');
   else if (e.key === 'a' || e.key === 'A') setStyle('aura');
+  else if (e.key === 'p' || e.key === 'P') setStyle('particles');
+  else if (e.key === 'w' || e.key === 'W') setStyle('wave');
 });
 
 /* ---------- drag and drop ---------- */
@@ -1152,7 +1156,7 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 let N = 0;
 let bands = [];             // [{ lo, hi, fc }] in bins
 let level, target, peak, peakV, peakHold;
-let bassAvg = 0, pulse = 0, lastBeat = 0, agc = 0.6;
+let bassAvg = 0, pulse = 0, lastBeat = 0, agc = 0.6, beats = 0;
 let gradCache = null;
 
 function resize() {
@@ -1170,7 +1174,7 @@ function resize() {
 new ResizeObserver(resize).observe(stage);
 
 function barCount() {
-  if (style === 'radial' || style === 'aura') return 64;
+  if (style !== 'bars') return 64;
   const usable = W - 2 * Math.max(24, W * 0.05);
   return Math.max(36, Math.min(128, Math.round(usable / 12)));
 }
@@ -1253,7 +1257,7 @@ function step(dt, t) {
   }
   /* a beat is the low end jumping above its own recent average */
   bassAvg += (bass - bassAvg) * (1 - Math.exp(-dt / 0.45));
-  if (bass > 0.3 && bass > bassAvg * 1.28 + 0.04 && t - lastBeat > 0.2) { pulse = 1; lastBeat = t; }
+  if (bass > 0.3 && bass > bassAvg * 1.28 + 0.04 && t - lastBeat > 0.2) { pulse = 1; lastBeat = t; beats++; }
   pulse *= Math.exp(-dt / 0.28);
   return bass;
 }
@@ -1493,6 +1497,158 @@ function drawAura(dt) {
   vctx.drawImage(aura, 0, 0, viz.width, viz.height);
 }
 
+/* ---------- particles ----------
+   A disc of points turning about the centre, inner ones faster, as a
+   galaxy does. Distance from the centre is frequency: the core answers the
+   bass, the rim the highs, and the palette runs outward the same way. A
+   beat throws every point out and a spring pulls it home.
+
+   Each point is drawn as a short streak from where it was a moment ago,
+   rather than by fading the last frame: fading leaves a faint residue that
+   8-bit alpha never quite removes, and the glow brings it back up. The
+   streaks are batched by colour and brightness — 48 strokes, not 2400. */
+const P_BUCKETS = 12, P_LEVELS = 4;
+let parts = null;
+
+function initParticles() {
+  const n = Math.round(Math.min(2400, Math.max(600, (W * H) / 450)));
+  const r0 = new Float32Array(n), th = new Float32Array(n), om = new Float32Array(n);
+  const dr = new Float32Array(n), vr = new Float32Array(n), bucket = new Uint8Array(n);
+  const px = new Float32Array(n), py = new Float32Array(n), lvl = new Uint8Array(n);
+  const x1 = new Float32Array(n), y1 = new Float32Array(n);
+  const radii = Array.from({ length: n }, () => 0.06 + 0.94 * Math.sqrt(Math.random())).sort((a, b) => a - b);
+  for (let i = 0; i < n; i++) {
+    r0[i] = radii[i];
+    th[i] = Math.random() * Math.PI * 2;
+    om[i] = (0.05 + 0.1 * Math.random()) / (0.25 + r0[i]);
+    bucket[i] = Math.min(P_BUCKETS - 1, Math.floor(r0[i] * P_BUCKETS));
+    px[i] = NaN;
+  }
+  parts = { n, r0, th, om, dr, vr, bucket, px, py, lvl, x1, y1, W, H, beats };
+}
+
+function drawParticles(dt, bass) {
+  if (!parts || parts.W !== W || parts.H !== H) initParticles();
+  const cx = W / 2, cy = source === 'none' ? H * 0.44 : H * 0.46;
+  const R = Math.min(W, H) * 0.44;
+  const e = energies();
+  const drive = 0.3 + 1.6 * (e[0] * 0.35 + e[1] * 0.3 + e[2] * 0.2 + e[3] * 0.15);
+  const kick = parts.beats !== beats;
+  parts.beats = beats;
+
+  const { n, r0, th, om, dr, vr, bucket, px, py, lvl, x1, y1 } = parts;
+  const spin = dt * drive * (reduceMotion ? 0.3 : 1);
+  /* move everything, remembering where each point was */
+  for (let i = 0; i < n; i++) {
+    const lv = level[Math.min(N - 1, Math.floor(r0[i] * N))];
+    if (kick && !reduceMotion) vr[i] += 0.9 + 1.4 * lv;
+    vr[i] += (-dr[i] * 22 - vr[i] * 6.5) * dt;      // a damped spring back to the orbit
+    dr[i] += vr[i] * dt;
+    th[i] += om[i] * spin;
+    const r = (r0[i] * (1 + 0.18 * lv) + dr[i] * 0.12) * R;
+    x1[i] = cx + Math.cos(th[i]) * r;
+    y1[i] = cy + Math.sin(th[i]) * r * 0.86;
+    lvl[i] = Math.min(P_LEVELS - 1, Math.floor(lv * P_LEVELS));
+  }
+
+  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  lctx.clearRect(0, 0, W, H);
+  lctx.lineCap = 'round';
+  for (let b = 0; b < P_BUCKETS; b++) {
+    lctx.strokeStyle = rgba(paletteAt((b + 0.5) / P_BUCKETS), 1);
+    for (let l = 0; l < P_LEVELS; l++) {
+      lctx.globalAlpha = 0.28 + 0.72 * (l + 0.5) / P_LEVELS;
+      lctx.lineWidth = 1 + 2.2 * (l / (P_LEVELS - 1));
+      lctx.beginPath();
+      let any = false;
+      for (let i = 0; i < n; i++) {
+        if (bucket[i] !== b || lvl[i] !== l) continue;
+        /* the streak: a little longer than one frame's travel */
+        const ox = isNaN(px[i]) ? x1[i] : x1[i] + (px[i] - x1[i]) * 2.5;
+        const oy = isNaN(px[i]) ? y1[i] : y1[i] + (py[i] - y1[i]) * 2.5;
+        lctx.moveTo(ox, oy);
+        lctx.lineTo(x1[i] + 0.01, y1[i]);
+        any = true;
+      }
+      if (any) lctx.stroke();
+    }
+  }
+  lctx.globalAlpha = 1;
+  px.set(x1); py.set(y1);
+  paintScene();
+}
+
+/* ---------- wave ----------
+   The signal itself rather than its spectrum. Each frame starts on a
+   rising zero crossing, as an oscilloscope's trigger does, so a steady
+   tone stands still instead of crawling across the screen. */
+const SCOPE_POINTS = 480, SCOPE_WINDOW = 2048;
+let timeBuf = null, scopePeak = 0.3;
+const scopeY = new Float32Array(SCOPE_POINTS), want = new Float32Array(SCOPE_POINTS);
+
+function drawScope(dt, bass, t) {
+  const active = analyser && ((source === 'file' && !audio.paused) || live);
+  want.fill(0);
+  if (active) {
+    if (!timeBuf || timeBuf.length !== analyser.fftSize) timeBuf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(timeBuf);
+    let trig = 0;
+    for (let i = 1; i < timeBuf.length - SCOPE_WINDOW; i++) {
+      if (timeBuf[i - 1] < 0 && timeBuf[i] >= 0) { trig = i; break; }
+    }
+    let m = 0;
+    for (let k = 0; k < SCOPE_POINTS; k++) {
+      const v = timeBuf[trig + Math.floor(k * SCOPE_WINDOW / SCOPE_POINTS)];
+      want[k] = v;
+      if (Math.abs(v) > m) m = Math.abs(v);
+    }
+    /* quiet passages still fill the height, loud ones never clip it */
+    scopePeak = m > scopePeak ? m : scopePeak * 0.995 + m * 0.005;
+    const g = Math.min(10, 0.85 / Math.max(0.04, scopePeak));
+    for (let k = 0; k < SCOPE_POINTS; k++) want[k] *= g;
+  } else if (source === 'none') {
+    for (let k = 0; k < SCOPE_POINTS; k++) {
+      const x = k / SCOPE_POINTS;
+      want[k] = reduceMotion ? 0 : 0.12 * Math.sin(x * 12.6 + t * 1.2) * Math.sin(x * 3.1 - t * 0.5);
+    }
+  }
+  const follow = 1 - Math.exp(-dt / 0.025);
+  for (let k = 0; k < SCOPE_POINTS; k++) scopeY[k] += (want[k] - scopeY[k]) * follow;
+
+  const side = Math.max(24, W * 0.05);
+  const cy = source === 'none' ? H * 0.46 : H * 0.44;
+  const amp = H * 0.28;
+  const xAt = (k) => side + (k / (SCOPE_POINTS - 1)) * (W - 2 * side);
+
+  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  lctx.clearRect(0, 0, W, H);
+  const grad = hGradient(lctx, side, W - side);
+
+  /* a faint body between the line and its axis */
+  lctx.beginPath();
+  lctx.moveTo(xAt(0), cy);
+  for (let k = 0; k < SCOPE_POINTS; k++) lctx.lineTo(xAt(k), cy - scopeY[k] * amp);
+  lctx.lineTo(xAt(SCOPE_POINTS - 1), cy);
+  lctx.closePath();
+  lctx.globalAlpha = 0.12 + 0.1 * pulse;
+  lctx.fillStyle = grad;
+  lctx.fill();
+
+  lctx.globalAlpha = 1;
+  lctx.beginPath();
+  for (let k = 0; k < SCOPE_POINTS; k++) {
+    const x = xAt(k), y = cy - scopeY[k] * amp;
+    if (k) lctx.lineTo(x, y); else lctx.moveTo(x, y);
+  }
+  lctx.lineJoin = 'round';
+  lctx.lineCap = 'round';
+  lctx.lineWidth = 2.2 + 2.5 * bass;
+  lctx.strokeStyle = grad;
+  lctx.stroke();
+
+  paintScene();
+}
+
 /* black, then glow, then the sharp layer on top — shared by both styles.
    Nothing lights the background itself: the beat shows in the glow. */
 function paintScene() {
@@ -1549,6 +1705,8 @@ function frame(now) {
       const bass = step(dt, t);
       if (style === 'radial') drawRadial(bass, t);
       else if (style === 'aura') drawAura(dt);
+      else if (style === 'particles') drawParticles(dt, bass);
+      else if (style === 'wave') drawScope(dt, bass, t);
       else drawBars(bass);
     }
     if (source === 'file' && !audio.paused) {
