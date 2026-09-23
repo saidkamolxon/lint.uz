@@ -21,6 +21,8 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: changes
         with:
+          # every tool folder is part of the site — a new tool must be listed
+          # here, or changes to it alone never deploy
           filters: |
             site:
               - 'shared/**'
@@ -33,6 +35,7 @@ jobs:
               - 'csv/**'
               - 'pdf/**'
               - 'log/**'
+              - 'audio/**'
             redirect:
               - 'redirect/**'
               - '.github/workflows/deploy.yml'
