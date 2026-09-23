@@ -57,11 +57,31 @@ body {
 }
 .ghost:hover { background: var(--row-hover); color: var(--ink); }
 
+/* ---------- the first screen ----------
+   Wide: the promise on the left, its proof on the right, every tool below —
+   short enough that the ribbon is in view without scrolling. Narrow: the
+   ribbon comes straight after the promise and the demo follows it. */
+.first {
+  display: grid;
+  grid-template-columns: minmax(24px, 1fr) minmax(0, 440px) 48px minmax(0, 584px) minmax(24px, 1fr);
+  align-items: center;
+}
+.first .top  { grid-column: 2 / 5; grid-row: 1; }
+.first .hero { grid-column: 2; grid-row: 2; }
+.first .demo { grid-column: 4; grid-row: 2; }
+.first .rail { grid-column: 1 / -1; grid-row: 3; }
+@media (max-width: 1000px) {
+  .first { grid-template-columns: 24px minmax(0, 1fr) 24px; }
+  .first .top, .first .hero { grid-column: 2; }
+  .first .rail { grid-row: 3; }
+  .first .demo { grid-column: 2; grid-row: 4; margin-top: 40px; }
+}
+
 /* ---------- hero ---------- */
-.hero { padding: 64px 0 56px; }
+.hero { padding: 32px 0; }
 .hero h1 {
   margin: 0 0 20px;
-  font-size: clamp(36px, 5.6vw, 64px);
+  font-size: clamp(36px, 4.4vw, 56px);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: -0.025em;
@@ -82,7 +102,6 @@ body {
    parsed on the left, and the strip underneath counts, live, every request
    this page has made. The promise is shown, not claimed. */
 .demo {
-  margin-top: 48px;
   border: var(--hairline) solid var(--line);
   border-radius: 12px;
   background: var(--raised);
@@ -123,7 +142,7 @@ body {
 }
 .demo-src {
   margin: 0; padding: 14px 12px 14px 0;
-  font-family: var(--mono); font-size: 14px; line-height: 1.7;
+  font-family: var(--mono); font-size: 14px; line-height: 1.6;
   overflow: hidden; white-space: pre;
   border-right: var(--hairline) solid var(--line);
   counter-reset: ln;
@@ -138,7 +157,7 @@ body {
 .demo-src .l.cur::before { color: #fff; background: #4F46E5; border-radius: 3px; }
 .demo-tree {
   padding: 14px 16px; overflow: hidden;
-  font-family: var(--mono); font-size: 14px; line-height: 1.7;
+  font-family: var(--mono); font-size: 14px; line-height: 1.6;
 }
 .demo-tree .r { display: block; white-space: nowrap; }
 .demo-tree .i {
@@ -187,12 +206,10 @@ body {
 .net-own b { color: var(--ink); font-weight: 600; }
 
 /* ---------- the tools ribbon ----------
-   One slow, endless drift: the set is drawn twice side by side and the track
-   slides by exactly one set, so the loop has no seam and no jump. It stops
-   while a pointer or the keyboard is on it, and without JavaScript or with
-   reduced motion it is a plain row you scroll yourself. */
+   One slow, endless drift, driven from the script below. Without JavaScript
+   or with reduced motion it is a plain row you scroll yourself. */
 .rail {
-  margin: 32px 0 0;
+  margin: 8px 0 0;
   overflow-x: auto;
   scrollbar-width: none;
   padding: 4px 0;
@@ -211,8 +228,10 @@ body {
 .tool {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 14px; row-gap: 4px;
-  width: 290px; height: 100%;
+  grid-template-rows: auto 1fr;
+  column-gap: 12px; row-gap: 12px;
+  align-items: center;
+  width: 300px; height: 100%;
   padding: 18px 20px 20px 18px;
   background: var(--raised);
   border: var(--hairline) solid var(--line);
@@ -223,9 +242,9 @@ body {
 .tool:hover { border-color: var(--tool-hue); }
 .tool:focus-visible { outline: 2px solid var(--tool-hue); outline-offset: 2px; }
 .tool-mark {
-  width: 36px; height: 36px; border-radius: 8px;
+  width: 32px; height: 32px; border-radius: 7px;
   background: var(--tool-hue);
-  grid-row: span 2;
+  flex: none;
 }
 .tool-mark::before {
   content: ""; display: block; width: 100%; height: 100%;
@@ -233,7 +252,12 @@ body {
   mask: url("/shared/glyph.svg") center / 100% no-repeat;
 }
 .tool h2 { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
-.tool p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.feat { grid-column: 1 / -1; align-self: start; margin: 0; padding: 0; list-style: none; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+.feat li { position: relative; padding-left: 14px; }
+.feat li::before {
+  content: ""; position: absolute; left: 0; top: 0.62em;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--tool-hue);
+}
 
 .t-json  { --tool-hue: #4F46E5; }
 .t-xml   { --tool-hue: #0F766E; }
@@ -262,11 +286,6 @@ body {
 }
 .why dt { font-size: 18px; font-weight: 600; line-height: 1.4; }
 .why dd { margin: 0; color: var(--muted); max-width: 60ch; }
-.why code {
-  font-family: var(--mono); font-size: 14px;
-  background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: 5px; padding: 1px 5px; color: var(--ink);
-}
 
 /* ---------- footer ---------- */
 footer {
@@ -311,15 +330,15 @@ footer .sp { flex: 1; }
 
 @media (max-width: 720px) {
   .wrap { padding: 0 16px; }
-  .hero { padding: 36px 0 40px; }
-  .demo { margin-top: 32px; }
+  .first { grid-template-columns: 16px minmax(0, 1fr) 16px; }
+  .hero { padding: 20px 0 8px; }
   .demo-body { grid-template-columns: minmax(0, 1fr); }
   .demo-src { border-right: none; border-bottom: var(--hairline) solid var(--line); }
   .demo-src, .demo-tree { font-size: 12px; }
   .net-own { display: none; }
   .net { gap: 6px 14px; }
 
-  .tool { width: 250px; }
+  .tool { width: 260px; }
   .why { padding: 64px 0 48px; }
   .why .row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 22px 0; }
 }
@@ -330,7 +349,9 @@ footer .sp { flex: 1; }
 </head>
 <body>
 
-<div class="wrap">
+<!-- The first screen: the promise, its proof, and every tool — the ribbon
+     sits inside the first view without scrolling, on a phone too. -->
+<div class="first">
   <header class="top">
     <a class="logo" href="/">
       <span class="logo-mark" aria-hidden="true"></span>
@@ -346,11 +367,12 @@ footer .sp { flex: 1; }
   </header>
 
   <section class="hero">
-    <h1>Read your files without handing them to anyone.</h1>
+    <h1>Read your files. Send&nbsp;nothing.</h1>
     <p>
-      Open JSON, XML, YAML, CSV, PDF, log and audio files right in your
-      browser. Nothing you paste or drop here leaves your device.
+      JSON, XML, YAML, CSV, logs, PDF and audio open right in your browser —
+      even offline. Nothing leaves your device.
     </p>
+  </section>
 
     <!-- The demo is the real thing: this page parses the text below with the
          same JSON.parse the tool uses, and draws the tree from the result.
@@ -371,8 +393,6 @@ footer .sp { flex: 1; }
         <span class="net-own"><b id="netOwn">0</b> files loaded from lint.one</span>
       </div>
     </div>
-  </section>
-</div>
 
 <nav class="rail" id="rail" aria-label="Tools">
   <div class="rail-track">
@@ -380,74 +400,100 @@ footer .sp { flex: 1; }
       <li><a class="tool t-json" href="/json/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>JSON</h2>
-        <p>Collapsible tree, paths, errors pinned to the line.</p>
+        <ul class="feat">
+          <li>Tree with copyable paths</li>
+          <li>Compare two versions</li>
+          <li>Format, minify, unescape</li>
+          <li>Convert to YAML</li>
+        </ul>
       </a></li>
       <li><a class="tool t-xml" href="/xml/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>XML</h2>
-        <p>Elements, attributes and the XPath of any node.</p>
+        <ul class="feat">
+          <li>Elements and attributes as a tree</li>
+          <li>XPath of any node</li>
+          <li>Format and minify</li>
+          <li>Convert to JSON</li>
+        </ul>
       </a></li>
       <li><a class="tool t-yaml" href="/yaml/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>YAML</h2>
-        <p>Indentation checked as you type, several documents at once.</p>
+        <ul class="feat">
+          <li>Indentation checked as you type</li>
+          <li>Several documents in one file</li>
+          <li>YAML ↔ JSON</li>
+        </ul>
       </a></li>
       <li><a class="tool t-csv" href="/csv/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>CSV</h2>
-        <p>A sortable table, with the delimiter found for you.</p>
+        <ul class="feat">
+          <li>Sortable table</li>
+          <li>Delimiter found for you</li>
+          <li>Broken rows flagged</li>
+          <li>Convert to JSON</li>
+        </ul>
       </a></li>
       <li><a class="tool t-log" href="/log/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>Logs</h2>
-        <p>Filter by severity, fold stack traces, find the failure.</p>
+        <ul class="feat">
+          <li>Gigabyte files open fast</li>
+          <li>Filter by severity</li>
+          <li>Stack traces folded</li>
+          <li>Map of errors to jump to</li>
+        </ul>
       </a></li>
       <li><a class="tool t-pdf" href="/pdf/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>PDF</h2>
-        <p>Read the pages, copy the text, see what the file holds.</p>
+        <ul class="feat">
+          <li>Read and zoom the pages</li>
+          <li>Find in the text</li>
+          <li>Contents, fonts, metadata</li>
+        </ul>
       </a></li>
       <li><a class="tool t-audio" href="/audio/">
         <span class="tool-mark" aria-hidden="true"></span>
         <h2>Audio</h2>
-        <p>Play a file or a tab's sound with a live spectrum.</p>
+        <ul class="feat">
+          <li>A file, a tab or a microphone</li>
+          <li>Live spectrum in five styles</li>
+          <li>Seek on the waveform</li>
+          <li>Sample rate, loudness, tags</li>
+        </ul>
       </a></li>
     </ul>
   </div>
 </nav>
+</div>
 
 <div class="wrap">
   <section class="why">
-    <h2>Private because there is nowhere to send it.</h2>
+    <h2>No server, so nothing to leak.</h2>
     <dl>
       <div class="row">
         <dt>Check it yourself</dt>
         <dd>
-          Open your browser's Network tab and paste something secret. No
-          request goes out: the parsing happens in <code>JSON.parse</code> and
-          <code>DOMParser</code>, right on the page.
+          Open the Network tab and paste something secret. No request goes
+          out.
         </dd>
       </div>
       <div class="row">
-        <dt>Works offline after the first visit</dt>
-        <dd>
-          Open lint.one once and every tool is saved in your browser. After
-          that it opens with no connection at all: on a plane, behind a
-          firewall, or with the Wi-Fi off.
-        </dd>
+        <dt>Works offline</dt>
+        <dd>After one visit every tool opens with no connection at all.</dd>
       </div>
       <div class="row">
-        <dt>Made for large files</dt>
-        <dd>
-          Trees draw in chunks and searches stop at a sensible limit, so a
-          40&nbsp;MB file opens instead of freezing the tab.
-        </dd>
+        <dt>Large files</dt>
+        <dd>A 40&nbsp;MB file opens without freezing the tab.</dd>
       </div>
     </dl>
   </section>
 
   <footer>
-    <span>MIT licensed. The only cookie is your theme.</span>
+    <span>MIT licensed. No accounts, no analytics.</span>
     <span class="sp"></span>
     <a href="https://github.com/saidkamolxon/lint.uz">GitHub</a>
     <a href="/json/">JSON</a>
@@ -699,10 +745,16 @@ THEMES.forEach(function (t) {
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reduce) { paint(SRC.length, true); return; }
 
+  /* the finished demo is measured first and its height held while it types,
+     so nothing below it moves */
+  var body = srcEl.parentNode;
+  paint(SRC.length, true);
+  body.style.minHeight = body.offsetHeight + 'px';
+
   var i = 0;
   function step() {
     i += Math.max(1, Math.round(Math.random() * 3));
-    if (i >= SRC.length) { paint(SRC.length, true); return; }
+    if (i >= SRC.length) { paint(SRC.length, true); body.style.minHeight = ''; return; }
     paint(i, false);
     setTimeout(step, SRC[i] === '\n' ? 90 : 26);
   }
