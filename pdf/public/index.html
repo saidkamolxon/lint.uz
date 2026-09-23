@@ -38,15 +38,18 @@
   align-items: center; align-items: safe center;
   gap: var(--s5);
   scroll-padding-top: var(--s4);
-  background: var(--sunken);
+  /* the same desk as every other tool's working pane */
+  background: var(--surface);
 }
 
 /* The lift sits on the wrapper, never on the canvas: a filter applies to an
    element's shadow too, so an inverted page would turn its own dark shadow
-   into a bright halo. */
+   into a bright halo. On a desk as light as the paper, the hairline is what
+   gives the sheet its edge; the shadow lifts it. */
 .page-wrap {
   position: relative; flex: none;
   box-shadow: var(--shadow);
+  outline: var(--hairline) solid var(--line);
   line-height: 0;
 }
 .page-wrap canvas {
@@ -60,11 +63,7 @@ body[data-page="dim"] .page-wrap canvas { filter: brightness(0.82) contrast(1.04
 body[data-page="invert"] .page-wrap canvas { filter: invert(1) hue-rotate(180deg); }
 /* an inverted page is nearly black, so a dark shadow under it reads as dirt —
    a hairline edge separates it from the backdrop instead */
-body[data-page="invert"] .page-wrap {
-  box-shadow: none;
-  outline: var(--hairline) solid var(--line);
-  outline-offset: -1px;
-}
+body[data-page="invert"] .page-wrap { box-shadow: none; }
 
 /* a slot waiting to be filled should not pretend to be a page */
 .page-wrap.pending {
@@ -373,6 +372,17 @@ body.dragover #pages::after {
   pointer-events: none; z-index: 20;
 }
 
+/* Increase contrast: the sheet gets a firm edge, the floating zoom stops
+   fading, and highlights and links stop being tints */
+:root[data-contrast="more"] .page-wrap { outline-color: var(--line-strong); }
+:root[data-contrast="more"] .zoom-pop { opacity: 1; background: var(--raised); backdrop-filter: none; }
+:root[data-contrast="more"] .hl-box { background: color-mix(in srgb, var(--mark) 80%, transparent); outline: 1px solid var(--mark-ink); }
+:root[data-contrast="more"] .hl-box.word { background: color-mix(in srgb, var(--mark) 40%, transparent); outline: none; }
+:root[data-contrast="more"] .hl-box.current { background: color-mix(in srgb, var(--hue) 55%, transparent); outline: 2px solid var(--hue); }
+:root[data-contrast="more"] .lnk:hover,
+:root[data-contrast="more"] body.show-links .lnk { outline: 2px solid var(--hue); }
+:root[data-contrast="more"] .page-pos .slash { color: var(--muted); }
+
 /* controls that only mean something once a document is open stay off the
    empty screen; author display rules would otherwise beat [hidden] */
 [hidden] { display: none !important; }
@@ -420,6 +430,7 @@ const esc = LintApp.esc;
    toast) comes from the shared runtime.
    ========================================================================== */
 const c = window.LINT_CONFIG;
+const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
 document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/pdf.svg")');
@@ -440,26 +451,20 @@ $('app').innerHTML = `
 
     <!-- reading position: a label until you click it -->
     <span class="pagebox needs-doc" id="pageBox">
-      <button id="btnPrev" class="icon-btn" title="Previous page" aria-label="Previous page" disabled></button>
-      <button id="pagePos" class="page-pos" title="Go to page">
+      <button id="btnPrev" class="icon-btn" title="Previous page (Page Up)" aria-label="Previous page" disabled></button>
+      <button id="pagePos" class="page-pos" title="Go to page (${MOD}G)">
         <span id="pageCur">1</span><span class="slash">/</span><span id="pageTotal">1</span>
       </button>
       <input id="pageNum" type="text" inputmode="numeric" aria-label="Go to page" hidden>
-      <button id="btnNext" class="icon-btn" title="Next page" aria-label="Next page" disabled></button>
+      <button id="btnNext" class="icon-btn" title="Next page (Page Down)" aria-label="Next page" disabled></button>
     </span>
 
     <span class="spacer"></span>
 
-    <button id="btnFind" class="icon-btn needs-doc" title="Find in this document"
+    <button id="btnFind" class="icon-btn needs-doc" title="Find in this document (${MOD}F)"
             aria-label="Find in this document" aria-pressed="false" disabled></button>
-    <button id="btnInfo" class="icon-btn needs-doc" title="Document details"
+    <button id="btnInfo" class="icon-btn needs-doc" title="Document details (${MOD}I)"
             aria-label="Document details" aria-pressed="false" disabled></button>
-    <div class="menu-wrap needs-doc">
-      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
-      <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnClose" role="menuitem" disabled>Close document</button>
-      </div>
-    </div>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
   </header>
@@ -477,8 +482,8 @@ $('app').innerHTML = `
         <input id="findInput" type="text" placeholder="Find in this document"
                aria-label="Find in this document" spellcheck="false">
         <span id="findCount"></span>
-        <button id="findPrev" class="icon-btn" title="Previous match" aria-label="Previous match"></button>
-        <button id="findNext" class="icon-btn" title="Next match" aria-label="Next match"></button>
+        <button id="findPrev" class="icon-btn" title="Previous match (Shift+F3)" aria-label="Previous match"></button>
+        <button id="findNext" class="icon-btn" title="Next match (F3)" aria-label="Next match"></button>
         <button id="findClose" class="icon-btn" title="Close" aria-label="Close find"></button>
       </div>
 
@@ -487,9 +492,9 @@ $('app').innerHTML = `
         <!-- page treatment: state is the active segment, not the label -->
         <div class="seg" id="pageModeSeg" role="radiogroup" aria-label="Page appearance"></div>
         <span class="sep"></span>
-        <button id="btnOut" class="icon-btn" title="Zoom out" aria-label="Zoom out"></button>
-        <button id="btnFit" class="zoom-fit" title="Fit page to window">Fit</button>
-        <button id="btnIn" class="icon-btn" title="Zoom in" aria-label="Zoom in"></button>
+        <button id="btnOut" class="icon-btn" title="Zoom out (${MOD}−)" aria-label="Zoom out"></button>
+        <button id="btnFit" class="zoom-fit" title="Fit page to window (${MOD}0)">Fit</button>
+        <button id="btnIn" class="icon-btn" title="Zoom in (${MOD}+)" aria-label="Zoom in"></button>
       </div>
     </div>
 
@@ -525,9 +530,6 @@ const ICON = {
   contents: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
   find:     '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/>',
   info:     '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
-  more:     '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
-            '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
-            '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
   up:       '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down:     '<path d="M12 5v14M6 13l6 6 6-6"/>',
   close:    '<path d="M6 6l12 12M18 6L6 18"/>',
@@ -542,7 +544,6 @@ const ICON = {
 $('btnContents').innerHTML = I(ICON.contents);
 $('btnFind').innerHTML = I(ICON.find);
 $('btnInfo').innerHTML = I(ICON.info);
-$('btnMore').innerHTML = I(ICON.more);
 $('btnPrev').innerHTML = I(ICON.up);
 $('btnNext').innerHTML = I(ICON.down);
 $('findPrev').innerHTML = I(ICON.up);
@@ -550,8 +551,6 @@ $('findNext').innerHTML = I(ICON.down);
 $('findClose').innerHTML = I(ICON.close);
 $('btnOut').innerHTML = I(ICON.minus);
 $('btnIn').innerHTML = I(ICON.plus);
-
-LintApp.wireMenu($('btnMore'), $('moreMenu'));
 
 /* ---------- page appearance ----------
    Three states shown as three positions. The old control relabelled itself
@@ -630,7 +629,7 @@ function setBusy(pct) {
 }
 
 function enableControls(on) {
-  ['btnClose', 'btnOut', 'btnFit', 'btnIn', 'btnInfo', 'btnFind',
+  ['btnOut', 'btnFit', 'btnIn', 'btnInfo', 'btnFind',
    'btnPrev', 'btnNext', 'btnContents']
     .forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
   document.querySelectorAll('.needs-doc').forEach((el) => { el.hidden = !on; });
@@ -711,6 +710,7 @@ async function renderDocument(file) {
   renderVisible();
 
   enableControls(true);
+  if (LintApp.setDocument) LintApp.setDocument(file.name, resetView);
   $('pageTotal').textContent = String(doc.numPages);
   sizePageBox(doc.numPages);
   syncPageIndicator(1);
@@ -900,6 +900,7 @@ function resetView() {
   $('drawer').classList.remove('open');
   $('pathBox').textContent = '';
   $('statusBar').hidden = true;
+  if (LintApp.setDocument) LintApp.setDocument(null);
   showEmpty();
 }
 
@@ -1573,7 +1574,6 @@ $('fileInput').addEventListener('change', (e) => {
   if (e.target.files[0]) openFile(e.target.files[0]);
   e.target.value = '';
 });
-$('btnClose').addEventListener('click', resetView);
 
 $('btnInfo').addEventListener('click', () => {
   const open = $('drawer').classList.toggle('open');
@@ -1734,6 +1734,12 @@ document.addEventListener('keydown', (e) => {
       openPageInput();
     }
   }
+  else if (e.key === 'F3') {
+    /* the browser's own find-next key, so it never opens the browser's bar */
+    e.preventDefault();
+    if (matches.length) gotoMatch(matchIdx + (e.shiftKey ? -1 : 1));
+    else if (doc) openFind();
+  }
   else if (!doc) return;
   /* paging keys stay out of the way while a field has focus */
   else if (/^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '')) return;
@@ -1742,6 +1748,23 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Home') { e.preventDefault(); scrollToPage(1); }
   else if (e.key === 'End') { e.preventDefault(); scrollToPage(doc.numPages); }
 });
+
+/* No LintApp.textZoom here: Ctrl + wheel and Ctrl + = / − / 0 zoom the
+   pages, as in every PDF viewer. */
+if (LintApp.shortcuts) LintApp.shortcuts([{ title: 'PDF', items: [
+  { keys: ['pagedown'], label: 'Next page' },
+  { keys: ['pageup'], label: 'Previous page' },
+  { keys: ['home', 'end'], label: 'First or last page' },
+  { keys: ['mod+g'], label: 'Go to page' },
+  { keys: ['f3', 'enter', 'mod+g'], label: 'Next match, while finding' },
+  { keys: ['shift+f3', 'shift+enter', 'mod+shift+g'], label: 'Previous match, while finding' },
+  { keys: ['mod+='], label: 'Zoom in' },
+  { keys: ['mod+-'], label: 'Zoom out' },
+  { keys: ['mod+wheel'], label: 'Zoom around the pointer' },
+  { keys: ['mod+0'], label: 'Fit page to window' },
+  { keys: ['mod+i'], label: 'Document details' },
+  { keys: ['alt'], label: 'Hold to show every link on the page' }
+] }]);
 
 /* refit on resize while in fit mode */
 let resizeTimer;
