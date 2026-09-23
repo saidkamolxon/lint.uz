@@ -9,9 +9,10 @@
    Nothing is bundled or transpiled. Files land as-is and stay readable in
    view-source, and shared/ is written once rather than copied per tool. */
 
-import { cp, rm, mkdir, readdir } from 'node:fs/promises';
+import { cp, rm, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -43,3 +44,18 @@ for (const tool of TOOLS) {
 /* one shared directory for the whole site */
 await cp(SHARED, join(DIST, 'shared'), { recursive: true });
 console.log('✓ /shared');
+
+/* the offline copy: every file in dist, as the URL a browser asks for it by,
+   versioned by content so any change to any file ships a fresh copy */
+const files = (await readdir(DIST, { recursive: true, withFileTypes: true }))
+  .filter((d) => d.isFile())
+  .map((d) => relative(DIST, join(d.parentPath, d.name)).split(sep).join('/'))
+  .sort();
+const hash = createHash('sha256');
+for (const f of files) hash.update(f).update(await readFile(join(DIST, f)));
+const urls = files.map((f) => '/' + f.replace(/(^|\/)index\.html$/, '$1'));
+const sw = (await readFile(join(root, 'site', 'sw.js'), 'utf8'))
+  .replace('__VERSION__', hash.digest('hex').slice(0, 12))
+  .replace('__FILES__', JSON.stringify(urls, null, 2));
+await writeFile(join(DIST, 'sw.js'), sw);
+console.log(`✓ /sw.js  (${urls.length} files offline)`);

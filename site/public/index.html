@@ -3,41 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lint.one — format viewers that never send your data anywhere</title>
-<meta name="description" content="Client-side JSON, XML, YAML, CSV, PDF and log viewers, formatters and validators, and an audio player with a live spectrum. Everything runs in your browser — open DevTools and watch: zero outbound requests.">
+<title>lint.one — file viewers that never send your data anywhere</title>
+<meta name="description" content="JSON, XML, YAML, CSV, PDF and log viewers, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/shared/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/shared/theme.css">
 <style>
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
+/* IBM Plex Sans carries every word on the page: an engineering face, drawn
+   for documentation and tools, sober enough to be believed about privacy.
+   JetBrains Mono appears only where the page shows actual code, the same
+   face the tools use. */
 body {
   margin: 0;
-  font-family: var(--ui);
-  font-size: 16px;
+  font-family: var(--display);
+  font-size: 17px;
   line-height: 1.6;
   background: var(--surface);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-.wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
 /* ---------- top bar ---------- */
 .top {
   display: flex; align-items: center; gap: 12px;
-  padding: 18px 0;
-  border-bottom: var(--hairline) solid var(--line);
+  padding: 20px 0;
 }
 .logo {
-  display: flex; align-items: center; gap: 9px;
-  font-size: 17px; font-weight: 650; letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 19px; font-weight: 600; letter-spacing: -0.01em; line-height: 1;
   text-decoration: none; color: inherit;
 }
 .logo-mark {
-  width: 28px; height: 28px; border-radius: 6.5px;
+  width: 28px; height: 28px; border-radius: 6.5px; flex: none;
   background: var(--ink);
 }
 .logo-mark::before {
@@ -45,122 +48,111 @@ body {
   background: var(--surface);
   mask: url("/shared/glyph.svg") center / 100% no-repeat;
 }
-.top-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
 .ghost {
-  font: inherit; font-size: 13.5px;
+  font: inherit; font-size: 15px;
   color: var(--muted); text-decoration: none;
-  padding: 6px 11px; border-radius: 7px;
+  padding: 7px 12px; border-radius: 8px;
   background: none; border: none; cursor: pointer;
 }
 .ghost:hover { background: var(--row-hover); color: var(--ink); }
 
 /* ---------- hero ---------- */
-.hero {
-  padding: 60px 0 44px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-  gap: 48px; align-items: center;
-}
+.hero { padding: 64px 0 56px; }
 .hero h1 {
   margin: 0 0 20px;
-  font-size: clamp(34px, 6.2vw, 58px);
-  line-height: 1.04;
-  letter-spacing: -0.035em;
-  font-weight: 680;
-  max-width: 17ch;
+  font-size: clamp(36px, 5.6vw, 64px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  max-width: 13em;
+  text-wrap: balance;
 }
 .hero p {
   margin: 0;
-  font-size: clamp(16px, 2vw, 19px);
+  font-size: clamp(17px, 1.8vw, 20px);
+  line-height: 1.5;
   color: var(--muted);
-  max-width: 56ch;
+  max-width: 44ch;
+  text-wrap: pretty;
 }
-.hero .tight { color: var(--ink); font-weight: 550; }
 
-/* The proof strip: the promise, stated as a measurement. */
-.proof {
-  display: inline-flex; align-items: baseline; gap: 10px;
-  margin-top: 28px; padding: 9px 16px;
-  border: var(--hairline) solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
-  font-family: var(--mono); font-size: 13px;
-}
-.proof b {
-  font-size: 15px; font-weight: 700;
-  color: var(--ok); font-variant-numeric: tabular-nums;
-}
-.proof span { color: var(--muted); }
-
-
-/* ---------- live demo ---------- */
+/* ---------- live demo ----------
+   The viewer and the browser's Network panel in one frame: the file is
+   parsed on the left, and the strip underneath counts, live, every request
+   this page has made. The promise is shown, not claimed. */
 .demo {
+  margin-top: 48px;
   border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   background: var(--raised);
   overflow: hidden;
   box-shadow: var(--shadow);
 }
 .demo-chrome {
-  display: flex; align-items: center; gap: 9px;
-  padding: 9px 12px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
   border-bottom: var(--hairline) solid var(--line);
   background: var(--sunken);
+  font-size: 14px;
 }
 .demo-mark {
-  display: grid; place-items: center;
-  width: 20px; height: 20px; border-radius: 6px;
-  background: #4F46E5; color: #fff;
-  font-family: var(--mono); font-size: 10px; font-weight: 700;
-  letter-spacing: -0.06em;
+  width: 20px; height: 20px; border-radius: 5px; flex: none;
+  background: #4F46E5;
 }
-.demo-host { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.demo-mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: #fff;
+  mask: url("/shared/glyph.svg") center / 100% no-repeat;
+}
+.demo-host { color: var(--muted); }
 .demo-state {
   margin-left: auto;
-  font-family: var(--mono); font-size: 11px;
   color: var(--ok);
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 7px;
 }
 .demo-state::before {
-  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
   background: currentColor;
 }
-.demo-state.bad { color: var(--bad); }
+.demo-state.bad { color: var(--warn); }
 
-.demo-body { display: grid; grid-template-columns: 1fr 1fr; min-height: 232px; }
+.demo-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
 .demo-src {
-  margin: 0; padding: 12px 10px 12px 0;
-  font-family: var(--mono); font-size: 11.5px; line-height: 1.65;
+  margin: 0; padding: 14px 12px 14px 0;
+  font-family: var(--mono); font-size: 14px; line-height: 1.7;
   overflow: hidden; white-space: pre;
   border-right: var(--hairline) solid var(--line);
   counter-reset: ln;
 }
-.demo-src .l { display: block; padding-left: 38px; position: relative; }
+.demo-src .l { display: block; padding-left: 44px; position: relative; }
 .demo-src .l::before {
   counter-increment: ln; content: counter(ln);
-  position: absolute; left: 0; width: 30px;
-  text-align: right; font-size: 10.5px;
+  position: absolute; left: 0; width: 32px;
+  text-align: right; font-size: 11.5px;
   color: color-mix(in srgb, #4F46E5 70%, var(--muted));
 }
 .demo-src .l.cur::before { color: #fff; background: #4F46E5; border-radius: 3px; }
 .demo-tree {
-  padding: 12px; overflow: hidden;
-  font-family: var(--mono); font-size: 11.5px; line-height: 1.7;
+  padding: 14px 16px; overflow: hidden;
+  font-family: var(--mono); font-size: 14px; line-height: 1.7;
 }
 .demo-tree .r { display: block; white-space: nowrap; }
 .demo-tree .i {
-  display: inline-block; width: 15px; height: 13px; border-radius: 3px;
-  font-size: 8px; font-weight: 700; text-align: center; line-height: 13px;
-  margin-right: 6px; vertical-align: 1px;
+  display: inline-block; width: 16px; height: 14px; border-radius: 3px;
+  font-size: 8.5px; font-weight: 700; text-align: center; line-height: 14px;
+  margin-right: 7px; vertical-align: 1px;
 }
 .caret-s { color: var(--faint); margin-right: 3px; }
 .cursor {
-  display: inline-block; width: 7px; height: 13px;
+  display: inline-block; width: 7px; height: 14px;
   background: #4F46E5; vertical-align: -2px;
   animation: blink 1.1s step-end infinite;
 }
 @keyframes blink { 50% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
 
 .j-key { color: var(--t-key); }
 .j-str { color: var(--t-str); }
@@ -172,144 +164,119 @@ body {
 .i-str { color: var(--t-str); background: color-mix(in srgb, var(--t-str) 15%, transparent); }
 .i-num { color: var(--t-num); background: color-mix(in srgb, var(--t-num) 15%, transparent); }
 .i-bool { color: var(--t-bool); background: color-mix(in srgb, var(--t-bool) 15%, transparent); }
-.cnt-s { color: var(--faint); font-family: var(--ui); font-size: 10.5px; margin-left: 6px; }
+.cnt-s { color: var(--faint); font-family: var(--display); font-size: 11.5px; margin-left: 6px; }
 
-@media (max-width: 860px) {
-  .hero { grid-template-columns: 1fr; gap: 32px; }
-  .demo-body { grid-template-columns: 1fr; }
-  .demo-src { border-right: none; border-bottom: var(--hairline) solid var(--line); }
+/* the Network strip, drawn after the browser's own panel */
+.net {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px;
+  padding: 0 16px;
+  border-top: var(--hairline) solid var(--line);
+  background: var(--sunken);
+  font-size: 14px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
+.net-tab {
+  align-self: stretch;
+  display: flex; align-items: center;
+  padding: 10px 2px 8px;
+  border-bottom: 2px solid var(--ink);
+  color: var(--ink); font-weight: 600;
+}
+.net-out b { color: var(--ok); font-weight: 600; }
+.net-own { margin-left: auto; }
+.net-own b { color: var(--ink); font-weight: 600; }
 
-/* ---------- the tools, one row ----------
-   Seven tools is a set, and a set reads best all at once. The tiles are
-   trimmed to what identifies a tool — its mark, its name, its address — so
-   all seven sit on one line on a desktop. Below that the row scrolls, and only
-   then does it drift, as a hint that it continues past the edge. */
-.tools-rail { margin: 48px 0 68px; position: relative; }
-
-.tools {
-  display: flex;
-  gap: 10px;
+/* ---------- the tools ribbon ----------
+   One slow, endless drift: the set is drawn twice side by side and the track
+   slides by exactly one set, so the loop has no seam and no jump. It stops
+   while a pointer or the keyboard is on it, and without JavaScript or with
+   reduced motion it is a plain row you scroll yourself. */
+.rail {
+  margin: 32px 0 0;
   overflow-x: auto;
-  scroll-snap-type: x proximity;
-  padding: 2px;
   scrollbar-width: none;
+  padding: 4px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
 }
-.tools::-webkit-scrollbar { display: none; }
+.rail::-webkit-scrollbar { display: none; }
+.rail-track { display: flex; width: max-content; }
+.rail-set {
+  display: flex; gap: 14px;
+  margin: 0; padding: 0 14px 0 0; list-style: none;
+}
+.rail.moving { overflow: hidden; }
+.rail.moving .rail-track { animation: drift var(--drift, 80s) linear infinite; }
+.rail.moving:hover .rail-track,
+.rail.moving:focus-within .rail-track { animation-play-state: paused; }
+@keyframes drift { to { transform: translate3d(-50%, 0, 0); } }
 
 .tool {
-  flex: 1 1 0;
-  min-width: 148px;
-  scroll-snap-align: start;
-  position: relative;
-  display: flex; flex-direction: column;
-  padding: 16px 14px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 14px; row-gap: 4px;
+  width: 290px; height: 100%;
+  padding: 18px 20px 20px 18px;
   background: var(--raised);
   border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   text-decoration: none; color: inherit;
-  transition: border-color var(--t-fast), background-color var(--t-fast);
+  transition: border-color var(--t-fast);
 }
-.tool:hover {
-  border-color: color-mix(in srgb, var(--tool-hue) 60%, var(--line));
-  background: color-mix(in srgb, var(--tool-hue) 4%, var(--raised));
-}
+.tool:hover { border-color: var(--tool-hue); }
 .tool:focus-visible { outline: 2px solid var(--tool-hue); outline-offset: 2px; }
-
-/* the hue stripe — the same device as each tool's editor gutter */
-.tool::before {
-  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
-  width: 3px; border-radius: 0 2px 2px 0;
-  background: var(--tool-hue);
-}
 .tool-mark {
-  display: grid; place-items: center;
-  width: 28px; height: 28px; border-radius: 8px;
-  background: var(--tool-hue); color: #fff;
-  font-family: var(--mono); font-weight: 700; font-size: 12.5px;
-  letter-spacing: -0.06em;
-  margin-bottom: 10px;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--tool-hue);
+  grid-row: span 2;
 }
-.tool h2 {
-  margin: 0 0 3px;
-  font-size: 14.5px; font-weight: 640; letter-spacing: -0.015em;
+.tool-mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: #fff;
+  mask: url("/shared/glyph.svg") center / 100% no-repeat;
 }
-.tool .host {
-  font-family: var(--mono); font-size: 11px;
-  color: var(--tool-hue);
-  display: block; margin-bottom: 8px;
-}
-/* the one thing each tool is for, in a handful of words */
-.tool p {
-  margin: 0; font-size: 12px; line-height: 1.45;
-  color: var(--muted);
-}
-.tool ul { display: none; }   /* the tags belong on the tool, not here */
+.tool h2 { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+.tool p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--muted); }
 
-.t-json { --tool-hue: #4F46E5; }
-.t-xml  { --tool-hue: #0F766E; }
-.t-yaml { --tool-hue: #B45309; }
-.t-csv  { --tool-hue: #9333EA; }
-.t-pdf  { --tool-hue: #BE123C; }
-.t-log  { --tool-hue: #0369A1; }
+.t-json  { --tool-hue: #4F46E5; }
+.t-xml   { --tool-hue: #0F766E; }
+.t-yaml  { --tool-hue: #B45309; }
+.t-csv   { --tool-hue: #9333EA; }
+.t-pdf   { --tool-hue: #BE123C; }
+.t-log   { --tool-hue: #0369A1; }
 .t-audio { --tool-hue: #C026D3; }
 
-/* Controls appear only when the row actually scrolls — on a wide screen
-   every tool is visible and there is nothing to page through. */
-.rail-foot {
-  display: none;
-  align-items: center; gap: var(--s3);
-  margin-top: var(--s3);
+/* ---------- why ---------- */
+.why { padding: 96px 0 72px; }
+.why h2 {
+  margin: 0 0 36px;
+  font-size: clamp(28px, 3.4vw, 40px); font-weight: 600;
+  line-height: 1.1; letter-spacing: -0.02em;
+  max-width: 16em;
+  text-wrap: balance;
 }
-.tools-rail.scrolls .rail-foot { display: flex; }
-.rail-dots { display: flex; gap: 6px; }
-.rail-dots button {
-  width: 6px; height: 6px; padding: 0; border: none; border-radius: 50%;
-  background: var(--line-strong); cursor: pointer;
-  transition: background-color var(--t-fast), transform var(--t-fast);
-}
-.rail-dots button[aria-current="true"] { background: var(--ink); transform: scale(1.4); }
-.rail-pause {
-  font: inherit; font-size: 12px; color: var(--muted);
-  background: none; border: none; cursor: pointer;
-  padding: 2px 6px; border-radius: 5px; margin-left: auto;
-}
-.rail-pause:hover { color: var(--ink); background: var(--row-hover); }
-
-@media (max-width: 1040px) {
-  .tools { scroll-snap-type: x mandatory; }
-  .tool { flex: 0 0 176px; }
-}
-@media (max-width: 560px) {
-  .tool { flex: 0 0 62%; }
-  .tool p { font-size: 12.5px; }
-}
-
-/* ---------- privacy section ---------- */
-.why {
+.why dl { margin: 0; }
+.why .row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 38px;
-  padding: 56px 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 32px;
+  padding: 24px 0;
   border-top: var(--hairline) solid var(--line);
 }
-.why h3 {
-  margin: 0 0 9px;
-  font-size: 15px; font-weight: 640; letter-spacing: -0.01em;
-}
-.why p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.6; }
+.why dt { font-size: 18px; font-weight: 600; line-height: 1.4; }
+.why dd { margin: 0; color: var(--muted); max-width: 60ch; }
 .why code {
-  font-family: var(--mono); font-size: 12.5px;
+  font-family: var(--mono); font-size: 14px;
   background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: 4px; padding: 1px 5px; color: var(--ink);
+  border-radius: 5px; padding: 1px 5px; color: var(--ink);
 }
 
 /* ---------- footer ---------- */
 footer {
-  padding: 26px 0 40px;
+  padding: 28px 0 44px;
   border-top: var(--hairline) solid var(--line);
-  display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
-  font-size: 13px; color: var(--faint);
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+  font-size: 14px; color: var(--faint);
 }
 footer a { color: var(--muted); text-decoration: none; }
 footer a:hover { color: var(--ink); text-decoration: underline; }
@@ -330,7 +297,7 @@ footer .sp { flex: 1; }
   display: flex; align-items: center; gap: 9px;
   width: 100%; padding: 7px 9px; border: none; background: none;
   border-radius: var(--radius);
-  font: inherit; font-size: 13.5px; color: var(--ink);
+  font: inherit; font-size: 14px; color: var(--ink);
   text-align: left; cursor: pointer;
 }
 .menu-item:hover { background: var(--row-hover); }
@@ -345,17 +312,28 @@ footer .sp { flex: 1; }
 
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
 
-@media (max-width: 640px) {
-  .hero { padding: 44px 0 30px; }
-  .tools { margin: 36px 0 52px; }
-  .why { gap: 28px; padding: 40px 0; }
+@media (max-width: 720px) {
+  .wrap { padding: 0 16px; }
+  .hero { padding: 36px 0 40px; }
+  .demo { margin-top: 32px; }
+  .demo-body { grid-template-columns: minmax(0, 1fr); }
+  .demo-src { border-right: none; border-bottom: var(--hairline) solid var(--line); }
+  .demo-src, .demo-tree { font-size: 12px; }
+  .net-own { display: none; }
+  .net { gap: 6px 14px; }
+
+  .tool { width: 250px; }
+  .why { padding: 64px 0 48px; }
+  .why .row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 22px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor { animation: none; }
 }
 </style>
 </head>
 <body>
 
 <div class="wrap">
-
   <header class="top">
     <a class="logo" href="/">
       <span class="logo-mark" aria-hidden="true"></span>
@@ -371,138 +349,118 @@ footer .sp { flex: 1; }
   </header>
 
   <section class="hero">
-    <div class="hero-copy">
-      <h1>Read your config files without handing them to anyone.</h1>
-      <p>
-        Six viewers for the formats you actually paste at 2&nbsp;a.m. — production
-        manifests, API payloads, exported spreadsheets.
-        <span class="tight">Every one runs entirely in your browser.</span>
-      </p>
-      <div class="proof">
-        <b id="reqCount">0</b>
-        <span>network requests made while you read this</span>
-      </div>
-    </div>
+    <h1>Read your files without handing them to anyone.</h1>
+    <p>
+      Open JSON, XML, YAML, CSV, PDF, log and audio files right in your
+      browser. Nothing you paste or drop here leaves your device.
+    </p>
 
     <!-- The demo is the real thing: this page parses the text below with the
-         same JSON.parse the tool uses, and draws the tree from the result. -->
-    <div class="demo" aria-hidden="true">
-      <div class="demo-chrome">
-        <span class="demo-mark">{}</span>
-        <span class="demo-host">json.lint.one</span>
+         same JSON.parse the tool uses, and draws the tree from the result.
+         The Network strip reads the browser's own record of requests. -->
+    <div class="demo">
+      <div class="demo-chrome" aria-hidden="true">
+        <span class="demo-mark"></span>
+        <span class="demo-host">lint.one/json</span>
         <span class="demo-state" id="demoState">valid</span>
       </div>
-      <div class="demo-body">
+      <div class="demo-body" aria-hidden="true">
         <pre class="demo-src" id="demoSrc"></pre>
         <div class="demo-tree" id="demoTree"></div>
       </div>
+      <div class="net">
+        <span class="net-tab">Network</span>
+        <span class="net-out"><b id="netOut">0</b> requests to other servers</span>
+        <span class="net-own"><b id="netOwn">0</b> files loaded from lint.one</span>
+      </div>
     </div>
   </section>
+</div>
 
-  <div class="tools-rail">
-  <nav class="tools" id="tools" aria-label="Tools">
-    <a class="tool t-json" href="https://json.lint.one">
-      <span class="tool-mark">{}</span>
-      <h2>JSON Viewer</h2>
-      <span class="host">json.lint.one</span>
-      <p>Collapsible tree, paths, errors pinned to the line.</p>
-      <ul><li>Format</li><li>Minify</li><li>Unescape</li><li>Search</li></ul>
-    </a>
-
-    <a class="tool t-xml" href="https://xml.lint.one">
-      <span class="tool-mark">&lt;&gt;</span>
-      <h2>XML Viewer</h2>
-      <span class="host">xml.lint.one</span>
-      <p>Elements, attributes and XPath for any node.</p>
-      <ul><li>Format</li><li>Minify</li><li>XPath</li><li>To JSON</li></ul>
-    </a>
-
-    <a class="tool t-yaml" href="https://yaml.lint.one">
-      <span class="tool-mark">&mdash;</span>
-      <h2>YAML Viewer</h2>
-      <span class="host">yaml.lint.one</span>
-      <p>Indentation checked as you type. Multi-document.</p>
-      <ul><li>Format</li><li>To JSON</li><li>From JSON</li><li>Multi-doc</li></ul>
-    </a>
-
-    <a class="tool t-csv" href="https://csv.lint.one">
-      <span class="tool-mark">&#9016;</span>
-      <h2>CSV Viewer</h2>
-      <span class="host">csv.lint.one</span>
-      <p>Sortable table, delimiter detected, ragged rows flagged.</p>
-      <ul><li>Sort</li><li>Filter</li><li>To JSON</li><li>Tab &amp; semicolon</li></ul>
-    </a>
-
-    <a class="tool t-log" href="https://log.lint.one">
-      <span class="tool-mark">&#8801;</span>
-      <h2>Log Viewer</h2>
-      <span class="host">log.lint.one</span>
-      <p>Filter by severity, fold stack traces, find the failure.</p>
-      <ul><li>Severity</li><li>Filter</li><li>Fold traces</li><li>1M+ lines</li></ul>
-    </a>
-
-    <a class="tool t-pdf" href="https://pdf.lint.one">
-      <span class="tool-mark">P</span>
-      <h2>PDF Viewer</h2>
-      <span class="host">pdf.lint.one</span>
-      <p>Read pages, pull out text, see what the file contains.</p>
-      <ul><li>Read</li><li>Extract text</li><li>Fonts</li><li>Dark page</li></ul>
-    </a>
-
-    <a class="tool t-audio" href="https://audio.lint.one">
-      <span class="tool-mark">&#9834;</span>
-      <h2>Audio Player</h2>
-      <span class="host">audio.lint.one</span>
-      <p>Play a file, or any tab's sound, with a live spectrum.</p>
-      <ul><li>Spectrum</li><li>Tab audio</li><li>Waveform</li><li>Tags</li></ul>
-    </a>
-  </nav>
-  <div class="rail-foot">
-    <div class="rail-dots" id="railDots"></div>
-    <button class="rail-pause" id="railPause" aria-pressed="false">Pause</button>
+<nav class="rail" id="rail" aria-label="Tools">
+  <div class="rail-track">
+    <ul class="rail-set">
+      <li><a class="tool t-json" href="/json/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>JSON</h2>
+        <p>Collapsible tree, paths, errors pinned to the line.</p>
+      </a></li>
+      <li><a class="tool t-xml" href="/xml/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>XML</h2>
+        <p>Elements, attributes and the XPath of any node.</p>
+      </a></li>
+      <li><a class="tool t-yaml" href="/yaml/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>YAML</h2>
+        <p>Indentation checked as you type, several documents at once.</p>
+      </a></li>
+      <li><a class="tool t-csv" href="/csv/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>CSV</h2>
+        <p>A sortable table, with the delimiter found for you.</p>
+      </a></li>
+      <li><a class="tool t-log" href="/log/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>Logs</h2>
+        <p>Filter by severity, fold stack traces, find the failure.</p>
+      </a></li>
+      <li><a class="tool t-pdf" href="/pdf/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>PDF</h2>
+        <p>Read the pages, copy the text, see what the file holds.</p>
+      </a></li>
+      <li><a class="tool t-audio" href="/audio/">
+        <span class="tool-mark" aria-hidden="true"></span>
+        <h2>Audio</h2>
+        <p>Play a file or a tab's sound with a live spectrum.</p>
+      </a></li>
+    </ul>
   </div>
-  </div>
+</nav>
 
+<div class="wrap">
   <section class="why">
-    <div>
-      <h3>Verify it, don't trust it</h3>
-      <p>
-        Open the Network tab and paste a production secret. You will see no
-        requests, because there is no server to send them to — the parsing
-        happens in <code>JSON.parse</code> and <code>DOMParser</code>, right
-        on the page.
-      </p>
-    </div>
-    <div>
-      <h3>Works with the tab closed</h3>
-      <p>
-        Each tool is one HTML file with no framework and no analytics. Save the
-        page to disk and it keeps working on a plane, behind a firewall, or on
-        an air-gapped machine.
-      </p>
-    </div>
-    <div>
-      <h3>Built for large files</h3>
-      <p>
-        Trees render in chunks and searches stop at a sane budget, so a 40&nbsp;MB
-        manifest opens instead of freezing the tab.
-      </p>
-    </div>
+    <h2>Private because there is nowhere to send it.</h2>
+    <dl>
+      <div class="row">
+        <dt>Check it yourself</dt>
+        <dd>
+          Open your browser's Network tab and paste something secret. No
+          request goes out: the parsing happens in <code>JSON.parse</code> and
+          <code>DOMParser</code>, right on the page.
+        </dd>
+      </div>
+      <div class="row">
+        <dt>Works offline after the first visit</dt>
+        <dd>
+          Open lint.one once and every tool is saved in your browser. After
+          that it opens with no connection at all: on a plane, behind a
+          firewall, or with the Wi-Fi off.
+        </dd>
+      </div>
+      <div class="row">
+        <dt>Made for large files</dt>
+        <dd>
+          Trees draw in chunks and searches stop at a sensible limit, so a
+          40&nbsp;MB file opens instead of freezing the tab.
+        </dd>
+      </div>
+    </dl>
   </section>
 
   <footer>
-    <span>MIT licensed · no cookies beyond your theme choice</span>
+    <span>MIT licensed. The only cookie is your theme.</span>
     <span class="sp"></span>
     <a href="https://github.com/saidkamolxon/lint.uz">GitHub</a>
-    <a href="https://json.lint.one">JSON</a>
-    <a href="https://xml.lint.one">XML</a>
-    <a href="https://yaml.lint.one">YAML</a>
-    <a href="https://csv.lint.one">CSV</a>
-    <a href="https://pdf.lint.one">PDF</a>
-    <a href="https://log.lint.one">Log</a>
-    <a href="https://audio.lint.one">Audio</a>
+    <a href="/json/">JSON</a>
+    <a href="/xml/">XML</a>
+    <a href="/yaml/">YAML</a>
+    <a href="/csv/">CSV</a>
+    <a href="/pdf/">PDF</a>
+    <a href="/log/">Logs</a>
+    <a href="/audio/">Audio</a>
   </footer>
-
 </div>
 
 <script src="/shared/theme-boot.js"></script>
@@ -559,100 +517,21 @@ THEMES.forEach(function (t) {
   menu.appendChild(item);
 });
 
-
-/* ---------- the tools rail ----------
-   On a wide screen all seven tools are visible and nothing moves: motion with
-   nowhere to go is just noise. When the row does overflow it drifts one tile
-   at a time, and stops the instant anyone reaches for it. */
+/* ---------- the tools ribbon ----------
+   A second copy of the set makes the loop seamless; it is inert, so the
+   keyboard and screen readers meet each tool once. The duration comes from
+   the set's width, so the drift keeps one slow speed however wide it is. */
 (function () {
-  const wrap = document.querySelector('.tools-rail');
-  const rail = document.getElementById('tools');
-  const dots = document.getElementById('railDots');
-  const pause = document.getElementById('railPause');
-  if (!rail || !wrap) return;
-
-  const cards = [...rail.querySelectorAll('.tool')];
-  const STEP_MS = 3600;
-  let timer = null;
-  let stopped = false;
-
-  cards.forEach((card, i) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    const name = (card.querySelector('h2') || {}).textContent || ('tool ' + (i + 1));
-    b.setAttribute('aria-label', 'Show ' + name);
-    b.addEventListener('click', () => { halt(); scrollToCard(i); });
-    dots.appendChild(b);
-  });
-
-  const overflows = () => rail.scrollWidth - rail.clientWidth > 8;
-
-  function current() {
-    let best = 0, min = Infinity;
-    cards.forEach((c, i) => {
-      const d = Math.abs(c.offsetLeft - rail.scrollLeft);
-      if (d < min) { min = d; best = i; }
-    });
-    return best;
-  }
-
-  function markDots() {
-    const cur = current();
-    [...dots.children].forEach((d, i) => d.setAttribute('aria-current', String(i === cur)));
-  }
-
-  function scrollToCard(i) {
-    const card = cards[Math.max(0, Math.min(cards.length - 1, i))];
-    rail.scrollTo({ left: card.offsetLeft - rail.offsetLeft, behavior: 'smooth' });
-  }
-
-  function advance() {
-    const atEnd = rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 8;
-    scrollToCard(atEnd ? 0 : current() + 1);
-  }
-
-  function start() {
-    if (stopped || timer || !overflows()) return;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    timer = setInterval(advance, STEP_MS);
-  }
-  function stop() { clearInterval(timer); timer = null; }
-
-  /* a deliberate stop, distinct from pausing while the pointer rests on it */
-  function halt() {
-    stopped = true;
-    stop();
-    pause.textContent = 'Play';
-    pause.setAttribute('aria-pressed', 'true');
-  }
-
-  pause.addEventListener('click', () => {
-    if (stopped) {
-      stopped = false;
-      pause.textContent = 'Pause';
-      pause.setAttribute('aria-pressed', 'false');
-      start();
-    } else halt();
-  });
-
-  ['pointerenter', 'focusin'].forEach((e) => rail.addEventListener(e, stop));
-  ['pointerleave', 'focusout'].forEach((e) => rail.addEventListener(e, start));
-  rail.addEventListener('wheel', halt, { passive: true });
-  rail.addEventListener('touchstart', halt, { passive: true });
-  document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
-  rail.addEventListener('scroll', markDots, { passive: true });
-
-  /* the controls exist only while there is somewhere to scroll to */
-  function sync() {
-    const many = overflows();
-    wrap.classList.toggle('scrolls', many);
-    if (many) start(); else { stop(); rail.scrollLeft = 0; }
-    markDots();
-  }
-
-  let rt;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(sync, 150); });
-  sync();
+  var rail = document.getElementById('rail');
+  if (!rail || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var set = rail.querySelector('.rail-set');
+  var copy = set.cloneNode(true);
+  copy.setAttribute('aria-hidden', 'true');
+  copy.inert = true;
+  set.parentNode.appendChild(copy);
+  var PX_PER_SECOND = 28;
+  rail.style.setProperty('--drift', (set.offsetWidth / PX_PER_SECOND) + 's');
+  rail.classList.add('moving');
 })();
 
 /* ---------- the hero demo ----------
@@ -660,15 +539,15 @@ THEMES.forEach(function (t) {
    handed to the same JSON.parse the tool uses, and the tree is drawn from
    whatever comes back. If the parse broke, the demo would show it. */
 (function () {
+  /* no line longer than 30 characters: the source pane is barely wider than
+     that on a 320px phone, and a demo that clips itself proves nothing */
   var SRC = [
     '{',
-    '  "service": "checkout-api",',
+    '  "service": "checkout",',
     '  "healthy": true,',
     '  "replicas": 3,',
-    '  "endpoints": [',
-    '    { "path": "/v2/cart", "p99Ms": 84 },',
-    '    { "path": "/health", "p99Ms": 3 }',
-    '  ]',
+    '  "limits": { "cpu": "500m" },',
+    '  "routes": ["/cart", "/pay"]',
     '}'
   ].join('\n');
 
@@ -772,19 +651,23 @@ THEMES.forEach(function (t) {
   setTimeout(step, 420);
 })();
 
-/* Count this page's own network requests and show the real number. */
+/* ---------- the Network strip ----------
+   Read from the browser's own record of what this page has fetched, and kept
+   live: a request made at any moment, to anywhere, would show up here. The
+   page itself counts as the first file from lint.one. */
 (function () {
-  var el = document.getElementById('reqCount');
-  if (!el || !window.performance || !performance.getEntriesByType) return;
-  function update() {
-    var res = performance.getEntriesByType('resource').filter(function (r) {
-      /* same-origin assets are the page itself; anything else would be a leak */
-      return new URL(r.name, location.href).origin !== location.origin;
+  var out = document.getElementById('netOut');
+  var own = document.getElementById('netOwn');
+  if (!out || !window.PerformanceObserver) return;
+  var n = { out: 0, own: 1 };
+  new PerformanceObserver(function (list) {
+    list.getEntries().forEach(function (r) {
+      if (new URL(r.name, location.href).origin === location.origin) n.own++;
+      else n.out++;
     });
-    el.textContent = res.length;
-  }
-  update();
-  setTimeout(update, 1500);
+    out.textContent = n.out;
+    own.textContent = n.own;
+  }).observe({ type: 'resource', buffered: true });
 })();
 
 btn.addEventListener('click', function (e) {
