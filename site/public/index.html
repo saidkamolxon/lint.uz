@@ -205,11 +205,8 @@ body {
   display: flex; gap: 14px;
   margin: 0; padding: 0 14px 0 0; list-style: none;
 }
-.rail.moving { overflow: hidden; }
-.rail.moving .rail-track { animation: drift var(--drift, 80s) linear infinite; }
-.rail.moving:hover .rail-track,
-.rail.moving:focus-within .rail-track { animation-play-state: paused; }
-@keyframes drift { to { transform: translate3d(-50%, 0, 0); } }
+.rail.moving { cursor: grab; }
+.rail.dragging { cursor: grabbing; user-select: none; }
 
 .tool {
   display: grid;
@@ -518,20 +515,81 @@ THEMES.forEach(function (t) {
 });
 
 /* ---------- the tools ribbon ----------
-   A second copy of the set makes the loop seamless; it is inert, so the
-   keyboard and screen readers meet each tool once. The duration comes from
-   the set's width, so the drift keeps one slow speed however wide it is. */
+   A second copy of the set makes the loop seamless: the rail scrolls itself,
+   and whenever it passes one set's width it steps back by exactly that much,
+   so the same cards are under the pointer and nothing jumps. The copy works
+   under the pointer like the original, but the keyboard and screen readers
+   meet each tool once. It rests under the pointer or the keyboard, and it
+   can be dragged either way with the mouse or swiped with a finger. */
 (function () {
   var rail = document.getElementById('rail');
   if (!rail || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   var set = rail.querySelector('.rail-set');
-  var copy = set.cloneNode(true);
-  copy.setAttribute('aria-hidden', 'true');
-  copy.inert = true;
-  set.parentNode.appendChild(copy);
-  var PX_PER_SECOND = 28;
-  rail.style.setProperty('--drift', (set.offsetWidth / PX_PER_SECOND) + 's');
+  /* enough copies that one set's width of scrolling never runs out of cards,
+     even on a screen wider than the set */
+  var copy;
+  for (var n = Math.max(1, Math.ceil(rail.clientWidth / set.offsetWidth)); n > 0; n--) {
+    var c = set.cloneNode(true);
+    c.setAttribute('aria-hidden', 'true');
+    c.querySelectorAll('a').forEach(function (a) { a.tabIndex = -1; });
+    set.parentNode.appendChild(c);
+    copy = copy || c;
+  }
   rail.classList.add('moving');
+
+  var PX_PER_SECOND = 28;
+  var pos = 0, last = 0, hovered = false, touching = false, drag = null, dragged = false;
+
+  function wrap(x) {
+    var w = copy.offsetLeft - set.offsetLeft;
+    if (w <= 0) return x;
+    return ((x % w) + w) % w;
+  }
+  function step(now) {
+    var dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
+    last = now;
+    var resting = hovered || touching || drag || rail.contains(document.activeElement);
+    /* at rest the rail follows whatever moved it — a wheel, a swipe, a drag */
+    pos = resting ? rail.scrollLeft : pos + dt * PX_PER_SECOND;
+    var p = wrap(pos);
+    if (p !== pos || !resting) { pos = p; rail.scrollLeft = pos; }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  rail.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') hovered = true; });
+  rail.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hovered = false; });
+  /* a finger scrolls the rail natively; the drift waits until it lets go */
+  var touchTimer;
+  rail.addEventListener('touchstart', function () { touching = true; clearTimeout(touchTimer); }, { passive: true });
+  rail.addEventListener('touchend', function () {
+    /* momentum carries on after the finger lifts */
+    touchTimer = setTimeout(function () { touching = false; }, 1200);
+  });
+
+  /* the mouse drags */
+  rail.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    drag = { x: e.clientX, left: rail.scrollLeft };
+    dragged = false;
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (!dragged && Math.abs(dx) > 4) { dragged = true; rail.classList.add('dragging'); }
+    if (dragged) rail.scrollLeft = wrap(drag.left - dx);
+    /* stepping back a set mid-drag moves where the drag is measured from */
+    if (dragged && rail.scrollLeft !== drag.left - dx) { drag.left = rail.scrollLeft; drag.x = e.clientX; }
+  });
+  window.addEventListener('pointerup', function () {
+    drag = null;
+    rail.classList.remove('dragging');
+  });
+  /* a drag that ends on a card is not a click on it */
+  rail.addEventListener('click', function (e) {
+    if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; }
+  }, true);
+  rail.addEventListener('dragstart', function (e) { e.preventDefault(); });
 })();
 
 /* ---------- the hero demo ----------
