@@ -409,27 +409,28 @@ kbd {
   max-width: 46ch; line-height: 1.6;
 }
 
-/* The first thing every tool shows: what to do, in one heading, one
-   sentence and the keys that do it. Built by LintApp.emptyState, placed at
-   the same height in every tool so switching between them feels like one
-   app. */
+/* A heading, one sentence and at most a row of buttons. Built by
+   LintApp.emptyState for the tools without an editor (Logs, PDF, Audio) and
+   for later messages in the tree. It matches the editor tools' prompt below
+   in type and in height (measured against it, for a container that starts
+   under the toolbar), so moving between tools the first screen does not
+   jump. */
 .empty-state {
-  /* --empty-drop lines every tool up with the tree tools, whose empty state
-     starts below the search bar: a pane that starts higher pushes it down */
-  margin: calc(14vh + var(--empty-drop, 0px)) auto 0;
+  margin: calc(40vh - 37px) auto 0;
   padding: 0 var(--s4) var(--s5);
   max-width: 50ch; text-align: center;
   font-family: var(--ui); color: var(--muted);
 }
 .empty-state h2 {
-  margin: 0 0 var(--s2);
-  font-size: var(--fs-large); font-weight: 600;
-  letter-spacing: -0.015em; color: var(--ink);
+  margin: 0;
+  font-size: var(--fs-display); font-weight: 600;
+  letter-spacing: -0.015em; line-height: 1.25; color: var(--ink);
+  text-wrap: balance;
 }
-.empty-state p { margin: 0 0 var(--s3); font-size: var(--fs-base); line-height: 1.6; }
+.empty-state p { margin: var(--s2) 0 0; font-size: var(--fs-mid); line-height: 1.5; text-wrap: balance; }
 .empty-state .empty-actions {
   display: flex; flex-wrap: wrap; justify-content: center;
-  gap: var(--s2); margin: var(--s4) 0;
+  gap: var(--s2); margin: var(--s5) 0 0;
 }
 .empty-state .keys { font-size: var(--fs-small); color: var(--faint); margin: 0; }
 
@@ -658,6 +659,11 @@ body.is-empty #input::placeholder { color: transparent; -webkit-text-fill-color:
   pointer-events: none;
 }
 body.is-empty .empty-prompt { display: flex; }
+/* nothing to format yet: the actions keep their place, so the toolbar does
+   not shift on the first paste, but show only once they can do something.
+   Hidden by visibility, not display, so the mobile overflow menu does not
+   mistake them for folded-away actions. */
+body.is-empty .tool-actions { visibility: hidden; }
 /* sits a little above the true centre, where the eye expects it */
 .empty-prompt-body { max-width: 56ch; margin-top: -10vh; text-wrap: balance; }
 .empty-prompt h2 {

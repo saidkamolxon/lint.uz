@@ -21,9 +21,12 @@
   display: flex; overflow: hidden;
 }
 
+/* the page column starts with its own padding; the empty state takes it
+   back so its heading sits where every other tool's does */
+#pages > .empty-state { margin-top: calc(40vh - 37px - var(--s5)); }
+
 /* ---------- the page column ---------- */
 #pages {
-  --empty-drop: 28px;
   /* positioned so descendants' offsetTop is measured against this scroll
      container rather than the document body */
   position: relative;

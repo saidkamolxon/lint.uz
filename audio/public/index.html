@@ -68,11 +68,12 @@
 /* ---------- nothing playing yet ---------- */
 /* the shared empty state, placed over the stage and coloured by it */
 .au-empty {
-  --empty-drop: 52px;
   position: absolute; left: 0; right: 0; top: 0;
   pointer-events: none;
 }
 .au-empty .empty-state { max-width: 560px; pointer-events: auto; }
+/* while the prompt offers the three sources, the toolbar does not repeat them */
+body:has(#empty:not([hidden])) .src-btn { visibility: hidden; }
 .au-empty h2 { color: var(--st-ink); }
 .au-empty p { color: var(--st-muted); }
 .au-empty .empty-actions button { padding: 7px 14px; font-size: var(--fs-base); }
@@ -285,7 +286,7 @@ $('app').innerHTML = `
 
       <div class="au-empty" id="empty"><div class="empty-state">
         <h2>Play a sound to watch it move</h2>
-        <p>Open a file, or let the bars follow what your computer is playing. The sound never leaves this tab.</p>
+        <p>Open a file, or let the bars follow what your computer is playing.</p>
         <div class="empty-actions">
           <button class="primary" id="chFile" title="Open an audio file (${MOD_O})">Open a file</button>
           <button class="bordered" id="chSystem" title="Pick a tab or screen and turn on sharing its audio">Tab or system sound</button>

@@ -61,8 +61,8 @@ document.getElementById('app').innerHTML =
      live in the ⋮ menu that app.js adds to the chrome slot */
   '<button id="btnLoad" class="primary" data-key="mod+o" ' +
     'title="Open a file — or drop one on the editor (' + keyHint('mod+o') + ')">Open</button>' +
-  '<span class="sep hide-sm"></span>' +
-  '<div class="group">' + actions + '</div>' +
+  '<span class="sep hide-sm tool-actions"></span>' +
+  '<div class="group tool-actions">' + actions + '</div>' +
   '<span class="spacer"></span>' +
   '<div class="group" id="chromeSlot"></div>' +
   '<input type="file" id="fileInput" accept="' + c.accept + '" hidden>' +
