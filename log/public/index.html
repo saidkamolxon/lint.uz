@@ -711,7 +711,7 @@ async function index() {
 }
 
 function reset() {
-  lines = []; sev = null; parent = null; childCount = null;
+  lines = []; sev = null; parent = null; childCount = null; fileName = '';
   visible = []; folded = new Set(); target = -1;
   closeDetail();
   $('gotoBox').hidden = true;
@@ -1309,6 +1309,15 @@ function setStatus(kind, msg) {
 }
 
 function showEmpty() {
+  /* a file with nothing in it is open, not missing: say so, keep the chip */
+  if (fileName) {
+    $('rows').innerHTML = LintApp.emptyState({
+      title: 'This file is empty',
+      body: LintApp.esc(fileName) + ' has no lines to show.'
+    });
+    $('spacer').style.height = '0px';
+    return;
+  }
   $('rows').innerHTML = LintApp.emptyState({
     title: 'Open a log or drop it here',
     body: 'It never leaves your browser, even at a gigabyte.',

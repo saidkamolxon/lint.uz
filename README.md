@@ -35,12 +35,13 @@ preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
 - **Verify it yourself.** Open DevTools → Network, paste a production secret,
   and watch nothing happen.
 
-Two cookies, neither carrying document data: `lintuz_theme` remembers the
-theme you picked so every page agrees, and
+Three cookies, none carrying document data: `lintuz_theme` and
+`lintuz_contrast` remember the look you picked so every page agrees, and
 `lintuz_from` lives for two minutes after you click "Open JSON viewer" so the
 destination can say *which* format is waiting on your clipboard. A file dropped on
 the landing page waits in your browser's IndexedDB for the second it takes
-the tool to open, and is deleted as it is read. Nothing else is stored.
+the tool to open, and is deleted as it is read. Your text size,
+split width and a few view toggles sit in localStorage. Nothing else is stored.
 
 ### Moving between tools
 
@@ -59,9 +60,10 @@ Every page shares one system in [`shared/`](shared/):
 | :-- | :-- |
 | `theme.css` | Design tokens and the three themes |
 | `app.css` | Every shared component |
+| `menu.css` | The menu component, shared with the landing page |
 | `app.js` | Tree rendering, search, editor, empty state, file I/O |
 | `shell.js` | The toolbar/split/status frame, rendered identically everywhere |
-| `theme-boot.js` | Reads, writes and applies the theme before first paint |
+| `theme-boot.js` | Theme and contrast: read, saved, applied before first paint, and the menu |
 | `glyphs/` | One mark per format, used as a mask on the format's hue |
 | `fonts/` | IBM Plex Sans + JetBrains Mono, variable woff2 (SIL OFL) |
 
@@ -73,10 +75,15 @@ still reads as one product:
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
 | `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#4D7C0F` green | `#BE123C` crimson | `#0369A1` blue | `#C026D3` magenta |
 
-**Themes:** System, Light and Dark. A high-contrast palette (WCAG AAA) applies
-on its own when the OS asks for more contrast.
-To add one, copy a block in `theme.css`, rename the selector, and register it
-in `THEMES[]` in `app.js`.
+**Themes:** System, Light and Dark, each with an **Increase contrast** switch
+(WCAG AAA palettes) that starts from the OS setting. To add a theme, copy a
+block in `theme.css`, rename the selector, and register it in `THEMES` in
+`theme-boot.js`.
+
+**Keyboard:** every page lists its shortcuts under `?` (or Ctrl/⌘+/). They
+follow VS Code and Windows Terminal where one exists: Shift+Alt+F formats,
+Alt+Z wraps, Alt+Shift+←/→ resizes the split, Ctrl/⌘ with + − 0 or the wheel
+sizes the document text (never the page), and Alt+W closes the file.
 
 A tool's own `index.html` holds only what is genuinely format-specific: its
 parser, syntax highlighter, tree adapter, sample document and toolbar actions.
