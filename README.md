@@ -14,7 +14,8 @@
 | `≡` | **[log.lint.one](https://log.lint.one)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
 | `♪` | **[audio.lint.one](https://audio.lint.one)** | Plays a file or another tab's sound with a live spectrum; waveform seek, tags, levels |
 
-The landing page at **[lint.one](https://lint.one)** links all seven.
+The landing page at **[lint.one](https://lint.one)** links all seven, and opens
+any file dropped on it in the tool that reads it.
 
 The original domain, `lint.uz`, redirects here: every path and subdomain is
 preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
@@ -34,11 +35,12 @@ preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
 - **Verify it yourself.** Open DevTools → Network, paste a production secret,
   and watch nothing happen.
 
-Two cookies, both on `.lint.one`, neither carrying document data:
-`lintuz_theme` remembers the theme you picked so all four tools agree, and
+Two cookies, neither carrying document data: `lintuz_theme` remembers the
+theme you picked so every page agrees, and
 `lintuz_from` lives for two minutes after you click "Open JSON viewer" so the
-destination can say *which* format is waiting on your clipboard. Nothing else
-is stored.
+destination can say *which* format is waiting on your clipboard. A file dropped on
+the landing page waits in your browser's IndexedDB for the second it takes
+the tool to open, and is deleted as it is read. Nothing else is stored.
 
 ### Moving between tools
 
@@ -51,28 +53,28 @@ filling itself in.
 
 ## Design system
 
-All five properties share one system in [`shared/`](shared/):
+Every page shares one system in [`shared/`](shared/):
 
 | File | Role |
 | :-- | :-- |
-| `theme.css` | Design tokens and all six themes |
+| `theme.css` | Design tokens and the three themes |
 | `app.css` | Every shared component |
-| `app.js` | Tree rendering, search, editor, themes, file I/O |
+| `app.js` | Tree rendering, search, editor, empty state, file I/O |
 | `shell.js` | The toolbar/split/status frame, rendered identically everywhere |
-| `theme-boot.js` | Applies the saved theme before first paint |
-| `fonts/` | Inter + JetBrains Mono, variable woff2 (SIL OFL) |
+| `theme-boot.js` | Reads, writes and applies the theme before first paint |
+| `glyphs/` | One mark per format, used as a mask on the format's hue |
+| `fonts/` | IBM Plex Sans + JetBrains Mono, variable woff2 (SIL OFL) |
 
-**Each format owns one hue**, appearing only in the editor gutter, the logo
-mark and the favicon — so a tab is identifiable at a glance while the suite
+**Each format owns one hue and one glyph**, appearing only in the editor
+gutter, the logo mark, the suite menu and the favicon — so a tab is identifiable at a glance while the suite
 still reads as one product:
 
-| JSON | XML | YAML | CSV | PDF |
-| :-- | :-- | :-- | :-- | :-- |
-| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#9333EA` plum | `#BE123C` crimson |
+| JSON | XML | YAML | CSV | PDF | Logs | Audio |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#4D7C0F` green | `#BE123C` crimson | `#0369A1` blue | `#C026D3` magenta |
 
-Plus `log` at `#0369A1` signal blue.
-
-**Themes:** System, Daylight, Slate, Paper, Midnight, Contrast (WCAG AAA).
+**Themes:** System, Light and Dark. A high-contrast palette (WCAG AAA) applies
+on its own when the OS asks for more contrast.
 To add one, copy a block in `theme.css`, rename the selector, and register it
 in `THEMES[]` in `app.js`.
 
