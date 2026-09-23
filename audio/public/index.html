@@ -162,6 +162,13 @@ body.pseudo-full .transport {
 /* style choices move into the colour menu where the toolbar has no room */
 .narrow-only { display: none; }
 @media (max-width: 760px) { .narrow-only { display: flex; } .menu-label.narrow-only { display: block; } }
+/* in full screen the menu rides in the transport, styles and all, opening upward */
+.transport .narrow-only { display: flex; }
+.transport .menu-label.narrow-only { display: block; }
+.transport .menu { top: auto; bottom: calc(100% + 10px); }
+.transport .menu button { color: var(--ink); }
+.transport .menu button:hover { background: var(--row-hover); }
+#stage.idle .transport:has(.menu.open) { opacity: 1; transform: none; pointer-events: auto; }
 
 /* ---------- toolbar controls ---------- */
 #inputSelect {
@@ -1236,25 +1243,39 @@ let pseudoTipShown = false;
 function setPseudo(on) {
   document.body.classList.toggle('pseudo-full', on);
   $('btnFull').innerHTML = I(on ? ICON.exitFull : ICON.full);
-  if (on && !pseudoTipShown && IOS && !navigator.standalone) {
-    pseudoTipShown = true;
-    LintApp.toast('For true full screen: Share → Add to Home Screen');
-  }
+  placeMenu();
   wake();
 }
 function isFull() { return !!document.fullscreenElement || document.body.classList.contains('pseudo-full'); }
 function toggleFull() {
   if (document.fullscreenElement) document.exitFullscreen();
   else if (document.body.classList.contains('pseudo-full')) setPseudo(false);
-  else if (canFull) stage.requestFullscreen().catch(() => setPseudo(true));
-  else setPseudo(true);
+  /* navigationUI: Android otherwise keeps its navigation bar on screen */
+  else if (canFull) stage.requestFullscreen({ navigationUI: 'hide' }).catch(() => setPseudo(true));
+  else {
+    /* the stage covers the page first, so the canvas takes the screen's shape */
+    setPseudo(true);
+    if (IOS && !navigator.standalone && !videoFull() && !pseudoTipShown) {
+      pseudoTipShown = true;
+      LintApp.toast('For true full screen: Share → Add to Home Screen');
+    }
+  }
 }
 $('btnFull').addEventListener('click', toggleFull);
 $('btnFullOut').addEventListener('click', toggleFull);
 document.addEventListener('fullscreenchange', () => {
   $('btnFull').innerHTML = I(document.fullscreenElement ? ICON.exitFull : ICON.full);
+  placeMenu();
   wake();
 });
+/* the toolbar is gone in full screen, so its style and colour menu moves
+   into the transport, and back again on the way out */
+const menuWrap = $('btnPalette').parentElement;
+function placeMenu() {
+  LintApp.closeMenus();
+  if (isFull()) $('transport').insertBefore(menuWrap, $('btnFullOut'));
+  else $('btnInfo').before(menuWrap);
+}
 
 let idleTimer;
 function wake() {
@@ -1341,6 +1362,33 @@ function resize() {
   dirty = true;
 }
 new ResizeObserver(resize).observe(stage);
+
+/* An iPhone gives the whole screen only to a video, as it does for a film —
+   so the picture becomes one. The canvas streams into a muted video that
+   plays out of sight, and full screen hands that video to the system
+   player. The sound still comes from the page; the video carries none. */
+const fsVideo = IOS && !navigator.standalone && viz.captureStream ? document.createElement('video') : null;
+if (fsVideo) {
+  fsVideo.muted = true;
+  fsVideo.playsInline = true;
+  fsVideo.setAttribute('playsinline', '');
+  fsVideo.setAttribute('aria-hidden', 'true');
+  fsVideo.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+  fsVideo.srcObject = viz.captureStream(60);
+  document.body.appendChild(fsVideo);
+  fsVideo.play().catch(() => {});
+  /* the player's Done button brings the page back as it was */
+  fsVideo.addEventListener('webkitendfullscreen', () => {
+    setPseudo(false);
+    fsVideo.play().catch(() => {});
+  });
+}
+function videoFull() {
+  if (!fsVideo || !fsVideo.webkitEnterFullscreen) return false;
+  /* Low Power Mode refuses autoplay, so play again inside the tap */
+  fsVideo.play().catch(() => {});
+  try { fsVideo.webkitEnterFullscreen(); return true; } catch (e) { return false; }
+}
 
 function barCount() {
   if (style !== 'bars') return 64;
@@ -1856,9 +1904,28 @@ function settled() {
   return pulse < 0.01;
 }
 
+/* the screen stays on while sound plays — a phone that locks itself stops
+   the music. The browser drops the lock when the tab hides; the first frame
+   after it comes back asks again. */
+let wakeLock = null, wakeAsking = false, wakeFailedAt = -1e9;
+function keepAwake(on, now) {
+  if (!navigator.wakeLock) return;
+  if (on && !wakeLock && !wakeAsking && now - wakeFailedAt > 5000 && document.visibilityState === 'visible') {
+    wakeAsking = true;
+    navigator.wakeLock.request('screen').then((l) => {
+      wakeLock = l;
+      l.addEventListener('release', () => { if (wakeLock === l) wakeLock = null; });
+    }, () => { wakeFailedAt = performance.now(); }).finally(() => { wakeAsking = false; });
+  } else if (!on && wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const playing = analyser && ((source === 'file' && !player.paused()) || live);
+  keepAwake(playing, now);
   const fps = playing ? 60 : source === 'none' ? 20 : 60;
   /* a little slack, so a 60 Hz display never skips alternate frames */
   if (now - lastT < 1000 / fps - 3) return;
