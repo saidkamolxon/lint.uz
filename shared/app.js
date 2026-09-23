@@ -16,37 +16,8 @@ var THEMES = [
   { id: 'contrast',  name: 'Contrast', bg: '#FFFFFF',        fg: '#000000' }
 ];
 
-/* The theme is remembered in a cookie rather than localStorage. Both work now
-   that every tool shares one origin, but the cookie is kept: it survives a
-   move back to separate hosts, and it is what the pages already read. */
-var THEME_COOKIE = 'lintuz_theme';
-var THEME_LS = 'lintuz-theme';
-
-function readTheme() {
-  var m = document.cookie.match(/(?:^|;\s*)lintuz_theme=([^;]*)/);
-  if (m) return decodeURIComponent(m[1]);
-  try { return localStorage.getItem(THEME_LS) || ''; } catch (e) { return ''; }
-}
-
-function writeTheme(id) {
-  var host = location.hostname;
-  /* one origin now, so the cookie needs no domain attribute */
-  var domain = '';
-  var secure = location.protocol === 'https:' ? '; secure' : '';
-  try {
-    document.cookie = THEME_COOKIE + '=' + encodeURIComponent(id) +
-      '; path=/; max-age=31536000; samesite=lax' + domain + secure;
-  } catch (e) {}
-  try { localStorage.setItem(THEME_LS, id); } catch (e) {}
-}
-
-function applyTheme(id) {
-  if (id) document.documentElement.setAttribute('data-theme', id);
-  else document.documentElement.removeAttribute('data-theme');
-}
-
-/* Apply before first paint to avoid a flash of the wrong theme. */
-applyTheme(readTheme());
+/* reading, writing and applying live in theme-boot.js, loaded first */
+var readTheme = LintTheme.read, writeTheme = LintTheme.write, applyTheme = LintTheme.apply;
 
 /* ---------- the four tools, for the suite switcher ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a

@@ -9,6 +9,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/shared/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/shared/theme.css">
+<script src="/shared/theme-boot.js"></script>
 <style>
 * { box-sizing: border-box; }
 
@@ -511,7 +512,6 @@ footer .sp { flex: 1; }
   </footer>
 </div>
 
-<script src="/shared/theme-boot.js"></script>
 <script>
 (function () {
 'use strict';
@@ -525,21 +525,7 @@ var THEMES = [
   { id: 'contrast', name: 'Contrast', bg: '#FFFFFF', fg: '#000000' }
 ];
 
-function readTheme() {
-  var m = document.cookie.match(/(?:^|;\s*)lintuz_theme=([^;]*)/);
-  if (m) return decodeURIComponent(m[1]);
-  try { return localStorage.getItem('lintuz-theme') || ''; } catch (e) { return ''; }
-}
-
-function writeTheme(id) {
-  var domain = /(^|\.)lint\.one$/.test(location.hostname) ? '; domain=.lint.one' : '';
-  var secure = location.protocol === 'https:' ? '; secure' : '';
-  try {
-    document.cookie = 'lintuz_theme=' + encodeURIComponent(id) +
-      '; path=/; max-age=31536000; samesite=lax' + domain + secure;
-  } catch (e) {}
-  try { localStorage.setItem('lintuz-theme', id); } catch (e) {}
-}
+var readTheme = LintTheme.read, writeTheme = LintTheme.write;
 
 var menu = document.getElementById('themeMenu');
 var btn = document.getElementById('themeBtn');
@@ -553,8 +539,7 @@ THEMES.forEach(function (t) {
   item.innerHTML = '<span class="swatch" style="--sw-bg:' + t.bg + ';--sw-fg:' + t.fg +
     '"></span><span>' + t.name + '</span><span class="tick">✓</span>';
   item.addEventListener('click', function () {
-    if (t.id) document.documentElement.setAttribute('data-theme', t.id);
-    else document.documentElement.removeAttribute('data-theme');
+    LintTheme.apply(t.id);
     writeTheme(t.id);
     var all = menu.querySelectorAll('.menu-item');
     for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-checked', 'false');

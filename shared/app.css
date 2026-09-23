@@ -495,6 +495,11 @@ kbd {
 .t-text { color: var(--t-str);  background: color-mix(in srgb, var(--t-str) 15%, transparent); }
 .t-cmt  { color: var(--faint);  background: color-mix(in srgb, var(--faint) 15%, transparent); }
 
+/* a long value ends in an ellipsis at the pane's edge rather than running
+   under it; Wrap shows the whole thing */
+#tree:not(.wrap) .v { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.caret, .k, .colon, .badge { flex: none; }
+
 .k { color: var(--t-key); }
 .k.idx { color: var(--faint); }
 .colon { color: var(--t-punct); margin-right: var(--s2); }

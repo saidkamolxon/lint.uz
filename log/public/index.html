@@ -799,8 +799,10 @@ function draw() {
   const vp = $('viewport');
   const rows = $('rows');
   if (!visible.length) {
-    rows.innerHTML = '';
-    if (lines.length) rows.innerHTML = LintApp.emptyState({
+    /* no file yet: every redraw (a resize, a filter keystroke) keeps the
+       opening prompt rather than blanking the screen */
+    if (!lines.length) { showEmpty(); return; }
+    rows.innerHTML = LintApp.emptyState({
       title: 'Nothing matches',
       body: 'No line passes the current filter. Clear the box or turn a severity back on.'
     });
