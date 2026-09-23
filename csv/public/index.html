@@ -15,8 +15,10 @@
 #tree.table-mode { padding: 0; font-family: var(--ui); }
 
 .csv-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+/* cells are the document, so they follow the text zoom (--code-size);
+   the header, type hints and row numbers scale with them */
 .csv-table th, .csv-table td {
-  font-family: var(--mono); font-size: var(--fs-small);
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base));
   padding: var(--s1) var(--s3);
   border-bottom: var(--hairline) solid var(--line);
   border-right: var(--hairline) solid var(--line);
@@ -28,13 +30,13 @@
   background: var(--raised);
   color: var(--t-key); font-weight: 600;
   border-bottom: var(--hairline) solid var(--line-strong);
-  font-family: var(--ui); font-size: var(--fs-small);
+  font-family: var(--ui);
   cursor: pointer; user-select: none;
 }
 .csv-table thead th:hover { background: var(--row-hover); }
-.csv-table thead th .sort { color: var(--hue); margin-left: var(--s1); font-size: var(--fs-micro); }
+.csv-table thead th .sort { color: var(--hue); margin-left: var(--s1); font-size: calc(var(--code-size, var(--fs-base)) * 0.75); }
 .csv-table thead th .coltype {
-  display: block; font-family: var(--mono); font-size: var(--fs-micro);
+  display: block; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.78);
   font-weight: 400; color: var(--faint); letter-spacing: 0;
 }
 
@@ -45,7 +47,7 @@
   color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted));
   text-align: right; font-variant-numeric: tabular-nums;
   border-right: var(--hairline) solid var(--line);
-  font-size: var(--fs-micro); padding: var(--s1) var(--s2);
+  font-size: calc(var(--code-size, var(--fs-base)) * 0.85); padding: var(--s1) var(--s2);
 }
 .csv-table thead .rn { z-index: 3; }
 .csv-table tbody tr:hover td { background: var(--row-hover); }
@@ -53,6 +55,15 @@
 .csv-table td.num { color: var(--t-num); text-align: right; font-variant-numeric: tabular-nums; }
 .csv-table td.empty-cell { color: var(--faint); font-style: italic; }
 .csv-table td.ragged { background: color-mix(in srgb, var(--bad) 13%, transparent); }
+
+/* "Header row" — a setting of the table, kept quiet in its bar */
+.header-toggle {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 0 var(--s2); font-size: var(--fs-small); color: var(--muted);
+  white-space: nowrap; cursor: pointer; user-select: none;
+}
+.header-toggle:hover { color: var(--ink); }
+.header-toggle input { margin: 0; accent-color: var(--ink); }
 </style>
 </head>
 <body>
@@ -72,9 +83,8 @@ window.LINT_CONFIG = {
   placeholder: 'Paste CSV or drop a file…',
   searchPlaceholder: 'Filter rows…',
   actions: [
-    { id: 'btnToJson', label: 'To JSON', primary: true, key: 'mod+shift+j', title: 'Copy the rows as a JSON array' },
-    { id: 'btnFormat', label: 'Fix quotes', key: 'mod+enter', title: 'Quote only the cells that need quotes, and unquote the rest' },
-    { id: 'btnHeader', label: 'Header row', hide: 'md', title: 'Treat the first row as column names' }
+    { id: 'btnToJson', label: 'To JSON', primary: true, key: 'mod+shift+j', title: 'Copy the rows as a JSON array, ready to open in the JSON viewer' },
+    { id: 'btnFormat', label: 'Fix quotes', key: 'shift+alt+f', title: 'Quote only the cells that need quotes, and unquote the rest' }
   ]
 };
 </script>
@@ -492,19 +502,21 @@ document.getElementById('btnToJson').addEventListener('click', function () {
   LintApp.copyAndOffer(JSON.stringify(out, null, 2), 'JSON', 'csv', 'json');
 });
 
-var btnHeader = document.getElementById('btnHeader');
-function syncHeaderBtn() {
-  btnHeader.setAttribute('aria-pressed', String(hasHeader));
-}
-syncHeaderBtn();
-btnHeader.addEventListener('click', function () {
-  hasHeader = !hasHeader;
-  syncHeaderBtn();
+/* whether the first row names the columns is a setting of the table, not
+   an action — so it sits in the table's own bar, as a checkbox */
+var headerToggle = document.createElement('label');
+headerToggle.className = 'header-toggle';
+headerToggle.title = 'Treat the first row as column names';
+headerToggle.innerHTML = '<input type="checkbox" id="chkHeader">Header row';
+document.getElementById('matchCount').after(headerToggle);
+var chkHeader = document.getElementById('chkHeader');
+chkHeader.checked = hasHeader;
+chkHeader.addEventListener('change', function () {
+  hasHeader = chkHeader.checked;
   try { localStorage.setItem('lintuz-csv-header', hasHeader ? '1' : '0'); } catch (e) {}
   sortCol = null;
   app.editor.paint();
   app.run();
-  LintApp.toast(hasHeader ? 'First row is the header' : 'First row is data');
 });
 })();
 </script>

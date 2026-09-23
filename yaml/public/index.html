@@ -28,9 +28,9 @@ window.LINT_CONFIG = {
   placeholder: 'Paste YAML or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, key: 'mod+enter', title: 'Normalise indentation to 2 spaces' },
-    { id: 'btnToJson', label: 'To JSON', key: 'mod+shift+j', title: 'Copy this document as JSON' },
-    { id: 'btnToYaml', label: 'From JSON', hide: 'md', title: 'Convert JSON in the editor into YAML' }
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Rewrite the document with a consistent two-space indent' },
+    { id: 'btnToYaml', label: 'From JSON', title: 'Replace JSON in the editor with the same data written as YAML' },
+    { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Copy this document as JSON, ready to open in the JSON viewer' }
   ]
 };
 </script>

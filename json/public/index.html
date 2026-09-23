@@ -11,23 +11,29 @@
 <link rel="stylesheet" href="/shared/app.css">
 <style>
 /* ==========================================================================
-   Compare — two documents, and what changed between them
+   Compare — the right pane's second view: the editor is "before", a
+   second document pasted here is "after", and below them what changed
    ========================================================================== */
-#compare { flex: 1; min-height: 0; display: none; }
-body.comparing main.split { display: none; }
+#compare { flex: 1; min-height: 0; display: none; flex-direction: column; }
+body.comparing #tree { display: none; }
 body.comparing #compare { display: flex; }
 
-.cmp-inputs {
-  width: 34%; min-width: 260px; flex: none;
-  display: flex; flex-direction: column; min-height: 0;
-  border-right: var(--hairline) solid var(--line);
-}
-.cmp-side { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.cmp-side + .cmp-side { border-top: var(--hairline) solid var(--line); }
-.cmp-head, .cmp-bar {
+/* the tree bar keeps its Tree | Compare switch and trades search and the
+   tree's own buttons for the diff's */
+.cmp-tools { display: none; flex: 1; min-width: 0; align-items: center; gap: var(--s1); font-size: var(--fs-small); color: var(--muted); }
+body.comparing .cmp-tools { display: flex; }
+body.comparing .treebar > :not(.mode-seg):not(.cmp-tools) { display: none !important; }
+.cmp-tools .summary { flex: 1; min-width: 0; padding-left: var(--s1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-tools .summary b { font-weight: 600; }
+.cmp-tools .n-add { color: var(--ok); }
+.cmp-tools .n-del { color: var(--bad); }
+.cmp-tools .n-chg { color: var(--warn); }
+.cmp-tools .pos { font-variant-numeric: tabular-nums; padding: 0 var(--s1); white-space: nowrap; }
+
+.cmp-side { flex: none; height: 30%; min-height: 96px; display: flex; flex-direction: column; border-bottom: var(--hairline) solid var(--line); }
+.cmp-head {
   display: flex; align-items: center; gap: var(--s1); flex: none;
   padding: var(--s1) var(--s2) var(--s1) var(--s3);
-  min-height: 38px;
   background: var(--raised);
   border-bottom: var(--hairline) solid var(--line);
   font-size: var(--fs-small); color: var(--muted);
@@ -40,24 +46,15 @@ body.comparing #compare { display: flex; }
   flex: 1; min-height: 0; resize: none;
   border: 0; outline: none;
   background: var(--surface); color: var(--ink);
-  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.55;
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.55;
   padding: var(--s2) var(--s3);
   white-space: pre; tab-size: 2;
 }
 .cmp-side textarea::placeholder { color: var(--faint); font-family: var(--ui); }
 
-.cmp-diff { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.cmp-bar .summary { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cmp-bar .summary b { font-weight: 600; }
-.cmp-bar .n-add { color: var(--ok); }
-.cmp-bar .n-del { color: var(--bad); }
-.cmp-bar .n-chg { color: var(--warn); }
-.cmp-bar .pos { font-variant-numeric: tabular-nums; padding: 0 var(--s1); white-space: nowrap; }
-.cmp-bar .icon-btn { width: 28px; height: 26px; }
-
 .cmp-body {
   flex: 1; overflow: auto;
-  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.6;
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.6;
   padding-bottom: 40vh;
 }
 .cmp-body .empty-state.err h2 { color: var(--bad); }
@@ -87,7 +84,7 @@ body.comparing #compare { display: flex; }
   padding: var(--s1) var(--s3) var(--s1) 3ch;
   background: color-mix(in srgb, var(--hue) 9%, var(--raised));
   border-block: var(--hairline) solid color-mix(in srgb, var(--hue) 22%, var(--line));
-  color: var(--hue); font-size: var(--fs-small);
+  color: var(--hue); font-size: calc(var(--code-size, var(--fs-base)) * 0.85);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
 }
@@ -121,7 +118,7 @@ body.comparing #compare { display: flex; }
 .dt-chg > .row .dt-tag { color: var(--warn); }
 .dt-count {
   margin-left: var(--s2);
-  font-family: var(--ui); font-size: var(--fs-small); font-weight: 600;
+  font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.85); font-weight: 600;
   color: var(--warn);
 }
 .dt-arrow { color: var(--faint); margin: 0 var(--s2); font-family: var(--ui); }
@@ -131,12 +128,6 @@ body.comparing #compare { display: flex; }
 
 .cmp-body.side-by-side .d-pair { display: grid; grid-template-columns: 1fr 1fr; }
 .cmp-body.side-by-side .d-pair > .d-row + .d-row { border-left: var(--hairline) solid var(--line); }
-
-@media (max-width: 860px) {
-  #compare { flex-direction: column; }
-  .cmp-inputs { width: auto; min-width: 0; height: 40%; border-right: 0; border-bottom: var(--hairline) solid var(--line); flex-direction: row; }
-  .cmp-side + .cmp-side { border-top: 0; border-left: var(--hairline) solid var(--line); }
-}
 </style>
 </head>
 <body>
@@ -156,11 +147,13 @@ window.LINT_CONFIG = {
   placeholder: 'Paste JSON or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, key: 'mod+enter', title: 'Pretty-print with 2-space indent' },
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Put every value on its own line, indented two spaces per level' },
     { id: 'btnMinify', label: 'Minify', title: 'Remove all whitespace to make the document as small as possible' },
-    { id: 'btnEscape', label: 'Unescape', hide: 'md', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' },
-    { id: 'btnToYaml', label: 'To YAML', hide: 'md', key: 'mod+shift+y', title: 'Copy this document as YAML' },
-    { id: 'btnCompare', label: 'Compare', title: 'Compare this document with another and see what changed' }
+    { id: 'btnToYaml', label: 'To YAML', hide: 'md', key: 'mod+shift+y', title: 'Copy this document as YAML, ready to open in the YAML viewer' }
+  ],
+  /* rarer commands, listed in the ⋮ menu ahead of Copy */
+  more: [
+    { id: 'btnEscape', label: 'Unescape a string', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' }
   ]
 };
 </script>
@@ -547,8 +540,23 @@ var app = LintApp.init({
     body: 'Expand it, search it and copy the path to any value.',
     extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
+  /* the editor is Compare's "before", so every edit re-runs the diff */
+  onParsed: function () { if (comparing()) onEditorChanged(); },
   sample: SAMPLE
 });
+
+/* ponytail: stop-gap for a shared app.js that does not yet read
+   LINT_CONFIG.more — slot the item into the ⋮ menu ahead of Copy */
+if (!document.getElementById('btnEscape') && document.getElementById('btnCopy')) {
+  var escItem = document.createElement('button');
+  escItem.className = 'menu-item';
+  escItem.id = 'btnEscape';
+  escItem.setAttribute('role', 'menuitem');
+  escItem.textContent = LINT_CONFIG.more[0].label;
+  escItem.title = LINT_CONFIG.more[0].title;
+  escItem.addEventListener('click', function () { LintApp.closeMenus(); });
+  document.getElementById('btnCopy').before(escItem);
+}
 
 document.getElementById('btnFormat').addEventListener('click', function () {
   var res = parse(app.editor.getValue());
@@ -868,40 +876,47 @@ var cmpEl = document.createElement('section');
 cmpEl.id = 'compare';
 cmpEl.setAttribute('aria-label', 'Compare two documents');
 cmpEl.innerHTML =
-  '<div class="cmp-inputs">' +
-    '<div class="cmp-side">' +
-      '<div class="cmp-head"><span class="name">Before</span><span class="state" id="stateA"></span></div>' +
-      '<textarea id="cmpA" spellcheck="false" autocapitalize="off" autocomplete="off" ' +
-        'aria-label="JSON before" placeholder="The earlier JSON…"></textarea>' +
-    '</div>' +
-    '<div class="cmp-side">' +
-      '<div class="cmp-head"><span class="name">After</span><span class="state" id="stateB"></span></div>' +
-      '<textarea id="cmpB" spellcheck="false" autocapitalize="off" autocomplete="off" ' +
-        'aria-label="JSON after" placeholder="Paste the new JSON here…"></textarea>' +
-    '</div>' +
+  '<div class="cmp-side">' +
+    '<div class="cmp-head"><span class="name">Compare with</span><span class="state" id="stateB"></span></div>' +
+    '<textarea id="cmpB" spellcheck="false" autocapitalize="off" autocomplete="off" ' +
+      'aria-label="JSON to compare with" placeholder="Paste the newer JSON — the editor holds the earlier one…"></textarea>' +
   '</div>' +
-  '<div class="cmp-diff">' +
-    '<div class="cmp-bar">' +
-      '<span class="summary" id="cmpSummary"></span>' +
-      '<span class="pos" id="cmpPos"></span>' +
-      '<button id="cmpPrev" class="icon-btn" title="Previous change (⇧⌘G)" aria-label="Previous change"></button>' +
-      '<button id="cmpNext" class="icon-btn" title="Next change (⌘G)" aria-label="Next change"></button>' +
-      '<span class="seg" role="group" aria-label="Layout">' +
-        '<button data-layout="unified" title="One column, like git diff">Unified</button>' +
-        '<button data-layout="split" title="Before and after side by side">Split</button>' +
-        '<button data-layout="tree" title="The structure, with each change marked where it happened">Tree</button>' +
-      '</span>' +
-      '<button id="cmpSwap" class="icon-btn" title="Swap before and after" aria-label="Swap before and after"></button>' +
-      '<button id="cmpClose" class="icon-btn" title="Close compare (Esc)" aria-label="Close compare"></button>' +
-    '</div>' +
-    '<div class="cmp-body" id="cmpBody"></div>' +
-  '</div>';
-document.querySelector('main.split').after(cmpEl);
+  '<div class="cmp-body" id="cmpBody"></div>';
+$('tree').after(cmpEl);
 
+/* Tree | Compare opens the tree bar; the diff's own controls sit beside it
+   and show only while comparing */
+var treebar = document.querySelector('.treebar');
+var modeSeg = document.createElement('span');
+modeSeg.className = 'seg mode-seg';
+modeSeg.setAttribute('role', 'group');
+modeSeg.setAttribute('aria-label', 'Show');
+modeSeg.innerHTML =
+  '<button data-mode="tree" aria-pressed="true" title="The document as a tree you can search">Tree</button>' +
+  '<button data-mode="compare" aria-pressed="false" title="Compare this document with another and see what changed">Compare</button>';
+treebar.insertBefore(modeSeg, treebar.firstChild);
+
+var cmpTools = document.createElement('span');
+cmpTools.className = 'cmp-tools';
+cmpTools.innerHTML =
+  '<span class="summary" id="cmpSummary"></span>' +
+  '<span class="pos" id="cmpPos"></span>' +
+  '<button id="cmpPrev" class="icon-btn" aria-label="Previous change"></button>' +
+  '<button id="cmpNext" class="icon-btn" aria-label="Next change"></button>' +
+  '<span class="seg" role="group" aria-label="Layout">' +
+    '<button data-layout="unified" title="One column, like git diff">Unified</button>' +
+    '<button data-layout="split" title="Before and after side by side">Split</button>' +
+    '<button data-layout="tree" title="The structure, with each change marked where it happened">Structure</button>' +
+  '</span>' +
+  '<button id="cmpSwap" class="icon-btn" title="Swap the two documents: the editor takes the pasted one" aria-label="Swap the two documents"></button>';
+modeSeg.after(cmpTools);
+
+var keyText = function (k) { return LintApp.kbd(k).replace(/<\/?kbd>/g, ''); };
+$('cmpPrev').title = 'Previous change (' + keyText('mod+shift+g') + ')';
+$('cmpNext').title = 'Next change (' + keyText('mod+g') + ')';
 $('cmpPrev').innerHTML = I('<path d="M6 15l6-6 6 6"/>');
 $('cmpNext').innerHTML = I('<path d="M6 9l6 6 6-6"/>');
 $('cmpSwap').innerHTML = I('<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>');
-$('cmpClose').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
 
 var LAYOUT_KEY = 'lintuz-diff-layout';
 var layout = 'unified';
@@ -932,20 +947,19 @@ function showEmpty(title, body, err) {
 
 function runCompare() {
   cmpTimer = null;
-  var ta = $('cmpA').value, tb = $('cmpB').value;
+  var ta = app.editor.getValue(), tb = $('cmpB').value;
   var ra = parse(ta), rb = parse(tb);
-  sideState($('stateA'), ra, ta);
   sideState($('stateB'), rb, tb);
 
   if (!ta.trim() || !tb.trim()) {
-    showEmpty(!ta.trim() ? 'Paste the earlier JSON in Before' : 'Paste the new JSON in After',
-      'Changes show here as soon as both sides are valid. Key order and ' +
-      'formatting are ignored, and records in arrays are matched by their ' +
-      '<code>id</code> — so only real changes are marked.');
+    showEmpty(!ta.trim() ? 'Put the earlier JSON in the editor' : 'Paste the JSON to compare with',
+      'The editor holds the earlier document; paste the newer one above. ' +
+      'Key order and formatting are ignored, and records in arrays are ' +
+      'matched by their <code>id</code> — so only real changes are marked.');
     return;
   }
   if (!ra.ok || !rb.ok) {
-    var which = !ra.ok ? 'Before' : 'After';
+    var which = !ra.ok ? 'The editor' : 'The pasted document';
     var r = !ra.ok ? ra : rb;
     showEmpty(which + ' is not valid JSON', esc(r.message) + (r.line ? ' — line ' + r.line + ', column ' + r.col : ''), true);
     return;
@@ -1256,13 +1270,12 @@ function scheduleCompare() {
   clearTimeout(cmpTimer);
   cmpTimer = setTimeout(runCompare, 250);
 }
-$('cmpA').addEventListener('input', scheduleCompare);
 $('cmpB').addEventListener('input', scheduleCompare);
 
 function setLayout(next) {
   var from = layout;
   layout = next;
-  document.querySelectorAll('.cmp-bar [data-layout]').forEach(function (b) {
+  cmpTools.querySelectorAll('[data-layout]').forEach(function (b) {
     b.setAttribute('aria-pressed', String(b.dataset.layout === next));
   });
   try { localStorage.setItem(LAYOUT_KEY, next); } catch (e) {}
@@ -1272,51 +1285,71 @@ function setLayout(next) {
   if (changeIdx >= 0) gotoChange(changeIdx);
 }
 setLayout(layout);
-document.querySelectorAll('.cmp-bar [data-layout]').forEach(function (b) {
+cmpTools.querySelectorAll('[data-layout]').forEach(function (b) {
   b.addEventListener('click', function () { setLayout(b.dataset.layout); });
 });
 $('cmpPrev').addEventListener('click', function () { gotoChange(changeIdx - 1); });
 $('cmpNext').addEventListener('click', function () { gotoChange(changeIdx + 1); });
 $('cmpSwap').addEventListener('click', function () {
-  var a = $('cmpA').value;
-  $('cmpA').value = $('cmpB').value;
+  var a = app.editor.getValue();
+  app.editor.setValue($('cmpB').value);
   $('cmpB').value = a;
   runCompare();
 });
 
-function openCompare() {
-  document.body.classList.add('comparing');
-  $('btnCompare').setAttribute('aria-pressed', 'true');
-  /* what is in the editor now is the natural "before" */
-  var current = app.editor.getValue();
-  if (current.trim() && !$('cmpA').value.trim()) $('cmpA').value = current;
-  runCompare();
-  ($('cmpA').value.trim() ? $('cmpB') : $('cmpA')).focus();
-}
-function closeCompare() {
-  document.body.classList.remove('comparing');
-  $('btnCompare').setAttribute('aria-pressed', 'false');
-  $('pathBox').textContent = '';
-}
-$('btnCompare').addEventListener('click', function () {
-  document.body.classList.contains('comparing') ? closeCompare() : openCompare();
-});
-$('cmpClose').addEventListener('click', closeCompare);
-$('btnCompare').setAttribute('aria-pressed', 'false');
+/* ---------- Tree | Compare ---------- */
+function comparing() { return document.body.classList.contains('comparing'); }
 
-/* while comparing, ⌘G walks changes — ahead of the tree's own ⌘G */
+/* the editor changed under the diff; an emptied editor (a closed document)
+   also ends the comparison, so the next document opens on its tree */
+function onEditorChanged() {
+  if (!app.editor.getValue().trim()) setMode('tree');
+  else scheduleCompare();
+}
+
+function setMode(mode) {
+  var on = mode === 'compare';
+  document.body.classList.toggle('comparing', on);
+  modeSeg.querySelectorAll('[data-mode]').forEach(function (b) {
+    b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+  });
+  if (on) {
+    runCompare();
+    $('cmpB').focus();
+  } else {
+    $('pathBox').textContent = '';
+  }
+}
+modeSeg.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-mode]');
+  if (b) setMode(b.dataset.mode);
+});
+
+/* while comparing, ⌘G and F3 walk changes — ahead of the tree's own */
 window.addEventListener('keydown', function (e) {
-  if (!document.body.classList.contains('comparing')) return;
+  if (!comparing()) return;
   var mod = e.ctrlKey || e.metaKey;
-  if (mod && (e.key === 'g' || e.key === 'G')) {
+  if ((mod && (e.key === 'g' || e.key === 'G')) || e.key === 'F3') {
     e.preventDefault();
     e.stopPropagation();
     if (cmpTimer !== null) { clearTimeout(cmpTimer); runCompare(); }
     gotoChange(changeIdx + (e.shiftKey ? -1 : 1));
-  } else if (e.key === 'Escape' && !document.querySelector('.menu.open')) {
-    closeCompare();
+  } else if (mod && (e.key === 'f' || e.key === 'F')) {
+    /* search belongs to the tree: go back to it, and let the shortcut through */
+    setMode('tree');
+  } else if (e.key === 'Escape' && !document.querySelector('.menu.open') &&
+             !e.target.closest('dialog, [role="dialog"]')) {
+    setMode('tree');
   }
 }, true);
+
+if (LintApp.shortcuts) {
+  LintApp.shortcuts([{ title: 'Compare', items: [
+    { keys: ['mod+g', 'f3'], label: 'Next change' },
+    { keys: ['mod+shift+g', 'shift+f3'], label: 'Previous change' },
+    { keys: ['esc'], label: 'Back to the tree' }
+  ] }]);
+}
 
 })();
 </script>
