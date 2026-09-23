@@ -6,20 +6,18 @@
 (function (global) {
 'use strict';
 
-/* ---------- theme registry — mirrors the blocks in theme.css ---------- */
+/* ---------- theme registry — mirrors the blocks in theme.css ----------
+   The ids are the old theme names, kept so a saved choice still applies. */
 var THEMES = [
-  { id: '',          name: 'System',   bg: 'var(--surface)', fg: 'var(--hue)' },
-  { id: 'daylight',  name: 'Daylight', bg: '#FBFBFC',        fg: '#1A1D23' },
-  { id: 'slate',     name: 'Slate',    bg: '#1B1E25',        fg: '#82B5F0' },
-  { id: 'paper',     name: 'Paper',    bg: '#F5F1E8',        fg: '#8A6114' },
-  { id: 'midnight',  name: 'Midnight', bg: '#08090B',        fg: '#4FD68F' },
-  { id: 'contrast',  name: 'Contrast', bg: '#FFFFFF',        fg: '#000000' }
+  { id: '',          name: 'System', bg: 'var(--surface)', fg: 'var(--hue)' },
+  { id: 'daylight',  name: 'Light',  bg: '#FBFBFC',        fg: '#1A1D23' },
+  { id: 'slate',     name: 'Dark',   bg: '#1B1E25',        fg: '#82B5F0' }
 ];
 
 /* reading, writing and applying live in theme-boot.js, loaded first */
 var readTheme = LintTheme.read, writeTheme = LintTheme.write, applyTheme = LintTheme.apply;
 
-/* ---------- the four tools, for the suite switcher ---------- */
+/* ---------- the seven tools, for the suite switcher ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a
    site's authority across its paths, but treats subdomains as separate sites
    and splits it. Relative hrefs also keep local development working. */
@@ -29,7 +27,7 @@ var SUITE = [
   { id: 'yaml', name: 'YAML', host: '/yaml' },
   { id: 'csv',  name: 'CSV',  host: '/csv'  },
   { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
-  { id: 'log',  name: 'Log',  host: '/log'  },
+  { id: 'log',  name: 'Logs', host: '/log'  },
   { id: 'audio', name: 'Audio', host: '/audio' }
 ];
 
@@ -89,7 +87,7 @@ function showToast(msg, action) {
   if (action) {
     var a = document.createElement('a');
     a.className = 'toast-action';
-    a.innerHTML = esc(action.label) + '<kbd class="kb">\u21B5</kbd>';
+    a.innerHTML = esc(action.label) + kbd('enter');
     a.href = action.href;
     a.target = '_blank';
     a.rel = 'noopener';
@@ -271,8 +269,8 @@ function buildThemeMenu(container) {
       var items = menu.querySelectorAll('.menu-item');
       for (var i = 0; i < items.length; i++) items[i].setAttribute('aria-checked', 'false');
       item.setAttribute('aria-checked', 'true');
+      /* no toast: the whole page just changed, which says it better */
       closeAllMenus();
-      showToast(t.name + ' theme');
     });
     menu.appendChild(item);
   });
@@ -302,17 +300,17 @@ function buildSuiteMenu(container, activeId) {
   label.textContent = 'Tools';
   menu.appendChild(label);
 
+  /* each tool as a small app icon — its glyph on its hue — so the menu
+     reads like a row of apps rather than a list of words */
   SUITE.forEach(function (t) {
     var a = document.createElement('a');
     a.className = 'menu-item';
     a.setAttribute('role', 'menuitem');
     a.href = t.host;
     a.innerHTML =
-      '<span class="fmt-dot dot-' + t.id + '"></span>' +
+      '<span class="tool-tile dot-' + t.id + '" aria-hidden="true"></span>' +
       '<span>' + t.name + '</span>' +
-      (t.id === activeId
-        ? '<span class="tick" style="opacity:1">✓</span>'
-        : '<span class="ext">↗</span>');
+      (t.id === activeId ? '<span class="tick" style="opacity:1">✓</span>' : '');
     if (t.id === activeId) {
       a.setAttribute('aria-current', 'page');
       a.style.fontWeight = '600';
@@ -324,7 +322,7 @@ function buildSuiteMenu(container, activeId) {
   var home = document.createElement('a');
   home.className = 'menu-item';
   home.href = '/';
-  home.innerHTML = '<span>All tools</span><span class="ext">↗</span>';
+  home.textContent = 'All tools';
   menu.appendChild(home);
 
   wrap.appendChild(btn);
@@ -384,7 +382,7 @@ function buildOverflowMenu(container, items) {
         var item = document.createElement('button');
         item.className = 'menu-item';
         item.setAttribute('role', 'menuitem');
-        /* the label only — not the shortcut hint rendered after it */
+        /* the label only — not any icon markup rendered after it */
         item.textContent = source.firstChild && source.firstChild.nodeType === 3
           ? source.firstChild.textContent : source.textContent || source.title;
         item.title = source.title || '';
@@ -647,7 +645,7 @@ function Tree(opts) {
       var more = document.createElement('button');
       more.className = 'more-btn';
       var next = Math.min(CHUNK, entries.length - end);
-      more.textContent = 'Show ' + next + ' more · ' + (entries.length - end) + ' left';
+      more.textContent = 'Show ' + next + ' more (' + fmtNum(entries.length - end) + ' left)';
       more.addEventListener('click', function () {
         more.remove();
         renderChildren(node, entry, q, end);
@@ -988,11 +986,15 @@ function init(config) {
   $('btnCollapse').innerHTML = svg(ICONS.collapse);
   $('searchIcon').innerHTML = svg(ICONS.search);
 
-  /* status */
+  /* status — a message, or a list of facts laid out with space between
+     them rather than a row of middle dots */
   var statusBar = $('statusBar'), statusMsg = $('statusMsg');
   function setStatus(kind, msg) {
     statusBar.className = 'status' + (kind ? ' ' + kind : '');
-    statusMsg.textContent = msg;
+    if (!Array.isArray(msg)) { statusMsg.textContent = msg; return; }
+    statusMsg.innerHTML = msg.map(function (m) {
+      return '<span>' + esc(m) + '</span>';
+    }).join('');
   }
 
   /* error bar */
@@ -1008,8 +1010,19 @@ function init(config) {
 
   var editor = new Editor({
     highlighter: config.highlighter,
-    onChange: function () { schedule(); }
+    onChange: function () { syncEmpty(); schedule(); }
   });
+
+  /* While the editor is empty the page is just the editor and a prompt
+     over it (body.is-empty; the CSS hides the rest). The first character
+     brings the split in; clearing the editor takes it away again. */
+  function syncEmpty() {
+    var empty = !editor.getValue();
+    if (empty === body.classList.contains('is-empty')) return;
+    body.classList.toggle('is-empty', empty);
+    /* a phone left on the tree tab would otherwise hide the editor */
+    if (empty) setView('text');
+  }
 
   var parseTimer;
   function schedule() {
@@ -1024,13 +1037,11 @@ function init(config) {
       else tree.hasData = false;
       errorBar.classList.remove('show');
       editor.setErrorLine(null);
-      setStatus('', 'Ready');
+      setStatus('', '');
       config.onParsed && config.onParsed(null, false);
       return;
     }
-    var t0 = performance.now();
     var res = config.parse(text);
-    var ms = performance.now() - t0;
 
     if (res.ok) {
       errorBar.classList.remove('show');
@@ -1039,9 +1050,10 @@ function init(config) {
       if (!config.ownsPane) tree.setData(res.value, true);
       else tree.hasData = true;
       var size = new Blob([text]).size;
-      var st = config.stats(res.value);
-      setStatus('ok', 'Valid · ' + fmtBytes(size) + ' · ' + st +
-        ' · ' + ms.toFixed(ms < 10 ? 1 : 0) + ' ms');
+      /* a tool's stats come as one "a · b" string; each part becomes its
+         own item so the status bar can space them */
+      var st = String(config.stats(res.value) || '').split(' · ');
+      setStatus('ok', ['Valid', fmtBytes(size)].concat(st.filter(Boolean)));
       config.onParsed && config.onParsed(res.value, true);
     } else {
       errorPos = res.pos != null ? res.pos : null;
@@ -1077,9 +1089,21 @@ function init(config) {
   });
 
   on('btnSample', function () { editor.setValue(config.sample.trim()); });
-  /* the empty state offers the sample too, where a first-time visitor looks */
-  $('tree').addEventListener('click', function (e) {
-    if (e.target.closest('[data-empty="sample"]')) $('btnSample').click();
+  /* the empty prompt (and a tree empty state) offer Open and the sample
+     where a first-time visitor looks */
+  function onEmptyAction(e) {
+    var b = e.target.closest('[data-empty]');
+    if (!b) return;
+    if (b.dataset.empty === 'sample') $('btnSample').click();
+    else if (b.dataset.empty === 'open') $('fileInput').click();
+  }
+  $('tree').addEventListener('click', onEmptyAction);
+  var emptyPrompt = $('emptyPrompt');
+  emptyPrompt.addEventListener('click', onEmptyAction);
+  /* clicking a prompt button must not pull focus out of the editor, so a
+     paste still lands there if they change their mind */
+  emptyPrompt.addEventListener('mousedown', function (e) {
+    if (e.target.closest('[data-empty]')) e.preventDefault();
   });
 
   on('btnLoad', function () { $('fileInput').click(); });
@@ -1096,7 +1120,7 @@ function init(config) {
     var reader = new FileReader();
     reader.onload = function () {
       editor.setValue(String(reader.result));
-      showToast('Opened ' + file.name + ' · ' + fmtBytes(file.size));
+      showToast('Opened ' + file.name + ' (' + fmtBytes(file.size) + ')');
     };
     reader.onerror = function () { showToast('Could not read that file'); };
     reader.readAsText(file);
@@ -1118,6 +1142,9 @@ function init(config) {
     var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) readFile(f);
   });
+
+  /* a file dropped on the landing page arrives here */
+  takeHandoff(config.id, readFile);
 
   /* mobile view tabs */
   function setView(v) {
@@ -1200,24 +1227,26 @@ function init(config) {
      its own. */
   if (!config.ownsPane) tree.render();
 
+  /* the note replaces the prompt's own sentence, and goes for good with the
+     first edit — coming back to an empty editor later is a fresh start */
   var from = readHandoff();
   if (from && !editor.getValue()) {
-    var paste = navigator.platform.indexOf('Mac') === 0 ? '\u2318V' : 'Ctrl+V';
-    $('tree').innerHTML =
-      '<div class="empty arrived">' +
-        '<p class="arrived-lead">Your ' + (from.format || config.label) +
-        ' from ' + from.name + ' is on the clipboard.</p>' +
-        '<p>Press <kbd>' + paste + '</kbd> in the editor to see it here.</p>' +
-      '</div>';
-    /* restore the normal empty state once they start working */
+    var note = $('emptyNote');
+    note.innerHTML =
+      '<p class="arrived-lead">Your ' + esc(from.format || config.label) +
+      ' from ' + esc(from.name) + ' is on the clipboard.</p>' +
+      '<p>Press ' + kbd('mod+v') + ' to see it here.</p>';
+    note.hidden = false;
+    emptyPrompt.classList.add('arrived');
     var clearArrival = function () {
-      var a = $('tree').querySelector('.arrived');
-      if (a) tree.render();
+      note.hidden = true;
+      emptyPrompt.classList.remove('arrived');
       editor.input.removeEventListener('input', clearArrival);
     };
     editor.input.addEventListener('input', clearArrival);
   }
 
+  syncEmpty();
   editor.paint();
   editor.input.focus();
 
@@ -1230,6 +1259,46 @@ function init(config) {
     toast: showToast,
     copy: copyText
   };
+}
+
+/* ---------- landing page -> tool file handoff ----------
+   A file dropped on the landing page cannot ride in a URL, so the landing
+   page parks it in IndexedDB ('lintone' db, 'handoff' store, key 'file',
+   value {tool, file, at}) and opens the tool, which takes it exactly once:
+   it is read and deleted in one transaction. A file meant for another
+   tool, or older than a minute (a tab restored days later), is dropped.
+   Any failure means the tool simply opens empty. */
+var HANDOFF_TTL = 60000;
+
+function takeHandoff(toolId, cb) {
+  try {
+    var req = indexedDB.open('lintone', 1);
+    req.onupgradeneeded = function () {
+      if (!req.result.objectStoreNames.contains('handoff')) {
+        req.result.createObjectStore('handoff');
+      }
+    };
+    req.onsuccess = function () {
+      var db = req.result, value = null;
+      try {
+        var tx = db.transaction('handoff', 'readwrite');
+        var store = tx.objectStore('handoff');
+        var get = store.get('file');
+        get.onsuccess = function () {
+          value = get.result;
+          if (value) store.delete('file');
+        };
+        /* only once the delete is committed, so a reload cannot open it twice */
+        tx.oncomplete = function () {
+          db.close();
+          if (value && value.tool === toolId && value.file &&
+              Date.now() - value.at < HANDOFF_TTL) cb(value.file);
+        };
+        tx.onerror = tx.onabort = function () { db.close(); };
+      } catch (e) { db.close(); }
+    };
+    req.onerror = function () {};
+  } catch (e) {}
 }
 
 /* Copy a converted document, then offer to open the tool that reads it.
@@ -1286,6 +1355,7 @@ global.LintApp = {
   closeMenus: closeAllMenus,
   isMac: IS_MAC,
   copyAndOffer: copyAndOffer,
+  takeHandoff: takeHandoff,
   kbd: kbd,
   emptyState: emptyState,
   esc: esc,

@@ -27,26 +27,6 @@
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("fonts/inter-var.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
-    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("fonts/inter-var-ext.woff2") format("woff2");
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-@font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
   font-weight: 100 800;
@@ -69,17 +49,21 @@
 
 /* ---------- invariants: identical in every theme ---------- */
 :root {
-  --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --display: "IBM Plex Sans", var(--ui);
-  --mono: "JetBrains Mono",ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* one sans for the whole suite; --display stays as a name so a heading
+     can still ask for "the display face" without caring that it is the same */
+  --ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: var(--ui);
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* type scale — 1.125 minor third off a 13px base */
-  --fs-micro: 10.5px;
-  --fs-small: 11.5px;
+  /* type scale — whole pixels around a 13px base: tight steps for the
+     dense chrome, wider ones for the few headings. Every size in the suite
+     is one of these six. */
+  --fs-micro: 11px;
+  --fs-small: 12px;
   --fs-base: 13px;
-  --fs-mid: 14.5px;
-  --fs-large: 16.5px;
-  --fs-display: 21px;
+  --fs-mid: 15px;
+  --fs-large: 17px;
+  --fs-display: 22px;
 
   /* space — 4px grid */
   --s1: 4px;
@@ -89,6 +73,9 @@
   --s5: 24px;
   --s6: 36px;
 
+  /* controls use --radius, menus and popovers --radius-lg; --radius-sm is
+     only for chips nested inside a control (a segment, a kbd, a type icon) */
+  --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 10px;
   --gutter-w: 52px;
@@ -105,15 +92,20 @@
 
 /* ==========================================================================
    THEMES
-   Each block defines the same 18 tokens. To add a theme, copy one block,
-   rename the selector, and register it in THEMES[] in app.js.
+   Three choices: System (no data-theme), Light ("daylight") and Dark
+   ("slate"). Each block defines the same tokens. Contrast is not a choice
+   but a response to the OS asking for more contrast on a light theme. The
+   ids keep their old names so a saved cookie still means the same thing.
    ========================================================================== */
 
-/* ---------- Daylight — the default light ---------- */
+/* ---------- Light ("daylight") ---------- */
+/* The gutter carries the tool's hue but should not be the loudest thing on
+   screen: a faint wash, muted numbers, and the current line in the hue. */
 :root,
 :root[data-theme="daylight"] {
-  --gutter-tint: 16%;
-  --gutter-ink: 78%;
+  --gutter-tint: 5%;
+  --gutter-ink: 30%;
+  --gutter-cur: var(--hue);
   --surface: #FBFBFC;
   --raised: #FFFFFF;
   --sunken: #F2F3F6;
@@ -145,10 +137,12 @@
   color-scheme: light;
 }
 
-/* ---------- Slate — the default dark ---------- */
+/* ---------- Dark ("slate") ---------- */
+/* pure hue is too dim on a dark surface, so the current line lifts it */
 :root[data-theme="slate"] {
-  --gutter-tint: 20%;
-  --gutter-ink: 72%;
+  --gutter-tint: 7%;
+  --gutter-ink: 30%;
+  --gutter-cur: color-mix(in srgb, var(--hue) 55%, var(--ink));
   --surface: #15171C;
   --raised: #1B1E25;
   --sunken: #101216;
@@ -180,117 +174,54 @@
   color-scheme: dark;
 }
 
-/* ---------- Paper — warm, low contrast, long sessions ---------- */
-:root[data-theme="paper"] {
-  --gutter-tint: 15%;
-  --gutter-ink: 80%;
-  --surface: #F5F1E8;
-  --raised: #FCFAF4;
-  --sunken: #EBE6DA;
-  --line: #DED7C7;
-  --line-strong: #C4BAA4;
-  --ink: #2B2722;
-  --muted: #6B6355;
-  --faint: #9A9183;
+/* ---------- Contrast — WCAG AAA, heavier lines ----------
+   Applied when the OS asks for more contrast and the theme is light. It
+   comes before the System dark block so a dark OS still gets dark. */
+@media (prefers-contrast: more) {
+  :root:not([data-theme]),
+  :root[data-theme="daylight"] {
+    --gutter-tint: 7%;
+    --gutter-ink: 0%;
+    --gutter-cur: var(--hue);
+    --surface: #FFFFFF;
+    --raised: #FFFFFF;
+    --sunken: #F0F0F0;
+    --line: #7A7A7A;
+    --line-strong: #000000;
+    --ink: #000000;
+    --muted: #3D3D3D;
+    --faint: #5C5C5C;
 
-  --ok: #4A6B2F;
-  --bad: #A8341F;
-  --warn: #8A6114;
+    --ok: #006B3C;
+    --bad: #B10000;
+    --warn: #7A4B00;
 
-  --t-key: #2F5488;
-  --t-str: #4A6B2F;
-  --t-num: #6B4292;
-  --t-bool: #9B4A14;
-  --t-null: #8A8276;
-  --t-cont: #1C6A70;
-  --t-date: #8A6114;
-  --t-punct: #9A9183;
+    --t-key: #0033A0;
+    --t-str: #006B3C;
+    --t-num: #5C1F99;
+    --t-bool: #8A3400;
+    --t-null: #4A4A4A;
+    --t-cont: #00575E;
+    --t-date: #7A4B00;
+    --t-punct: #3D3D3D;
 
-  --row-hover: #EEE9DC;
-  --row-active: color-mix(in srgb, var(--hue) 15%, transparent);
-  --mark: #EBD48A;
-  --mark-ink: #3B2F0A;
-  --scroll: #C4BAA4;
-  --shadow: 0 6px 20px -6px rgb(43 39 34 / 0.16), 0 1px 2px rgb(43 39 34 / 0.06);
-  color-scheme: light;
-}
-
-/* ---------- Midnight — near-black, OLED / dim rooms ---------- */
-:root[data-theme="midnight"] {
-  --gutter-tint: 26%;
-  --gutter-ink: 76%;
-  --surface: #08090B;
-  --raised: #0E1014;
-  --sunken: #030405;
-  --line: #1E222A;
-  --line-strong: #333944;
-  --ink: #EDEFF4;
-  --muted: #8F97A5;
-  --faint: #5A6170;
-
-  --ok: #4FD68F;
-  --bad: #FF8175;
-  --warn: #F0AE42;
-
-  --t-key: #7CBCFF;
-  --t-str: #86D69B;
-  --t-num: #CBA6FF;
-  --t-bool: #FFAA66;
-  --t-null: #6E7684;
-  --t-cont: #56D3E2;
-  --t-date: #F0AE42;
-  --t-punct: #636B79;
-
-  --row-hover: #161A21;
-  --row-active: color-mix(in srgb, var(--hue) 30%, transparent);
-  --mark: #6E5A18;
-  --mark-ink: #FFF6D8;
-  --scroll: #2E343F;
-  --shadow: 0 8px 30px -8px rgb(0 0 0 / 0.8), 0 1px 2px rgb(0 0 0 / 0.5);
-  color-scheme: dark;
-}
-
-/* ---------- Contrast — WCAG AAA, heavier lines ---------- */
-:root[data-theme="contrast"] {
-  --gutter-tint: 20%;
-  --gutter-ink: 100%;
-  --surface: #FFFFFF;
-  --raised: #FFFFFF;
-  --sunken: #F0F0F0;
-  --line: #7A7A7A;
-  --line-strong: #000000;
-  --ink: #000000;
-  --muted: #3D3D3D;
-  --faint: #5C5C5C;
-
-  --ok: #006B3C;
-  --bad: #B10000;
-  --warn: #7A4B00;
-
-  --t-key: #0033A0;
-  --t-str: #006B3C;
-  --t-num: #5C1F99;
-  --t-bool: #8A3400;
-  --t-null: #4A4A4A;
-  --t-cont: #00575E;
-  --t-date: #7A4B00;
-  --t-punct: #3D3D3D;
-
-  --row-hover: #E8E8E8;
-  --row-active: color-mix(in srgb, var(--hue) 20%, transparent);
-  --mark: #FFE55C;
-  --mark-ink: #000000;
-  --scroll: #7A7A7A;
-  --shadow: 0 0 0 2px #000000;
-  --hairline: 1.5px;
-  color-scheme: light;
+    --row-hover: #E8E8E8;
+    --row-active: color-mix(in srgb, var(--hue) 20%, transparent);
+    --mark: #FFE55C;
+    --mark-ink: #000000;
+    --scroll: #7A7A7A;
+    --shadow: 0 0 0 2px #000000;
+    --hairline: 1.5px;
+    color-scheme: light;
+  }
 }
 
 /* ---------- System — follows the OS when no explicit theme is set ---------- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-  --gutter-tint: 20%;
-  --gutter-ink: 72%;
+    --gutter-tint: 7%;
+    --gutter-ink: 30%;
+    --gutter-cur: color-mix(in srgb, var(--hue) 55%, var(--ink));
     --surface: #15171C;
     --raised: #1B1E25;
     --sunken: #101216;

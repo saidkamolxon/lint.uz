@@ -4,10 +4,17 @@
 (function () {
   var NAME = 'lintuz_theme', LS = 'lintuz-theme';
 
+  /* Paper, Midnight and Contrast were once menu choices. A saved one maps to
+     the theme closest to it, so nobody comes back to an unstyled page;
+     Contrast now follows the OS setting on its own. */
+  var RETIRED = { paper: 'daylight', midnight: 'slate', contrast: 'daylight' };
+
   function read() {
+    var id = '';
     var m = document.cookie.match(/(?:^|;\s*)lintuz_theme=([^;]*)/);
-    if (m) return decodeURIComponent(m[1]);
-    try { return localStorage.getItem(LS) || ''; } catch (e) { return ''; }
+    if (m) id = decodeURIComponent(m[1]);
+    else try { id = localStorage.getItem(LS) || ''; } catch (e) {}
+    return RETIRED.hasOwnProperty(id) ? RETIRED[id] : id;
   }
 
   function apply(id) {

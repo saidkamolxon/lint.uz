@@ -10,9 +10,12 @@ var c = window.LINT_CONFIG;
 
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk || '#FFFFFF');
+/* the format's own glyph in the logo tile; app.css falls back to the suite
+   mark for a page that never sets it */
+document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/' + c.id + '.svg")');
 
-/* A declared `key` renders as a hint inside the button and is bound by
-   app.js — so the shortcut and the label can never drift apart. */
+/* A declared `key` is named in the button's tooltip and bound by app.js —
+   so the shortcut and the label can never drift apart. */
 var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
 function keyHint(key) {
@@ -21,25 +24,25 @@ function keyHint(key) {
   var out = parts.map(function (p) {
     if (p === 'mod') return IS_MAC ? '\u2318' : 'Ctrl';
     if (p === 'shift') return IS_MAC ? '\u21E7' : 'Shift';
-    if (p === 'enter') return '\u21B5';
+    /* \u21B5 is a Mac keycap; a PC keyboard says Enter */
+    if (p === 'enter') return IS_MAC ? '\u21B5' : 'Enter';
     return p.toUpperCase();
   });
   return IS_MAC ? out.join('') : out.join('+');
 }
 
-/* Open is the one coloured button in every tool, so actions are all
-   outlined. `primary` marks the tool's main action: on a phone only Open and
-   that action stay in the toolbar, and every other action folds into the ⋮
-   menu unless it declares its own breakpoint. */
+/* Three weights of button, so the eye reads the toolbar in order: Open is
+   the one filled button in every tool, the `primary` action is outlined,
+   and every other action is a quiet ghost. On a phone only Open and the
+   primary action stay in the toolbar; the rest fold into the ⋮ menu unless
+   they declare their own breakpoint. */
 var actions = (c.actions || []).map(function (a) {
   var hide = a.hide || (a.primary ? '' : 'sm');
-  return '<button id="' + a.id + '" class="bordered"' +
+  return '<button id="' + a.id + '"' + (a.primary ? ' class="bordered"' : '') +
     (hide ? ' data-hide="' + hide + '"' : '') +
     (a.key ? ' data-key="' + a.key + '"' : '') +
     ' title="' + a.title + (a.key ? ' (' + keyHint(a.key) + ')' : '') + '">' +
-    a.label +
-    (a.key ? '<kbd class="kb">' + keyHint(a.key) + '</kbd>' : '') +
-    '</button>';
+    a.label + '</button>';
 }).join('');
 
 document.getElementById('app').innerHTML =
@@ -48,7 +51,6 @@ document.getElementById('app').innerHTML =
     '<span class="mark" aria-hidden="true"></span>' +
     '<span class="brand-text">' +
       '<span class="brand-name">' + c.name + '</span>' +
-      '<span class="brand-host">' + c.host + '</span>' +
     '</span>' +
   '</a>' +
   '<nav class="tabs" aria-label="View">' +
@@ -75,6 +77,21 @@ document.getElementById('app').innerHTML =
         '<textarea id="input" spellcheck="false" autocapitalize="off" ' +
           'autocomplete="off" autocorrect="off" aria-label="' + c.label + ' input" ' +
           'placeholder="' + c.placeholder + '"></textarea>' +
+      '</div>' +
+    '</div>' +
+    /* The first thing a visitor sees: what to do, and the two ways to start.
+       It sits over the empty editor, which keeps focus, so a paste works at
+       once; only its buttons take the pointer. app.js shows it while the
+       editor is empty (body.is-empty). */
+    '<div class="empty-prompt" id="emptyPrompt">' +
+      '<div class="empty-prompt-body">' +
+        '<h2>Paste ' + c.label + ' or drop a file</h2>' +
+        (c.emptyLine ? '<p class="empty-line">' + c.emptyLine + '</p>' : '') +
+        '<div class="empty-note" id="emptyNote" hidden></div>' +
+        '<div class="empty-actions">' +
+          '<button type="button" class="primary" data-empty="open">Open a file</button>' +
+          '<button type="button" class="bordered" data-empty="sample">Load a sample</button>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     '<button id="errorBar" type="button" title="Jump to the problem">' +
@@ -109,7 +126,7 @@ document.getElementById('app').innerHTML =
 
 '<footer class="status" id="statusBar">' +
   '<span class="dot"></span>' +
-  '<span id="statusMsg">Ready</span>' +
+  '<span id="statusMsg"></span>' +
   '<span id="pathBox" title="Click to copy"></span>' +
 '</footer>';
 

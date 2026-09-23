@@ -4,13 +4,14 @@
    ========================================================================== */
 
 * { box-sizing: border-box; }
+/* hidden means hidden, even on an element whose own rule sets a display */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 
 body {
   margin: 0;
   font-family: var(--ui);
   font-size: var(--fs-base);
-  font-feature-settings: "cv05" 1, "cv08" 1, "tnum" 0;
   background: var(--surface);
   color: var(--ink);
   overflow: hidden;
@@ -19,7 +20,7 @@ body {
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-thumb {
-  background: var(--scroll); border-radius: 6px;
+  background: var(--scroll); border-radius: var(--radius);
   border: 3px solid transparent; background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background-clip: content-box; background-color: var(--line-strong); }
@@ -28,10 +29,10 @@ body {
 
 ::selection { background: color-mix(in srgb, var(--hue) 28%, transparent); }
 
+/* the ring follows each element's own radius, so none is forced here */
 :focus-visible {
   outline: 2px solid var(--hue);
   outline-offset: 1px;
-  border-radius: 3px;
 }
 
 .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
@@ -56,32 +57,31 @@ body {
   flex: none;
 }
 .brand:hover .brand-name { color: var(--hue); }
-/* the lint.one glyph, same tile proportions as the favicon (rx 15 of 64) */
+/* The tool's glyph on its hue, same tile proportions as the favicon (rx 15
+   of 64). Each tool sets --glyph (shell.js does it for the editor tools);
+   a page that does not gets the suite mark. */
 .mark {
   width: 26px; height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--hue);
   flex: none;
 }
 .mark::before {
   content: ""; display: block; width: 100%; height: 100%;
   background: var(--hue-ink);
-  mask: url("glyph.svg") center / 100% no-repeat;
+  -webkit-mask: var(--glyph, url("glyph.svg")) center / 100% no-repeat;
+  mask: var(--glyph, url("glyph.svg")) center / 100% no-repeat;
 }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-name {
-  font-size: var(--fs-mid); font-weight: 650; letter-spacing: -0.015em;
+  font-size: var(--fs-mid); font-weight: 600; letter-spacing: -0.01em;
   transition: color var(--t-fast);
-}
-.brand-host {
-  font-size: var(--fs-micro); color: var(--faint);
-  font-family: var(--mono); letter-spacing: -0.01em;
 }
 
 /* Buttons */
 button {
   font-family: var(--ui);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   font-weight: 500;
   color: var(--ink);
   background: transparent;
@@ -110,17 +110,6 @@ button[aria-pressed="true"] {
 
 .group { display: flex; align-items: center; gap: 2px; }
 
-/* shortcut hint inside a button — quiet until the button is hovered */
-button .kb {
-  font-family: var(--mono); font-size: var(--fs-micro);
-  margin-left: var(--s2);
-  opacity: 0.55;
-  letter-spacing: 0;
-  font-weight: 500;
-  background: none; border: 0; padding: 0; color: inherit;
-}
-button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
-@media (max-width: 1100px) { button .kb { display: none; } }
 .sep { width: var(--hairline); height: 18px; background: var(--line); margin: 0 var(--s2); flex: none; }
 .spacer { flex: 1 1 auto; min-width: var(--s2); }
 
@@ -141,7 +130,7 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius);
 }
-.seg button { padding: 3px 10px; font-size: 12px; color: var(--muted); border-radius: 5px; }
+.seg button { padding: 3px 10px; font-size: var(--fs-small); color: var(--muted); border-radius: var(--radius-sm); }
 .seg button:hover { color: var(--ink); }
 .seg button[aria-pressed="true"], .seg button[aria-checked="true"] {
   background: var(--raised); color: var(--ink);
@@ -151,19 +140,19 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
 .seg button svg { width: 14px; height: 14px; display: block; }
 
 kbd {
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: var(--fs-micro);
   background: var(--sunken); border: var(--hairline) solid var(--line);
-  border-radius: 4px; padding: 1px 5px; color: var(--muted);
+  border-radius: var(--radius-sm); padding: 1px 5px; color: var(--muted);
 }
 
-/* View tabs (mobile) */
+/* View tabs (mobile) — the same shape as .seg */
 .tabs {
   display: none; gap: 2px; padding: 2px; flex: none;
   background: var(--sunken);
   border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
 }
-.tabs button { padding: 4px 13px; border-radius: 7px; color: var(--muted); font-size: 12px; }
+.tabs button { padding: 4px 13px; border-radius: var(--radius-sm); color: var(--muted); font-size: var(--fs-small); }
 .tabs button.active { background: var(--raised); color: var(--ink); font-weight: 600; }
 
 /* ==========================================================================
@@ -189,32 +178,39 @@ kbd {
   display: flex; align-items: center; gap: var(--s2);
   width: 100%; padding: 6px var(--s2);
   border-radius: var(--radius);
-  font-size: 12.5px; text-align: left; text-decoration: none;
+  font-size: var(--fs-base); text-align: left; text-decoration: none;
   color: var(--ink); border: none; background: transparent;
 }
 .menu-item:hover { background: var(--row-hover); }
 .menu-item[aria-checked="true"] { font-weight: 600; }
-.menu-item .tick { margin-left: auto; color: var(--hue); opacity: 0; font-size: 12px; }
+.menu-item .tick { margin-left: auto; color: var(--hue); opacity: 0; font-size: var(--fs-small); }
 .menu-item[aria-checked="true"] .tick { opacity: 1; }
-.menu-item .ext { margin-left: auto; color: var(--faint); font-size: 11px; }
 .menu-sep { height: var(--hairline); background: var(--line); margin: var(--s1) var(--s2); }
 
 /* Theme swatch: two-tone chip previewing surface + hue */
 .swatch {
-  width: 15px; height: 15px; border-radius: 5px; flex: none;
+  width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none;
   border: var(--hairline) solid var(--line-strong);
   background: linear-gradient(135deg, var(--sw-bg) 0 50%, var(--sw-fg) 50% 100%);
 }
 
-/* Suite switcher dots */
-.dot-json { background: #4F46E5; }
-.dot-xml  { background: #0F766E; }
-.dot-yaml { background: #B45309; }
-.dot-csv  { background: #9333EA; }
-.dot-pdf  { background: #BE123C; }
-.dot-log  { background: #0369A1; }
-.dot-audio { background: #C026D3; }
-.fmt-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+/* Suite switcher: each tool as a tiny app icon, its glyph on its hue.
+   The paths are absolute because a url() inside a custom property resolves
+   where it is used, not in this file. */
+.dot-json  { background: #4F46E5; --tile-glyph: url("/shared/glyphs/json.svg"); }
+.dot-xml   { background: #0F766E; --tile-glyph: url("/shared/glyphs/xml.svg"); }
+.dot-yaml  { background: #B45309; --tile-glyph: url("/shared/glyphs/yaml.svg"); }
+.dot-csv   { background: #4D7C0F; --tile-glyph: url("/shared/glyphs/csv.svg"); }
+.dot-pdf   { background: #BE123C; --tile-glyph: url("/shared/glyphs/pdf.svg"); }
+.dot-log   { background: #0369A1; --tile-glyph: url("/shared/glyphs/log.svg"); }
+.dot-audio { background: #C026D3; --tile-glyph: url("/shared/glyphs/audio.svg"); }
+.tool-tile { width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none; }
+.tool-tile::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: #FFFFFF;
+  -webkit-mask: var(--tile-glyph) center / 100% no-repeat;
+  mask: var(--tile-glyph) center / 100% no-repeat;
+}
 
 /* ==========================================================================
    Split layout
@@ -253,7 +249,8 @@ kbd {
   --ed-pad-x: var(--s3);
 }
 
-/* The colored gutter — this is the tool's identity */
+/* The gutter carries the tool's hue — a faint wash and a hued edge, so a
+   tab is recognisable without the gutter being the loudest thing on screen */
 .gutter {
   position: relative;
   overflow: hidden;
@@ -265,16 +262,15 @@ kbd {
   user-select: none;
   padding: var(--ed-pad-y) var(--s2) var(--ed-pad-y) 0;
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .gutter-inner { will-change: transform; }
 .gutter .ln { display: block; height: calc(var(--fs-base) * 1.6); }
+/* the current line is marked by its number alone; an error stays a filled
+   block, because an error should be loud */
 .gutter .ln.cur {
-  color: var(--hue-ink);
+  color: var(--gutter-cur);
   font-weight: 600;
-  background: var(--hue);
-  margin-right: calc(var(--s2) * -1);
-  padding-right: var(--s2);
 }
 .gutter .ln.err {
   color: var(--hue-ink);
@@ -320,7 +316,7 @@ kbd {
   -webkit-text-fill-color: var(--faint);
 }
 .editor:focus-within .gutter {
-  background: color-mix(in srgb, var(--hue) calc(var(--gutter-tint) + 6%), var(--raised));
+  background: color-mix(in srgb, var(--hue) calc(var(--gutter-tint) + 2%), var(--raised));
 }
 
 /* Syntax tokens inside the highlight layer */
@@ -342,7 +338,7 @@ kbd {
   display: none; align-items: baseline; gap: var(--s2);
   flex: none;
   padding: var(--s2) var(--s3);
-  font-family: var(--mono); font-size: 12px;
+  font-family: var(--mono); font-size: var(--fs-small);
   color: var(--bad);
   background: color-mix(in srgb, var(--bad) 9%, var(--raised));
   border-top: var(--hairline) solid color-mix(in srgb, var(--bad) 30%, transparent);
@@ -380,7 +376,7 @@ kbd {
 }
 #search {
   width: 100%;
-  font-family: var(--ui); font-size: 12.5px;
+  font-family: var(--ui); font-size: var(--fs-base);
   color: var(--ink);
   background: var(--sunken);
   border: var(--hairline) solid var(--line);
@@ -398,11 +394,10 @@ kbd {
 }
 .treebar .icon-btn { width: 28px; height: 26px; }
 .step-nav { display: inline-flex; }
-.step-nav[hidden] { display: none; }
 
 #tree {
   flex: 1; overflow: auto;
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.55;
   padding: var(--s2) var(--s3) 40vh var(--s2);
   scroll-padding-block: var(--s5);
 }
@@ -431,12 +426,12 @@ kbd {
   font-size: var(--fs-large); font-weight: 600;
   letter-spacing: -0.015em; color: var(--ink);
 }
-.empty-state p { margin: 0 0 var(--s3); font-size: 13.5px; line-height: 1.6; }
+.empty-state p { margin: 0 0 var(--s3); font-size: var(--fs-base); line-height: 1.6; }
 .empty-state .empty-actions {
   display: flex; flex-wrap: wrap; justify-content: center;
   gap: var(--s2); margin: var(--s4) 0;
 }
-.empty-state .keys { font-size: 12px; color: var(--faint); margin: 0; }
+.empty-state .keys { font-size: var(--fs-small); color: var(--faint); margin: 0; }
 
 .children {
   margin-left: 15px; padding-left: var(--s2);
@@ -449,7 +444,7 @@ kbd {
 .row {
   display: flex; align-items: baseline;
   padding: 1px var(--s2) 1px 2px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   position: relative;
   cursor: default;
@@ -478,10 +473,11 @@ kbd {
 .caret.leaf { visibility: hidden; cursor: default; }
 
 .ticon {
-  flex: none; width: 17px; height: 15px; border-radius: 4px;
+  flex: none; width: 17px; height: 15px; border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; justify-content: center;
   align-self: center; margin-right: var(--s2);
-  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  /* the one size off the scale: two letters inside a 15px chip */
+  font-family: var(--mono); font-size: calc(var(--fs-micro) - 2px); font-weight: 700;
   letter-spacing: -0.05em; user-select: none;
 }
 .t-obj  { color: var(--t-key);  background: color-mix(in srgb, var(--t-key) 15%, transparent); }
@@ -520,7 +516,7 @@ kbd {
 
 mark {
   background: var(--mark); color: var(--mark-ink);
-  border-radius: 2px; padding: 0 1px;
+  border-radius: calc(var(--radius-sm) / 2); padding: 0 1px;
 }
 
 .more-btn, .trunc-btn {
@@ -534,7 +530,7 @@ mark {
 .row-actions {
   display: none; gap: 1px;
   position: absolute; top: 0; right: 2px;
-  background: inherit; border-radius: 5px;
+  background: inherit; border-radius: var(--radius-sm);
   padding: 0 2px 0 var(--s3);
 }
 .row:hover .row-actions, .row.selected .row-actions,
@@ -546,8 +542,8 @@ mark {
 }
 .row-actions button {
   border: none; padding: 1px 6px;
-  font-family: var(--ui); font-size: 11px; font-weight: 500;
-  color: var(--muted); border-radius: 4px;
+  font-family: var(--ui); font-size: var(--fs-micro); font-weight: 500;
+  color: var(--muted); border-radius: var(--radius-sm);
 }
 .row-actions button:hover { color: var(--hue); background: var(--hue-wash); }
 
@@ -587,6 +583,8 @@ mark {
   white-space: nowrap; font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis;
 }
+/* facts sit apart by space alone; inline, so the line still ellipsizes */
+#statusMsg > span + span { margin-left: var(--s3); }
 #pathBox {
   font-family: var(--mono); font-size: var(--fs-small);
   flex: 1; min-width: 0; text-align: right;
@@ -607,8 +605,8 @@ mark {
   position: fixed; left: 50%; bottom: 46px;
   transform: translateX(-50%) translateY(6px);
   background: var(--ink); color: var(--surface);
-  font-size: 12.5px; font-weight: 500;
-  padding: 7px var(--s4); border-radius: 8px;
+  font-size: var(--fs-base); font-weight: 500;
+  padding: 7px var(--s4); border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   opacity: 0; pointer-events: none;
   transition: opacity var(--t-mid), transform var(--t-mid);
@@ -624,26 +622,69 @@ mark {
 .toast-action {
   color: var(--surface);
   background: color-mix(in srgb, var(--surface) 18%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 4px var(--s3);
-  font-size: 12px; font-weight: 600;
+  font-size: var(--fs-small); font-weight: 600;
   text-decoration: none; white-space: nowrap;
   transition: background-color var(--t-fast);
 }
 .toast-action:hover { background: color-mix(in srgb, var(--surface) 30%, transparent); }
 .toast-action:focus-visible { outline: 2px solid var(--surface); outline-offset: 1px; }
 
-/* the prompt shown when arriving from another viewer */
-.empty.arrived .arrived-lead {
-  color: var(--ink); font-weight: 550;
-  margin: 0 0 var(--s2);
+/* ==========================================================================
+   Empty editor — body.is-empty (set by app.js while the editor is empty)
+   The page is the editor and one calm prompt over it: no tree, no gutter,
+   no status. The prompt ignores the pointer except on its buttons, so a
+   click anywhere else lands in the textarea underneath.
+   ========================================================================== */
+body.is-empty #treePane,
+body.is-empty #divider,
+body.is-empty .gutter,
+body.is-empty #errorBar,
+body.is-empty #statusBar,
+body.is-empty .tabs { display: none; }
+/* !important beats the width the divider drag leaves inline */
+body.is-empty #editorPane { width: 100% !important; }
+body.is-empty .editor { grid-template-columns: 1fr; }
+/* the prompt replaces the placeholder */
+body.is-empty #input::placeholder { color: transparent; -webkit-text-fill-color: transparent; }
+
+.empty-prompt {
+  display: none;
+  position: absolute; inset: 0; z-index: 4;
+  align-items: center; justify-content: center;
+  padding: var(--s5) var(--s4);
+  text-align: center;
+  pointer-events: none;
 }
-.empty.arrived p { margin: 0; }
-.empty.arrived {
-  border-left: 2px solid var(--hue);
-  padding-left: var(--s4);
-  margin: var(--s5) var(--s4);
+body.is-empty .empty-prompt { display: flex; }
+/* sits a little above the true centre, where the eye expects it */
+.empty-prompt-body { max-width: 56ch; margin-top: -10vh; text-wrap: balance; }
+.empty-prompt h2 {
+  margin: 0;
+  font-size: var(--fs-display); font-weight: 600;
+  letter-spacing: -0.015em; line-height: 1.25;
+  color: var(--ink);
+  transition: color var(--t-fast);
 }
+.empty-prompt .empty-line {
+  margin: var(--s2) 0 0;
+  font-size: var(--fs-mid); line-height: 1.5; color: var(--muted);
+}
+.empty-prompt.arrived .empty-line { display: none; }
+.empty-actions {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: var(--s2); margin-top: var(--s5);
+}
+.empty-actions button { pointer-events: auto; padding: 7px var(--s4); }
+
+/* arriving from another viewer: what is waiting, and the key that pastes it */
+.empty-note {
+  margin: var(--s3) auto 0;
+  font-size: var(--fs-base); line-height: 1.55; color: var(--muted);
+}
+.empty-note p { margin: 0; }
+.empty-note .arrived-lead { color: var(--ink); font-weight: 500; }
 
 body.dragover #editorPane::after {
   content: "";
@@ -653,6 +694,7 @@ body.dragover #editorPane::after {
   background: var(--hue-wash);
   pointer-events: none; z-index: 5;
 }
+body.dragover .empty-prompt h2 { color: var(--hue); }
 
 /* ==========================================================================
    Responsive
