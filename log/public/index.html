@@ -310,7 +310,6 @@ window.LINT_CONFIG = {
   name: 'Log Viewer',
   host: 'lint.one/log',
   label: 'log',
-  mark: '≡',
   hue: '#0369A1',
   hueInk: '#FFFFFF',
   accept: '.log,.txt,.out,.err,.jsonl,.ndjson,text/plain'
@@ -332,7 +331,7 @@ document.documentElement.style.setProperty('--hue-ink', c.hueInk);
 $('app').innerHTML = `
   <header class="toolbar">
     <a class="brand" href="/" title="All tools">
-      <span class="mark">${c.mark}</span>
+      <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>
         <span class="brand-host">${c.host}</span>

@@ -41,7 +41,7 @@ var actions = (c.actions || []).map(function (a) {
 document.getElementById('app').innerHTML =
 '<header class="toolbar">' +
   '<a class="brand" href="/" title="All tools">' +
-    '<span class="mark">' + c.mark + '</span>' +
+    '<span class="mark" aria-hidden="true"></span>' +
     '<span class="brand-text">' +
       '<span class="brand-name">' + c.name + '</span>' +
       '<span class="brand-host">' + c.host + '</span>' +

@@ -37,10 +37,13 @@ body {
   text-decoration: none; color: inherit;
 }
 .logo-mark {
-  display: grid; place-items: center;
-  width: 28px; height: 28px; border-radius: 8px;
-  background: var(--ink); color: var(--surface);
-  font-family: var(--mono); font-weight: 700; font-size: 13px;
+  width: 28px; height: 28px; border-radius: 6.5px;
+  background: var(--ink);
+}
+.logo-mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: var(--surface);
+  mask: url("/shared/glyph.svg") center / 100% no-repeat;
 }
 .top-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .ghost {
@@ -355,7 +358,7 @@ footer .sp { flex: 1; }
 
   <header class="top">
     <a class="logo" href="/">
-      <span class="logo-mark">L</span>
+      <span class="logo-mark" aria-hidden="true"></span>
       <span>lint.one</span>
     </a>
     <div class="top-right">

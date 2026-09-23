@@ -426,7 +426,6 @@ window.LINT_CONFIG = {
   name: 'PDF Viewer',
   host: 'lint.one/pdf',
   label: 'PDF',
-  mark: 'P',
   hue: '#BE123C',
   hueInk: '#FFFFFF',
   accept: '.pdf,application/pdf'
@@ -455,7 +454,7 @@ $('app').innerHTML = `
     <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
             aria-pressed="false" disabled></button>
     <a class="brand" href="/" title="All tools">
-      <span class="mark">${c.mark}</span>
+      <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>
         <span class="brand-host">${c.host}</span>

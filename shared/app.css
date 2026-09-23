@@ -56,17 +56,17 @@ body {
   flex: none;
 }
 .brand:hover .brand-name { color: var(--hue); }
+/* the lint.one glyph, same tile proportions as the favicon (rx 15 of 64) */
 .mark {
-  display: grid; place-items: center;
   width: 26px; height: 26px;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--hue);
-  color: var(--hue-ink);
-  font-family: var(--mono);
-  font-size: var(--fs-small);
-  font-weight: 700;
-  letter-spacing: -0.06em;
   flex: none;
+}
+.mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: var(--hue-ink);
+  mask: url("glyph.svg") center / 100% no-repeat;
 }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-name {
