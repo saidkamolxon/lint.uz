@@ -44,7 +44,6 @@
 .page-wrap {
   position: relative; flex: none;
   box-shadow: var(--shadow);
-  border-radius: 2px;
   line-height: 0;
 }
 .page-wrap canvas {
@@ -52,7 +51,6 @@
      page while its height stayed put, squashing it */
   display: block;
   background: #fff;
-  border-radius: 2px;
 }
 /* the page treatment — chrome is always themed, the sheet is opt-in */
 body[data-page="dim"] .page-wrap canvas { filter: brightness(0.82) contrast(1.04); }
@@ -69,7 +67,6 @@ body[data-page="invert"] .page-wrap {
 .page-wrap.pending {
   background: var(--raised);
   border: var(--hairline) dashed var(--line);
-  border-radius: 2px;
   display: grid; place-items: center;
   color: var(--faint); font-size: var(--fs-small);
   box-shadow: none;
@@ -121,7 +118,7 @@ body[data-page="invert"] .hl-box { mix-blend-mode: screen; }
 }
 #findInput {
   width: 210px;
-  font-family: var(--ui); font-size: 12.5px;
+  font-family: var(--ui); font-size: var(--fs-base);
   color: var(--ink); background: transparent;
   border: none; outline: none;
   padding: 5px var(--s2);
@@ -140,7 +137,7 @@ body[data-page="invert"] .hl-box { mix-blend-mode: screen; }
 .find-pop.scanning #findCount { color: var(--hue); }
 .find-pop.scanning::after {
   content: ""; position: absolute; left: var(--s2); right: var(--s2); bottom: 0; height: 2px;
-  background: var(--hue); border-radius: 2px;
+  background: var(--hue); border-radius: var(--radius);
   animation: scanning 1.1s ease-in-out infinite;
 }
 @keyframes scanning { 0%,100% { opacity: 0.2; } 50% { opacity: 0.9; } }
@@ -190,7 +187,7 @@ body.show-links .lnk {
 .pagebox { display: flex; align-items: center; gap: 2px; }
 .pagebox[hidden] { display: none; }
 .page-pos {
-  font-family: var(--mono); font-size: 12.5px;
+  font-family: var(--mono); font-size: var(--fs-base);
   color: var(--ink);
   padding: 4px var(--s2);
   border-radius: var(--radius);
@@ -209,7 +206,7 @@ body.show-links .lnk {
   /* width is measured from the real glyphs in JS: ch under-measures for this
      face, and a fixed guess clips the moment a book runs past 999 pages */
   text-align: center;
-  font-family: var(--mono); font-size: 12.5px;
+  font-family: var(--mono); font-size: var(--fs-base);
   color: var(--ink); background: var(--sunken);
   border: var(--hairline) solid var(--hue);
   border-radius: var(--radius); padding: 4px var(--s2);
@@ -219,7 +216,7 @@ body.show-links .lnk {
 
 /* ---------- page appearance: the shared .seg, sized for icons ---------- */
 #pageModeSeg button { width: 26px; height: 22px; padding: 0; display: grid; place-items: center; }
-#pageModeSeg[data-disabled="true"] { opacity: 0.4; pointer-events: none; }
+.zoom-pop .sep { margin: 0 var(--s1); }
 
 /* ---------- zoom, floating near the page ---------- */
 .zoom-pop {
@@ -237,7 +234,7 @@ body.show-links .lnk {
 .zoom-pop[hidden] { display: none; }
 .zoom-pop:hover, .zoom-pop:focus-within { opacity: 1; }
 .zoom-fit {
-  font-size: 12px; padding: 4px var(--s2);
+  font-size: var(--fs-small); padding: 4px var(--s2);
   color: var(--muted); border-radius: var(--radius);
 }
 .zoom-fit:hover { color: var(--ink); }
@@ -265,7 +262,7 @@ body.show-links .lnk {
   padding: var(--s3) var(--s4) var(--s2);
   background: var(--raised);
   border-bottom: var(--hairline) solid var(--line);
-  font-size: 12.5px; font-weight: 600; color: var(--muted);
+  font-size: var(--fs-base); font-weight: 600; color: var(--muted);
 }
 .page-area { flex: 1; min-width: 0; position: relative; display: flex; }
 
@@ -276,12 +273,12 @@ body.show-links .lnk {
 .bm button {
   display: block; width: 100%; text-align: left;
   padding: 5px var(--s2); border: none; border-radius: var(--radius);
-  font-size: 12.5px; color: var(--ink); line-height: 1.45;
+  font-size: var(--fs-base); color: var(--ink); line-height: 1.45;
   white-space: normal;
 }
 .bm button:hover { background: var(--row-hover); color: var(--hue); }
 .bm > li > button { font-weight: 550; }
-.bm ul button { color: var(--muted); font-size: 12px; }
+.bm ul button { color: var(--muted); font-size: var(--fs-small); }
 .bm ul button:hover { color: var(--hue); }
 .bm button.here {
   background: var(--hue-wash); color: var(--hue); font-weight: 600;
@@ -306,7 +303,7 @@ body.show-links .lnk {
 }
 .drawer-tabs button {
   flex: 1; padding: 5px var(--s2); border-radius: var(--radius);
-  color: var(--muted); font-size: 12px;
+  color: var(--muted); font-size: var(--fs-small);
 }
 .drawer-tabs button[aria-selected="true"] {
   background: var(--hue-wash); color: var(--hue); font-weight: 600;
@@ -316,7 +313,7 @@ body.show-links .lnk {
 .drawer-panel.active { display: block; }
 
 /* metadata rows — a definition list, because that is what this is */
-.meta { margin: 0; font-size: 12.5px; }
+.meta { margin: 0; font-size: var(--fs-base); }
 .meta div {
   display: grid; grid-template-columns: 96px 1fr; gap: var(--s3);
   padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
@@ -325,7 +322,7 @@ body.show-links .lnk {
 .meta div:last-child { border-bottom: none; }
 .meta dt { color: var(--muted); }
 .meta dd {
-  margin: 0; font-family: var(--mono); font-size: 11.5px;
+  margin: 0; font-family: var(--mono); font-size: var(--fs-small);
   overflow-wrap: anywhere; color: var(--ink);
 }
 .meta dd.none { color: var(--faint); font-style: italic; font-family: var(--ui); }
@@ -334,19 +331,19 @@ body.show-links .lnk {
 .flag {
   display: flex; align-items: baseline; gap: var(--s2);
   padding: var(--s2) 0; border-bottom: var(--hairline) solid var(--line);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
 }
 .flag:last-child { border-bottom: none; }
 .flag .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: 5px; }
 .flag.yes .dot { background: var(--warn); }
 .flag.no .dot { background: var(--ok); }
 .flag .what { flex: 1; }
-.flag .what small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.flag .what small { display: block; color: var(--muted); font-size: var(--fs-small); margin-top: 2px; }
 
 .font-row {
   display: flex; justify-content: space-between; gap: var(--s2);
   padding: 4px 0; border-bottom: var(--hairline) solid var(--line);
-  font-family: var(--mono); font-size: 11.5px;
+  font-family: var(--mono); font-size: var(--fs-small);
 }
 .font-row:last-child { border-bottom: none; }
 .font-row .kind { color: var(--faint); flex: none; }
@@ -354,13 +351,13 @@ body.show-links .lnk {
 /* extracted text */
 #textOut {
   width: 100%; min-height: 240px; resize: vertical;
-  font-family: var(--mono); font-size: 11.5px; line-height: 1.6;
+  font-family: var(--mono); font-size: var(--fs-small); line-height: 1.6;
   color: var(--ink); background: var(--sunken);
   border: var(--hairline) solid var(--line); border-radius: var(--radius);
   padding: var(--s2); white-space: pre-wrap;
 }
 .drawer-actions { display: flex; gap: var(--s1); margin-top: var(--s2); }
-.hint { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 0 0 var(--s3); }
+.hint { color: var(--muted); font-size: var(--fs-small); line-height: 1.55; margin: 0 0 var(--s3); }
 
 
 /* the shared dragover cue targets #editorPane, which this tool has none of */
@@ -372,6 +369,10 @@ body.dragover #pages::after {
   background: var(--hue-wash);
   pointer-events: none; z-index: 20;
 }
+
+/* controls that only mean something once a document is open stay off the
+   empty screen; author display rules would otherwise beat [hidden] */
+[hidden] { display: none !important; }
 
 .page-error {
   display: grid; place-items: center; height: 100%;
@@ -393,7 +394,7 @@ body.dragover #pages::after {
 <script>
 window.LINT_CONFIG = {
   id: 'pdf',
-  name: 'PDF Viewer',
+  name: 'PDF',
   host: 'lint.one/pdf',
   label: 'PDF',
   hue: '#BE123C',
@@ -418,6 +419,7 @@ const esc = LintApp.esc;
 const c = window.LINT_CONFIG;
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/pdf.svg")');
 
 $('app').innerHTML = `
   <header class="toolbar">
@@ -428,15 +430,14 @@ $('app').innerHTML = `
         <span class="brand-host">${c.host}</span>
       </span>
     </a>
-    <button id="btnOpen" class="primary" title="Open a PDF — or drop one anywhere">Open</button>
-    <span class="sep hide-sm"></span>
-    <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
+    <button id="btnOpen" class="primary" title="Open a PDF, or drop one anywhere">Open</button>
+    <button id="btnContents" class="icon-btn needs-doc" title="Contents" aria-label="Contents"
             aria-pressed="false" disabled></button>
 
     <span class="spacer"></span>
 
     <!-- reading position: a label until you click it -->
-    <span class="pagebox" id="pageBox" hidden>
+    <span class="pagebox needs-doc" id="pageBox">
       <button id="btnPrev" class="icon-btn" title="Previous page" aria-label="Previous page" disabled></button>
       <button id="pagePos" class="page-pos" title="Go to page">
         <span id="pageCur">1</span><span class="slash">/</span><span id="pageTotal">1</span>
@@ -447,15 +448,11 @@ $('app').innerHTML = `
 
     <span class="spacer"></span>
 
-    <button id="btnFind" class="icon-btn" title="Find in this document"
+    <button id="btnFind" class="icon-btn needs-doc" title="Find in this document"
             aria-label="Find in this document" aria-pressed="false" disabled></button>
-
-    <!-- page treatment: state is the active segment, not the label -->
-    <div class="seg" id="pageModeSeg" role="group" aria-label="Page appearance"></div>
-
-    <button id="btnInfo" class="icon-btn" title="Document details"
+    <button id="btnInfo" class="icon-btn needs-doc" title="Document details"
             aria-label="Document details" aria-pressed="false" disabled></button>
-    <div class="menu-wrap">
+    <div class="menu-wrap needs-doc">
       <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
       <div class="menu" id="moreMenu" role="menu">
         <button class="menu-item" id="btnClose" role="menuitem" disabled>Close document</button>
@@ -483,8 +480,11 @@ $('app').innerHTML = `
         <button id="findClose" class="icon-btn" title="Close" aria-label="Close find"></button>
       </div>
 
-      <!-- zoom sits near the page, not in the header -->
-      <div class="zoom-pop" id="zoomPop" hidden>
+      <!-- zoom and page treatment sit near the page, not in the header -->
+      <div class="zoom-pop needs-doc" id="zoomPop">
+        <!-- page treatment: state is the active segment, not the label -->
+        <div class="seg" id="pageModeSeg" role="radiogroup" aria-label="Page appearance"></div>
+        <span class="sep"></span>
         <button id="btnOut" class="icon-btn" title="Zoom out" aria-label="Zoom out"></button>
         <button id="btnFit" class="zoom-fit" title="Fit page to window">Fit</button>
         <button id="btnIn" class="icon-btn" title="Zoom in" aria-label="Zoom in"></button>
@@ -505,9 +505,9 @@ $('app').innerHTML = `
     </aside>
   </main>
 
-  <footer class="status" id="statusBar">
+  <footer class="status" id="statusBar" hidden>
     <span class="dot"></span>
-    <span id="statusMsg">Ready</span>
+    <span id="statusMsg"></span>
     <span id="pathBox"></span>
   </footer>
 `;
@@ -594,7 +594,6 @@ $('pageModeSeg').querySelectorAll('button').forEach((b) => {
     try { localStorage.setItem('lintuz-pdf-page', b.dataset.mode); } catch (e) {}
   });
 });
-$('pageModeSeg').dataset.disabled = 'true';
 applyPageMode(pageMode);
 
 /* ==========================================================================
@@ -607,21 +606,20 @@ let renderedPages = new Map();
 let firstPage = null;    // every slot is laid out from page 1's size
 
 const EMPTY = LintApp.emptyState({
-  title: 'Open a PDF to read it',
-  body: 'Pages render here and never leave your browser — there is no server to ' +
-    'send them to. Use <strong>Info</strong> to see what the file contains: ' +
-    'metadata, fonts, extracted text, and whether it carries JavaScript or encryption.',
-  keys: LintApp.kbd('mod+o') + ' open · or drop a file anywhere'
+  title: 'Open a PDF or drop it here',
+  body: 'Pages render in your browser and the file never leaves it.',
+  extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>'
 });
 
 function showEmpty() {
   $('pages').innerHTML = EMPTY;
   $('pages').style.display = 'flex';
+  $('emptyOpen').addEventListener('click', () => $('fileInput').click());
 }
-showEmpty();
 
 function setStatus(kind, msg) {
   $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusBar').hidden = false;
   $('statusMsg').textContent = msg;
 }
 
@@ -633,9 +631,7 @@ function enableControls(on) {
   ['btnClose', 'btnOut', 'btnFit', 'btnIn', 'btnInfo', 'btnFind',
    'btnPrev', 'btnNext', 'btnContents']
     .forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
-  $('pageBox').hidden = !on;
-  $('zoomPop').hidden = !on;
-  $('pageModeSeg').dataset.disabled = String(!on);
+  document.querySelectorAll('.needs-doc').forEach((el) => { el.hidden = !on; });
 }
 
 /* ==========================================================================
@@ -664,7 +660,7 @@ async function openFile(file) {
       const pw = window.prompt(
         reason === 1 ? 'This PDF is password protected. Enter its password:'
                      : 'That password was not accepted. Try again:');
-      if (pw === null) { task.destroy(); resetView(); setStatus('', 'Ready'); return; }
+      if (pw === null) { task.destroy(); resetView(); return; }
       retry(pw);
     };
 
@@ -678,9 +674,9 @@ async function openFile(file) {
     const msg = /password/i.test(err.message || '')
       ? 'This PDF needs a password'
       : 'Could not read this PDF — it may be damaged';
+    resetView();
     setStatus('err', msg);
     LintApp.toast(msg);
-    resetView();
   }
 }
 
@@ -717,7 +713,7 @@ async function renderDocument(file) {
   sizePageBox(doc.numPages);
   syncPageIndicator(1);
   const size = LintApp.fmtBytes(file.size);
-  setStatus('ok', `${doc.numPages} page${doc.numPages === 1 ? '' : 's'} · ${size}`);
+  setStatus('ok', `${LintApp.fmtNum(doc.numPages)} page${doc.numPages === 1 ? '' : 's'}, ${size}`);
   $('pathBox').textContent = file.name;
   buildOutline();
   await buildInfo(file);
@@ -889,7 +885,7 @@ function resetView() {
   textCache.clear();
   linkCache.clear();
   matches = []; matchIdx = -1; findTerm = '';
-  $('findBar').classList.add('hidden');
+  $('findBar').hidden = true;
   $('btnFind').setAttribute('aria-pressed', 'false');
   $('findInput').value = '';
   $('findCount').textContent = '';
@@ -901,6 +897,7 @@ function resetView() {
   enableControls(false);
   $('drawer').classList.remove('open');
   $('pathBox').textContent = '';
+  $('statusBar').hidden = true;
   showEmpty();
 }
 
@@ -1380,6 +1377,7 @@ async function buildOutline() {
       '<p class="hint">This document carries no contents list. Use the page ' +
       'number or find to move around.</p>';
     $('btnContents').disabled = true;
+    $('btnContents').hidden = true;
     return;
   }
 
@@ -1573,7 +1571,7 @@ $('fileInput').addEventListener('change', (e) => {
   if (e.target.files[0]) openFile(e.target.files[0]);
   e.target.value = '';
 });
-$('btnClose').addEventListener('click', () => { resetView(); setStatus('', 'Ready'); });
+$('btnClose').addEventListener('click', resetView);
 
 $('btnInfo').addEventListener('click', () => {
   const open = $('drawer').classList.toggle('open');
@@ -1753,6 +1751,9 @@ window.addEventListener('resize', () => {
     rerender();
   }, 220);
 });
+
+resetView();
+if (LintApp.takeHandoff) LintApp.takeHandoff('pdf', openFile);
 </script>
 </body>
 </html>

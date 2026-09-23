@@ -23,7 +23,7 @@
   background: var(--surface);
   position: relative;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--fs-base);
   line-height: var(--row-h);
   --row-h: 21px;
 }
@@ -65,7 +65,7 @@
   padding: 0 var(--s3) 0 var(--s2);
   text-align: right;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
@@ -128,7 +128,7 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
   display: flex; align-items: center; gap: 6px;
   padding: 4px var(--s2);
   border-radius: var(--radius);
-  font-size: 12px; color: var(--muted);
+  font-size: var(--fs-small); color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 .sev-chip .pip { width: 7px; height: 7px; border-radius: 2px; flex: none; }
@@ -146,7 +146,7 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
 .filter-wrap { display: flex; align-items: center; flex: 1; max-width: 420px; }
 #filter {
   width: 100%;
-  font-family: var(--mono); font-size: 12.5px;
+  font-family: var(--mono); font-size: var(--fs-base);
   color: var(--ink); background: var(--sunken);
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius);
@@ -203,7 +203,7 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
 .detail-body { flex: 1; overflow: auto; padding: var(--s3); }
 .detail-text, .detail-json {
   margin: 0;
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.6;
   white-space: pre-wrap; overflow-wrap: anywhere;
   color: var(--ink);
 }
@@ -212,12 +212,11 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
   display: flex; align-items: center; gap: var(--s2);
   margin: var(--s4) 0 var(--s2);
   font-size: var(--fs-small); color: var(--muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.04em;
 }
 .detail-label::after { content: ""; flex: 1; border-top: var(--hairline) solid var(--line); }
 .detail-label button {
   order: 2; font-size: var(--fs-small); color: var(--muted);
-  text-transform: none; letter-spacing: 0; font-weight: 500;
+  font-weight: 500;
   padding: 2px var(--s2); border-radius: var(--radius);
 }
 .detail-label button:hover { color: var(--hue); background: var(--hue-wash); }
@@ -254,7 +253,7 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
 .goto[hidden] { display: none; }
 .goto input {
   width: 14ch;
-  font-family: var(--mono); font-size: 12.5px;
+  font-family: var(--mono); font-size: var(--fs-base);
   color: var(--ink); background: var(--sunken);
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius);
@@ -270,7 +269,9 @@ mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
   transition: width 120ms linear;
 }
 
-/* ---------- empty state ---------- */
+/* controls that only mean something once a log is open stay off the empty
+   screen; author display rules would otherwise beat [hidden] */
+[hidden] { display: none !important; }
 
 body.dragover #viewport::after {
   content: ""; position: absolute; inset: var(--s2);
@@ -292,7 +293,7 @@ body.dragover #viewport::after {
 <script>
 window.LINT_CONFIG = {
   id: 'log',
-  name: 'Log Viewer',
+  name: 'Logs',
   host: 'lint.one/log',
   label: 'log',
   hue: '#0369A1',
@@ -309,6 +310,7 @@ const c = window.LINT_CONFIG;
 
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/log.svg")');
 
 /* ==========================================================================
    Chrome
@@ -322,23 +324,23 @@ $('app').innerHTML = `
         <span class="brand-host">${c.host}</span>
       </span>
     </a>
-    <button id="btnOpen" class="primary" title="Open a log — or drop one anywhere">Open</button>
-    <span class="sep hide-sm"></span>
+    <button id="btnOpen" class="primary" title="Open a log, or drop one anywhere">Open</button>
+    <span class="sep hide-sm needs-file"></span>
 
-    <label class="filter-wrap">
+    <label class="filter-wrap needs-file">
       <input id="filter" type="text" spellcheck="false" autocomplete="off"
-             placeholder="Filter lines…  -exclude to hide" aria-label="Filter lines">
+             placeholder="Filter lines (use -word to hide)" aria-label="Filter lines">
     </label>
-    <span id="filterCount"></span>
+    <span id="filterCount" class="needs-file"></span>
 
     <div class="sev-filters" id="sevFilters" hidden></div>
 
     <span class="spacer"></span>
-    <button id="btnWrap" class="icon-btn" title="Wrap long lines"
+    <button id="btnWrap" class="icon-btn needs-file" title="Wrap long lines"
             aria-label="Wrap long lines" aria-pressed="false" disabled></button>
-    <button id="btnTail" class="icon-btn" title="Jump to the end"
+    <button id="btnTail" class="icon-btn needs-file" title="Jump to the end"
             aria-label="Jump to the end" disabled></button>
-    <div class="menu-wrap">
+    <div class="menu-wrap needs-file">
       <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
       <div class="menu" id="moreMenu" role="menu">
         <button class="menu-item" id="btnCopyVisible" role="menuitem" disabled>Copy filtered lines</button>
@@ -358,7 +360,7 @@ $('app').innerHTML = `
     <div id="viewport">
       <div id="spacer"><div id="rows"></div></div>
     </div>
-    <div id="density" title="Click to jump — red marks are errors">
+    <div id="density" class="needs-file" title="Click to jump — red marks are errors">
       <canvas id="densityCanvas"></canvas>
       <div id="densityThumb"></div>
     </div>
@@ -375,9 +377,9 @@ $('app').innerHTML = `
     </aside>
   </main>
 
-  <footer class="status" id="statusBar">
+  <footer class="status" id="statusBar" hidden>
     <span class="dot"></span>
-    <span id="statusMsg">Ready</span>
+    <span id="statusMsg"></span>
     <span id="pathBox"></span>
   </footer>
 `;
@@ -606,7 +608,6 @@ async function openFile(file) {
   setStatus('', 'Reading ' + file.name + '…');
   $('progress').style.width = '2%';
 
-  const started = performance.now();
   try {
     const stream = file.stream().pipeThrough(new TextDecoderStream());
     const reader = stream.getReader();
@@ -640,8 +641,7 @@ async function openFile(file) {
     $('progress').style.width = '100%';
     setTimeout(() => { $('progress').style.width = '0'; }, 400);
 
-    const ms = Math.round(performance.now() - started);
-    setStatus('ok', `${LintApp.fmtNum(lines.length)} lines · ${LintApp.fmtBytes(file.size)} · ${ms} ms`);
+    setStatus('ok', `${LintApp.fmtNum(lines.length)} lines, ${LintApp.fmtBytes(file.size)}`);
     $('pathBox').textContent = file.name;
     enable(true);
     applyFilters();
@@ -702,12 +702,14 @@ function reset() {
   $('spacer').style.height = '0px';
   $('sevFilters').hidden = true;
   $('pathBox').textContent = '';
+  $('statusBar').hidden = true;
   enable(false);
 }
 
 function enable(v) {
   ['btnWrap', 'btnTail', 'btnClose', 'btnCopyVisible']
     .forEach((id) => { $(id).disabled = !v; });
+  document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = !v; });
   if (!v) showEmpty();
 }
 
@@ -927,7 +929,7 @@ function paintSevFilters() {
     const n = counts[s];
     return `<button class="sev-chip" data-sev="${s}" aria-pressed="${on[s]}"
               title="${n ? LintApp.fmtNum(n) : 'No'} ${s} line${n === 1 ? '' : 's'} — click to show or hide">
-      <span class="pip"></span><span>${s}</span>
+      <span class="pip"></span><span>${s[0].toUpperCase() + s.slice(1)}</span>
       <span class="n">${n ? LintApp.fmtNum(n) : '—'}</span>
     </button>`;
   }).join('');
@@ -996,8 +998,8 @@ function paintDetail() {
   $('detailTitle').innerHTML =
     '<span class="pip' + (name ? ' sev-' + name : '') + '"></span>' +
     '<strong>Line ' + LintApp.fmtNum(root + 1) + '</strong>' +
-    (kids ? ' · ' + (kids + 1) + ' lines' : '') +
-    ' · ' + LintApp.fmtNum(lines[root].length) + ' chars';
+    (kids ? ', ' + (kids + 1) + ' lines' : '') +
+    ', ' + LintApp.fmtNum(lines[root].length) + ' characters';
 
   let html = '<pre class="detail-text' + (name ? ' sev-' + name : '') + '">';
   for (let k = root; k <= root + kids; k++) {
@@ -1129,7 +1131,7 @@ $('fileInput').addEventListener('change', (e) => {
   if (e.target.files[0]) openFile(e.target.files[0]);
   e.target.value = '';
 });
-$('btnClose').addEventListener('click', () => { reset(); setStatus('', 'Ready'); });
+$('btnClose').addEventListener('click', reset);
 
 let filterTimer;
 $('filter').addEventListener('input', () => {
@@ -1254,23 +1256,22 @@ window.addEventListener('resize', () => {
 
 function setStatus(kind, msg) {
   $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusBar').hidden = false;
   $('statusMsg').textContent = msg;
 }
 
 function showEmpty() {
   $('rows').innerHTML = LintApp.emptyState({
-    title: 'Open a log to read it',
-    body: 'Lines render here and never leave your browser. Severity is detected ' +
-      'from the text, stack traces fold into the error that produced them, and ' +
-      'the strip on the right shows where the trouble is. Handles files up to ' +
-      'about a gigabyte.',
-    keys: LintApp.kbd('mod+o') + ' open · or drop a file anywhere'
+    title: 'Open a log or drop it here',
+    body: 'It never leaves your browser, even at a gigabyte.',
+    extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>'
   });
+  $('emptyOpen').addEventListener('click', () => $('fileInput').click());
   $('spacer').style.height = '0px';
 }
 
-showEmpty();
-$('filter').focus();
+enable(false);
+if (LintApp.takeHandoff) LintApp.takeHandoff('log', openFile);
 </script>
 </body>
 </html>
