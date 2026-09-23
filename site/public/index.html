@@ -9,6 +9,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/shared/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/menu.css">
 <script src="/shared/theme-boot.js"></script>
 <style>
 * { box-sizing: border-box; }
@@ -112,13 +113,13 @@ h1, h2 { text-wrap: balance; }
 }
 /* The brand is monochrome: the one filled button is ink, and the tool hues
    stay with the tools. */
-.open {
+.open-file {
   font: inherit; font-size: var(--size-m); font-weight: 600; line-height: 1;
   padding: 14px 22px; border: none; border-radius: 10px;
   background: var(--ink); color: var(--surface);
   cursor: pointer;
 }
-.open:hover { background: color-mix(in srgb, var(--ink) 86%, var(--surface)); }
+.open-file:hover { background: color-mix(in srgb, var(--ink) 86%, var(--surface)); }
 .act-note { font-size: var(--size-s); color: var(--muted); }
 
 /* ---------- live demo ----------
@@ -281,19 +282,6 @@ h1, h2 { text-wrap: balance; }
 .t-log   { --tool-hue: #0369A1; --glyph: url("/shared/glyphs/log.svg"); }
 .t-audio { --tool-hue: #C026D3; --glyph: url("/shared/glyphs/audio.svg"); }
 
-/* ---------- facts ----------
-   What the hero cannot fit: how to check the promise, and what it costs
-   nothing to rely on. One quiet row, no heading. */
-.facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px 48px;
-  margin-top: 96px; padding-top: 32px;
-  border-top: var(--hairline) solid var(--line);
-}
-.facts p { margin: 0; font-size: var(--size-s); line-height: 1.55; color: var(--muted); max-width: 36ch; }
-.facts b { display: block; color: var(--ink); font-weight: 600; }
-
 /* ---------- footer ---------- */
 footer {
   margin-top: 96px;
@@ -304,34 +292,6 @@ footer {
 }
 footer a { color: var(--muted); text-decoration: none; margin-left: auto; }
 footer a:hover { color: var(--ink); text-decoration: underline; }
-
-/* ---------- theme menu ---------- */
-.menu-wrap { position: relative; }
-.menu {
-  display: none; position: absolute; right: 0; top: calc(100% + 6px);
-  min-width: 180px; z-index: 40; padding: 4px;
-  background: var(--raised);
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-}
-.menu.open { display: block; }
-.menu-item {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%; padding: 7px 9px; border: none; background: none;
-  border-radius: var(--radius);
-  font: inherit; font-size: var(--size-s); color: var(--ink);
-  text-align: left; cursor: pointer;
-}
-.menu-item:hover { background: var(--row-hover); }
-.menu-item .tick { margin-left: auto; opacity: 0; }
-.menu-item[aria-checked="true"] { font-weight: 600; }
-.menu-item[aria-checked="true"] .tick { opacity: 1; }
-.swatch {
-  width: 15px; height: 15px; border-radius: 5px; flex: none;
-  border: var(--hairline) solid var(--line-strong);
-  background: linear-gradient(135deg, var(--sw-bg) 0 50%, var(--sw-fg) 50% 100%);
-}
 
 /* ---------- drop veil ----------
    The whole window takes a file. While one is dragged over it the page
@@ -365,7 +325,6 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
   /* a narrower number column keeps the longest line whole on a 320px phone */
   .demo-src .l { padding-left: 36px; }
   .demo-src .l::before { width: 26px; }
-  .facts { grid-template-columns: minmax(0, 1fr); margin-top: 64px; }
   footer { margin-top: 64px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -383,7 +342,6 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <span>lint.one</span>
     </a>
     <div class="top-right">
-      <a class="ghost" href="https://github.com/saidkamolxon/lint.uz">Source</a>
       <div class="menu-wrap">
         <button class="ghost icon-btn" id="themeBtn" aria-label="Theme" title="Theme" aria-haspopup="true" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/></svg>
@@ -402,7 +360,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
           even offline. Nothing leaves your device.
         </p>
         <div class="act">
-          <button class="open" id="openBtn" type="button">Open a file</button>
+          <button class="open-file" id="openBtn" type="button">Open a file</button>
           <span class="act-note">or drop one anywhere on this page</span>
           <input type="file" id="fileIn" hidden>
         </div>
@@ -468,16 +426,11 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       </ul>
     </nav>
 
-    <section class="facts" aria-label="Details">
-      <p><b>Check it yourself.</b> Open the Network panel in DevTools and paste something secret.</p>
-      <p><b>Works offline.</b> After one visit every tool opens with no connection at all.</p>
-      <p><b>Built for big files.</b> A 40&nbsp;MB file opens without freezing the tab.</p>
-    </section>
   </main>
 
   <footer>
     <span>MIT licensed. No accounts, no analytics.</span>
-    <a href="https://github.com/saidkamolxon/lint.uz">GitHub</a>
+    <a href="https://github.com/saidkamolxon/lint.uz">Source code</a>
   </footer>
 </div>
 
@@ -489,36 +442,14 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
 (function () {
 'use strict';
 
-/* Contrast is not a choice here: it follows the system's prefers-contrast
-   inside whichever of these three is active. */
-var THEMES = [
-  { id: '',         name: 'System', bg: 'var(--surface)', fg: 'var(--ink)' },
-  { id: 'daylight', name: 'Light',  bg: '#FBFBFC', fg: '#1A1D23' },
-  { id: 'slate',    name: 'Dark',   bg: '#15171C', fg: '#E6E9F0' }
-];
-
 var menu = document.getElementById('themeMenu');
 var btn = document.getElementById('themeBtn');
-var current = LintTheme.read();
-
-THEMES.forEach(function (t) {
-  var item = document.createElement('button');
-  item.className = 'menu-item';
-  item.setAttribute('role', 'menuitemradio');
-  item.setAttribute('aria-checked', String(t.id === current));
-  item.innerHTML = '<span class="swatch" style="--sw-bg:' + t.bg + ';--sw-fg:' + t.fg +
-    '"></span><span>' + t.name + '</span><span class="tick">✓</span>';
-  item.addEventListener('click', function () {
-    LintTheme.apply(t.id);
-    LintTheme.write(t.id);
-    var all = menu.querySelectorAll('.menu-item');
-    for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-checked', 'false');
-    item.setAttribute('aria-checked', 'true');
-    menu.classList.remove('open');
-    btn.setAttribute('aria-expanded', 'false');
-  });
-  menu.appendChild(item);
-});
+function closeMenu() {
+  menu.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
+}
+/* the same menu every tool shows, built by the one shared implementation */
+LintTheme.buildMenu(menu, closeMenu);
 
 /* ---------- opening a file ----------
    The page is a drop target, and the button a picker. Either way the file
