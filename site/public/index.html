@@ -222,7 +222,12 @@ body {
   display: flex; gap: 14px;
   margin: 0; padding: 0 14px 0 0; list-style: none;
 }
-.rail.moving { cursor: grab; }
+/* the script turns sideways swipes into its own physics; up and down stay the page's */
+.rail.moving { cursor: grab; touch-action: pan-y; overflow: hidden; }
+/* Moved by transform, not scrolling: a scroll offset snaps to whole pixels,
+   and at a slow drift that snapping reads as a stutter. No will-change on
+   purpose — a promoted layer slides a picture of the text and smears it;
+   left in place, the text is drawn afresh, sharp, at every position. */
 .rail.dragging { cursor: grabbing; user-select: none; }
 
 .tool {
@@ -565,8 +570,7 @@ THEMES.forEach(function (t) {
    and whenever it passes one set's width it steps back by exactly that much,
    so the same cards are under the pointer and nothing jumps. The copy works
    under the pointer like the original, but the keyboard and screen readers
-   meet each tool once. It rests under the pointer or the keyboard, and it
-   can be dragged either way with the mouse or swiped with a finger. */
+   meet each tool once. */
 (function () {
   var rail = document.getElementById('rail');
   if (!rail || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -583,54 +587,94 @@ THEMES.forEach(function (t) {
   }
   rail.classList.add('moving');
 
-  var PX_PER_SECOND = 28;
-  var pos = 0, last = 0, hovered = false, touching = false, drag = null, dragged = false;
+  /* One velocity drives it all. Left alone it eases back to the drift; a
+     pointer resting on the rail, or the keyboard in it, eases it to a stop.
+     A drag moves the rail with the hand, and letting go throws it at the
+     speed the hand was moving — a flick spins it, a slow release barely
+     nudges it — and friction brings it back to the drift. */
+  var DRIFT = 28;          // px per second, the resting speed
+  var EASE = 0.8;          // seconds for the gap to the target speed to shrink ~63%
+  var MAX_SPEED = 6000;    // px per second, however hard the flick
+  var SETTLE = 0.35;       // seconds: how gently the target speed itself turns
+  var pos = 0, vel = DRIFT, goal = DRIFT, last = 0;
+  var hovered = false, drag = null, dragged = false;
+  var track = set.parentNode;
 
+  function period() { return copy.offsetLeft - set.offsetLeft; }
   function wrap(x) {
-    var w = copy.offsetLeft - set.offsetLeft;
-    if (w <= 0) return x;
-    return ((x % w) + w) % w;
+    var w = period();
+    return w > 0 ? ((x % w) + w) % w : x;
   }
   function step(now) {
     var dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
     last = now;
-    var resting = hovered || touching || drag || rail.contains(document.activeElement);
-    /* at rest the rail follows whatever moved it — a wheel, a swipe, a drag */
-    pos = resting ? rail.scrollLeft : pos + dt * PX_PER_SECOND;
-    var p = wrap(pos);
-    if (p !== pos || !resting) { pos = p; rail.scrollLeft = pos; }
+    if (!drag) {
+      /* :focus-visible — a card the keyboard reached, not one a mouse press
+         left focused behind it */
+      var target = hovered || rail.querySelector(':focus-visible') ? 0 : DRIFT;
+      /* the aim eases too, so stopping under the pointer and setting off
+         again start and end without a jolt; a throw still meets friction
+         at once */
+      goal += (target - goal) * (1 - Math.exp(-dt / SETTLE));
+      vel += (goal - vel) * (1 - Math.exp(-dt / EASE));
+      pos += vel * dt;
+    }
+    pos = wrap(pos);
+    track.style.transform = 'translateX(' + (-pos) + 'px)';
     requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 
-  rail.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') hovered = true; });
-  rail.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hovered = false; });
-  /* a finger scrolls the rail natively; the drift waits until it lets go */
-  var touchTimer;
-  rail.addEventListener('touchstart', function () { touching = true; clearTimeout(touchTimer); }, { passive: true });
-  rail.addEventListener('touchend', function () {
-    /* momentum carries on after the finger lifts */
-    touchTimer = setTimeout(function () { touching = false; }, 1200);
+  /* a sideways wheel or trackpad swipe moves it too */
+  rail.addEventListener('wheel', function (e) {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    pos += e.deltaX;
+  }, { passive: false });
+  /* tabbing to a card out of view makes the browser scroll the rail to it;
+     that scroll is folded into the position, so the two never add up */
+  rail.addEventListener('scroll', function () {
+    pos += rail.scrollLeft;
+    rail.scrollLeft = 0;
   });
 
-  /* the mouse drags */
+  rail.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') hovered = true; });
+  rail.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hovered = false; });
+
+  /* mouse and finger alike; the page still scrolls up and down over it */
   rail.addEventListener('pointerdown', function (e) {
-    if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    drag = { x: e.clientX, left: rail.scrollLeft };
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    drag = { x: e.clientX, pos: pos, samples: [{ x: e.clientX, t: e.timeStamp }] };
     dragged = false;
+    vel = 0;
   });
   window.addEventListener('pointermove', function (e) {
     if (!drag) return;
     var dx = e.clientX - drag.x;
-    if (!dragged && Math.abs(dx) > 4) { dragged = true; rail.classList.add('dragging'); }
-    if (dragged) rail.scrollLeft = wrap(drag.left - dx);
+    if (!dragged && Math.abs(dx) > 5) { dragged = true; rail.classList.add('dragging'); }
+    if (!dragged) return;
+    var p = drag.pos - dx, w = wrap(p);
     /* stepping back a set mid-drag moves where the drag is measured from */
-    if (dragged && rail.scrollLeft !== drag.left - dx) { drag.left = rail.scrollLeft; drag.x = e.clientX; }
+    drag.pos += w - p;
+    pos = w;
+    drag.samples.push({ x: e.clientX, t: e.timeStamp });
+    while (drag.samples.length > 2 && e.timeStamp - drag.samples[0].t > 100) drag.samples.shift();
   });
-  window.addEventListener('pointerup', function () {
+  function release(e) {
+    if (!drag) return;
+    /* the hand's speed over its last tenth of a second; a hand that had
+       stopped before letting go throws nothing */
+    var s = drag.samples, a = s[0], b = s[s.length - 1];
+    var span = (e.timeStamp - a.t) / 1000;
+    var fresh = e.timeStamp - b.t < 80;
+    if (dragged && e.type === 'pointerup' && fresh && span > 0.01) {
+      vel = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, -(b.x - a.x) / span));
+    }
     drag = null;
     rail.classList.remove('dragging');
-  });
+  }
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', release);
   /* a drag that ends on a card is not a click on it */
   rail.addEventListener('click', function (e) {
     if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; }
