@@ -2,11 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Audio Player &amp; Visualizer · lint.one</title>
 <meta name="description" content="Play an audio file, or the sound of a browser tab or your whole system, with a live spectrum visualizer. See what the file holds — sample rate, bit depth, loudness, tags. Nothing is uploaded.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<!-- iPhone gives full screen only to video, or to a page opened from the
+     home screen — these make "Add to Home Screen" open edge to edge -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Audio">
+<meta name="theme-color" content="#000000">
 <link rel="stylesheet" href="/shared/theme.css">
 <link rel="stylesheet" href="/shared/app.css">
 <style>
@@ -67,6 +76,7 @@
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   text-align: left; white-space: normal;
 }
+.au-empty .choice[hidden] { display: none; }
 .au-empty .choice:hover { border-color: color-mix(in srgb, var(--hue) 60%, transparent); background: rgb(24 26 36 / 0.75); }
 .au-empty .choice b { font-size: 13.5px; font-weight: 600; }
 .au-empty .choice span { font-size: 11.5px; color: var(--st-faint); line-height: 1.4; font-weight: 400; }
@@ -131,7 +141,26 @@
 #stage.idle .transport { opacity: 0; transform: translateY(8px); pointer-events: none; }
 #stage.idle .now { opacity: 0; }
 .fs-only { display: none; }
-#stage:fullscreen .fs-only { display: grid; }
+#stage:fullscreen .fs-only, body.pseudo-full .fs-only { display: grid; }
+
+/* Where the browser will not go full screen (iPhone), the stage covers
+   the page instead, and keeps clear of the notch and the home bar. */
+body.pseudo-full { background: #000; }
+body.pseudo-full .toolbar, body.pseudo-full .status, body.pseudo-full #drawer { display: none !important; }
+body.pseudo-full #stage { position: fixed; inset: 0; z-index: 40; }
+body.pseudo-full .now {
+  top: calc(var(--s5) + env(safe-area-inset-top));
+  left: calc(var(--s5) + env(safe-area-inset-left));
+}
+body.pseudo-full .transport {
+  bottom: calc(var(--s3) + env(safe-area-inset-bottom));
+  left: calc(var(--s3) + env(safe-area-inset-left));
+  right: calc(var(--s3) + env(safe-area-inset-right));
+}
+
+/* style choices move into the colour menu where the toolbar has no room */
+.narrow-only { display: none; }
+@media (max-width: 760px) { .narrow-only { display: flex; } .menu-label.narrow-only { display: block; } }
 
 /* ---------- toolbar controls ---------- */
 .seg {
@@ -377,8 +406,17 @@ function paletteAt(t) {
 }
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
+const STYLE_NAMES = { bars: 'Bars', radial: 'Radial', aura: 'Aura', particles: 'Particles', wave: 'Wave' };
+const STYLES = Object.keys(STYLE_NAMES);
+let style = STYLES.includes(store.get('style', 'bars')) ? store.get('style', 'bars') : 'bars';
 function paintPaletteMenu() {
-  $('paletteMenu').innerHTML = '<div class="menu-label">Colours</div>' +
+  $('paletteMenu').innerHTML =
+    '<div class="menu-label narrow-only">Style</div>' +
+    Object.keys(STYLE_NAMES).map((id) =>
+      `<button class="menu-item narrow-only" role="menuitemradio" data-pick-style="${id}" aria-checked="${id === style}">` +
+      `${STYLE_NAMES[id]}<span class="tick">✓</span></button>`).join('') +
+    '<div class="menu-sep narrow-only"></div>' +
+    '<div class="menu-label">Colours</div>' +
     Object.keys(PALETTES).map((id) =>
       `<button class="menu-item" role="menuitemradio" data-pal="${id}" aria-checked="${id === paletteId}">` +
       `<span class="pal-swatch" style="background:linear-gradient(90deg,${PALETTES[id].stops.join(',')})"></span>` +
@@ -386,6 +424,8 @@ function paintPaletteMenu() {
 }
 paintPaletteMenu();
 $('paletteMenu').addEventListener('click', (e) => {
+  const st = e.target.closest('[data-pick-style]');
+  if (st) { setStyle(st.dataset.pickStyle); LintApp.closeMenus(); return; }
   const b = e.target.closest('[data-pal]');
   if (!b) return;
   paletteId = b.dataset.pal;
@@ -397,11 +437,10 @@ $('paletteMenu').addEventListener('click', (e) => {
   LintApp.closeMenus();
 });
 
-const STYLES = ['bars', 'radial', 'aura', 'particles', 'wave'];
-let style = STYLES.includes(store.get('style', 'bars')) ? store.get('style', 'bars') : 'bars';
 function setStyle(s) {
   style = s;
   invalidate();
+  paintPaletteMenu();
   store.set('style', s);
   document.querySelectorAll('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === s)));
 }
@@ -452,6 +491,92 @@ function attachFile() {
   mediaNode.connect(gain);
 }
 
+/* ---------- playback ----------
+   Two engines behind one face. The <audio> element streams, so it plays
+   anything at no cost in memory. On iPhone and iPad, though, its route into
+   Web Audio holds about half a second of sound: after a seek the old place
+   keeps playing before the new one arrives. There the decoded buffer —
+   made anyway for the waveform — plays instead, and a seek is immediate.
+   That costs ~23 MB a minute of stereo, so very long files keep streaming. */
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const BUFFER_MAX_SECONDS = 20 * 60;
+
+const player = {
+  buffer: null,       // set when the decoded signal is what plays
+  node: null,
+  startedAt: 0,       // context time the current node started
+  offset: 0,          // position in the file when it did, or when paused
+  playing: false,
+  done: false,
+
+  paused() { return this.buffer ? !this.playing : audio.paused || audio.ended; },
+  duration() { return this.buffer ? this.buffer.duration : audio.duration; },
+  time() {
+    if (!this.buffer) return audio.currentTime;
+    return this.playing ? Math.min(this.buffer.duration, this.offset + actx.currentTime - this.startedAt) : this.offset;
+  },
+
+  play() {
+    if (!this.buffer) return audio.play().catch(() => {});
+    if (this.playing) return;
+    ensureAudio();
+    if (this.done || this.offset >= this.buffer.duration) this.offset = 0;
+    this.done = false;
+    const node = actx.createBufferSource();
+    node.buffer = this.buffer;
+    node.connect(analyser);
+    node.connect(gain);
+    node.onended = () => {
+      if (node !== this.node) return;          // replaced by a seek or a pause
+      this.playing = false; this.done = true; this.offset = this.buffer.duration; this.node = null;
+      paintPlay();
+    };
+    node.start(0, this.offset);
+    this.node = node;
+    this.startedAt = actx.currentTime;
+    this.playing = true;
+    paintPlay();
+  },
+
+  pause() {
+    if (!this.buffer) return audio.pause();
+    if (!this.playing) return;
+    this.offset = this.time();
+    this.stopNode();
+    this.playing = false;
+    paintPlay();
+  },
+
+  seek(t) {
+    const d = this.duration();
+    if (!isFinite(d)) return;
+    t = Math.max(0, Math.min(d, t));
+    if (!this.buffer) { audio.currentTime = t; return; }
+    const was = this.playing;
+    this.stopNode();
+    this.playing = false;
+    this.offset = t;
+    this.done = false;
+    if (was) this.play();
+    onSeeked();
+  },
+
+  stopNode() {
+    if (!this.node) return;
+    const n = this.node;
+    this.node = null;
+    try { n.stop(); } catch (e) {}
+    n.disconnect();
+  },
+
+  /* a new file, or the file engine handing back to streaming */
+  reset() {
+    this.stopNode();
+    this.buffer = null; this.playing = false; this.done = false; this.offset = 0;
+  }
+};
+
 function stopLive() {
   if (!live) return;
   live.stream.getTracks().forEach((t) => { t.onended = null; t.stop(); });
@@ -484,6 +609,7 @@ async function openFile(file) {
   stopLive();
   ensureAudio();
   attachFile();
+  player.reset();
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   if (coverUrl) { URL.revokeObjectURL(coverUrl); coverUrl = null; }
   objectUrl = URL.createObjectURL(file);
@@ -497,7 +623,10 @@ async function openFile(file) {
   setStatus('', 'Opening ' + file.name + '…');
   $('pathBox').textContent = file.name;
 
-  try { await audio.play(); } catch (e) { /* autoplay may wait for a gesture */ }
+  /* On iOS the decoded buffer will play, so the element must not start —
+     handing over mid-song would jump by the element's own delay. */
+  if (!IOS) { try { await audio.play(); } catch (e) { /* autoplay may wait for a gesture */ } }
+  else setStatus('', 'Decoding ' + file.name + '…');
 
   /* what the container says, then the whole signal for the overview */
   const buf = await file.arrayBuffer();
@@ -512,16 +641,26 @@ async function openFile(file) {
   paintMediaSession();
   paintDrawer();
 
-  if (file.size > 400 * 1024 * 1024) { setReadyStatus(); return; }
-  try {
-    const decoded = await actx.decodeAudioData(buf.slice(0));
-    if (fileInfo.name !== file.name) return;
-    analyseSignal(decoded);
-    drawWave();
-    paintDrawer();
-  } catch (e) {
-    /* playable but not decodable here happens (some containers) — the
-       player still works, only the overview is missing */
+  let decoded = null;
+  if (file.size <= 400 * 1024 * 1024) {
+    try {
+      decoded = await actx.decodeAudioData(buf.slice(0));
+      if (fileInfo.name !== file.name) return;
+      analyseSignal(decoded);
+      drawWave();
+      paintDrawer();
+    } catch (e) {
+      /* playable but not decodable here happens (some containers) — the
+         player still works, only the overview is missing */
+    }
+  }
+  if (IOS) {
+    if (decoded && decoded.duration <= BUFFER_MAX_SECONDS) {
+      player.buffer = decoded;
+      $('tDur').textContent = fmtTime(decoded.duration);
+    }
+    /* the context was unlocked by the tap that chose the file */
+    player.play();
   }
   setReadyStatus();
 }
@@ -530,7 +669,7 @@ function setReadyStatus() {
   if (!fileInfo) return;
   const h = fileInfo.head || {};
   const bits = [fileInfo.name];
-  if (isFinite(audio.duration)) bits.push(fmtTime(audio.duration));
+  if (isFinite(player.duration())) bits.push(fmtTime(player.duration()));
   if (h.sampleRate) bits.push((h.sampleRate / 1000).toFixed(h.sampleRate % 1000 ? 1 : 0) + ' kHz');
   if (fileInfo.channels) bits.push(fileInfo.channels === 1 ? 'mono' : fileInfo.channels === 2 ? 'stereo' : fileInfo.channels + ' channels');
   setStatus('ok', bits.join(' · '));
@@ -547,7 +686,7 @@ audio.addEventListener('pause', paintPlay);
 audio.addEventListener('ended', paintPlay);
 
 function paintPlay() {
-  const playing = !audio.paused && !audio.ended;
+  const playing = source === 'file' && !player.paused();
   $('btnPlay').innerHTML = I(playing ? ICON.pause : ICON.play);
   $('btnPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
@@ -556,7 +695,7 @@ function paintPlay() {
 function togglePlay() {
   if (source !== 'file') return;
   ensureAudio();
-  if (audio.paused || audio.ended) audio.play().catch(() => {}); else audio.pause();
+  if (player.paused()) player.play(); else player.pause();
 }
 
 /* ---------- another tab, or the whole system ---------- */
@@ -627,7 +766,7 @@ $('inputSelect').addEventListener('change', () => listenInput($('inputSelect').v
 
 function startLive(stream, kind, label, detail) {
   stopLive();
-  if (!audio.paused) audio.pause();
+  player.pause();
   const node = actx.createMediaStreamSource(stream);
   node.connect(analyser);
   live = { stream, node, kind, label, detail };
@@ -653,6 +792,13 @@ $('btnOpen').addEventListener('click', () => $('fileInput').click());
 $('srcFile').addEventListener('click', chooseFile);
 $('chFile').addEventListener('click', () => $('fileInput').click());
 $('srcSystem').addEventListener('click', listenSystem);
+/* iPhone and iPad let no page hear other apps — offering it would only
+   fail; the microphone is what they allow */
+if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
+  $('srcSystem').hidden = true;
+  $('chSystem').hidden = true;
+  $('chInput').querySelector('span').textContent = 'Hear the room — music from a speaker nearby';
+}
 $('chSystem').addEventListener('click', listenSystem);
 $('srcInput').addEventListener('click', () => listenInput());
 $('chInput').addEventListener('click', () => listenInput());
@@ -916,11 +1062,11 @@ function paintMediaSession() {
 if ('mediaSession' in navigator) {
   const ms = navigator.mediaSession;
   const on = (a, f) => { try { ms.setActionHandler(a, f); } catch (e) {} };
-  on('play', () => { if (source === 'file') audio.play(); });
-  on('pause', () => audio.pause());
+  on('play', () => { if (source === 'file') player.play(); });
+  on('pause', () => player.pause());
   on('seekbackward', () => seekBy(-10));
   on('seekforward', () => seekBy(10));
-  on('seekto', (d) => { audio.currentTime = d.seekTime; });
+  on('seekto', (d) => player.seek(d.seekTime));
 }
 
 const dash = '<dd class="none">—</dd>';
@@ -945,7 +1091,7 @@ function paintDrawer() {
     return;
   }
   const h = fileInfo.head || {}, t = fileInfo.tags || {};
-  const dur = isFinite(audio.duration) ? audio.duration : fileInfo.duration;
+  const dur = isFinite(player.duration()) ? player.duration() : fileInfo.duration;
   const bitrate = h.bitrate && !h.vbr ? Math.round(h.bitrate / 1000) + ' kbps'
     : dur ? '≈ ' + Math.round(fileInfo.size * 8 / dur / 1000) + ' kbps' + (h.vbr ? ' (VBR)' : '') : '';
   d.innerHTML =
@@ -986,8 +1132,8 @@ function fmtTime(s, long) {
 }
 
 function seekBy(d) {
-  if (source !== 'file' || !isFinite(audio.duration)) return;
-  audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + d));
+  if (source !== 'file') return;
+  player.seek(player.time() + d);
 }
 
 $('btnPlay').addEventListener('click', togglePlay);
@@ -1017,8 +1163,8 @@ function drawWave() {
   if (wave.width !== Math.round(w * dpr)) { wave.width = Math.round(w * dpr); wave.height = Math.round(h * dpr); }
   wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   wctx.clearRect(0, 0, w, h);
-  const dur = audio.duration;
-  const at = isFinite(dur) && dur > 0 ? audio.currentTime / dur : 0;
+  const dur = player.duration();
+  const at = !isFinite(dur) || dur <= 0 ? 0 : (scrubTo !== null ? scrubTo : player.time()) / dur;
   const mid = h / 2;
 
   if (!peaks) {
@@ -1050,26 +1196,40 @@ function drawWave() {
 function seekFromEvent(e) {
   const r = $('seek').getBoundingClientRect();
   const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-  return f * (audio.duration || 0);
+  return f * (player.duration() || 0);
 }
-let seeking = false;
+/* While dragging only the picture moves; the one seek happens on release.
+   A seek per pointer move queued dozens of them, and on iOS each is slow. */
+let scrubTo = null;
+function showScrub(t) {
+  $('tCur').textContent = fmtTime(t);
+  drawWave();
+}
 $('seek').addEventListener('pointerdown', (e) => {
-  if (!isFinite(audio.duration)) return;
-  seeking = true;
+  if (!isFinite(player.duration())) return;
   $('seek').setPointerCapture(e.pointerId);
-  audio.currentTime = seekFromEvent(e);
+  scrubTo = seekFromEvent(e);
+  showScrub(scrubTo);
 });
 $('seek').addEventListener('pointermove', (e) => {
-  if (!isFinite(audio.duration)) return;
+  if (!isFinite(player.duration())) return;
   const tip = $('seekTip');
   const r = $('seek').getBoundingClientRect();
   tip.hidden = false;
   tip.style.left = Math.max(0, Math.min(r.width, e.clientX - r.left)) + 'px';
   tip.textContent = fmtTime(seekFromEvent(e));
-  if (seeking) audio.currentTime = seekFromEvent(e);
+  if (scrubTo !== null) { scrubTo = seekFromEvent(e); showScrub(scrubTo); }
 });
-$('seek').addEventListener('pointerup', () => { seeking = false; });
-$('seek').addEventListener('pointerleave', () => { if (!seeking) $('seekTip').hidden = true; });
+const endScrub = () => {
+  if (scrubTo === null) return;
+  const t = scrubTo;
+  scrubTo = null;
+  player.seek(t);
+  $('seekTip').hidden = true;
+};
+$('seek').addEventListener('pointerup', endScrub);
+$('seek').addEventListener('pointercancel', () => { scrubTo = null; drawWave(); $('seekTip').hidden = true; });
+$('seek').addEventListener('pointerleave', () => { if (scrubTo === null) $('seekTip').hidden = true; });
 $('seek').addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); seekBy(-5); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); seekBy(5); }
@@ -1077,9 +1237,23 @@ $('seek').addEventListener('keydown', (e) => {
 
 /* ---------- full screen, and resting controls ---------- */
 const stage = $('stage');
+const canFull = !!(document.fullscreenEnabled && stage.requestFullscreen);
+let pseudoTipShown = false;
+function setPseudo(on) {
+  document.body.classList.toggle('pseudo-full', on);
+  $('btnFull').innerHTML = I(on ? ICON.exitFull : ICON.full);
+  if (on && !pseudoTipShown && IOS && !navigator.standalone) {
+    pseudoTipShown = true;
+    LintApp.toast('For true full screen: Share → Add to Home Screen');
+  }
+  wake();
+}
+function isFull() { return !!document.fullscreenElement || document.body.classList.contains('pseudo-full'); }
 function toggleFull() {
   if (document.fullscreenElement) document.exitFullscreen();
-  else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+  else if (document.body.classList.contains('pseudo-full')) setPseudo(false);
+  else if (canFull) stage.requestFullscreen().catch(() => setPseudo(true));
+  else setPseudo(true);
 }
 $('btnFull').addEventListener('click', toggleFull);
 $('btnFullOut').addEventListener('click', toggleFull);
@@ -1093,7 +1267,7 @@ function wake() {
   stage.classList.remove('idle');
   clearTimeout(idleTimer);
   /* in a window the controls stay; full screen is for watching */
-  if (document.fullscreenElement) idleTimer = setTimeout(() => stage.classList.add('idle'), 2600);
+  if (isFull()) idleTimer = setTimeout(() => stage.classList.add('idle'), 2600);
 }
 stage.addEventListener('pointermove', wake);
 stage.addEventListener('pointerdown', wake);
@@ -1106,6 +1280,7 @@ document.addEventListener('keydown', (e) => {
   if (mod && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('fileInput').click(); return; }
   if (mod || e.altKey || typing) return;
   wake();
+  if (e.key === 'Escape' && document.body.classList.contains('pseudo-full')) { setPseudo(false); return; }
   /* space always plays — not whichever button happened to keep focus */
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); seekBy(e.shiftKey ? -30 : -5); }
@@ -1199,7 +1374,7 @@ function buildBands() {
 }
 
 function readSpectrum(t) {
-  const active = analyser && ((source === 'file' && !audio.paused) || live);
+  const active = analyser && ((source === 'file' && !player.paused()) || live);
   if (!active && source !== 'none') {
     /* paused: let everything fall, then the loop stops drawing */
     target.fill(0);
@@ -1587,7 +1762,7 @@ let timeBuf = null, scopePeak = 0.3;
 const scopeY = new Float32Array(SCOPE_POINTS), want = new Float32Array(SCOPE_POINTS);
 
 function drawScope(dt, bass, t) {
-  const active = analyser && ((source === 'file' && !audio.paused) || live);
+  const active = analyser && ((source === 'file' && !player.paused()) || live);
   want.fill(0);
   if (active) {
     if (!timeBuf || timeBuf.length !== analyser.fftSize) timeBuf = new Float32Array(analyser.fftSize);
@@ -1689,7 +1864,7 @@ function settled() {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const playing = analyser && ((source === 'file' && !audio.paused) || live);
+  const playing = analyser && ((source === 'file' && !player.paused()) || live);
   const fps = playing ? 60 : source === 'none' ? 20 : 60;
   /* a little slack, so a 60 Hz display never skips alternate frames */
   if (now - lastT < 1000 / fps - 3) return;
@@ -1709,8 +1884,8 @@ function frame(now) {
       else if (style === 'wave') drawScope(dt, bass, t);
       else drawBars(bass);
     }
-    if (source === 'file' && !audio.paused) {
-      $('tCur').textContent = fmtTime(audio.currentTime);
+    if (source === 'file' && !player.paused() && scrubTo === null) {
+      $('tCur').textContent = fmtTime(player.time());
       /* the seek bar only needs a few repaints a second */
       if ((waveTick += dt) > 0.12) { waveTick = 0; drawWave(); }
     }
@@ -1720,7 +1895,8 @@ function frame(now) {
 }
 
 /* while paused the loop is quiet, so the clock and bar follow a seek here */
-audio.addEventListener('seeked', () => { $('tCur').textContent = fmtTime(audio.currentTime); drawWave(); });
+function onSeeked() { $('tCur').textContent = fmtTime(player.time()); drawWave(); }
+audio.addEventListener('seeked', onSeeked);
 
 /* ==========================================================================
    Start
