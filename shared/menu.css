@@ -1,0 +1,66 @@
+/* ==========================================================================
+   lint.one — menus
+   The dropdown every page uses: the theme menu, the lint.one menu, a tool's
+   ⋮ menu and a tree row's menu. Its own file so the landing page, which
+   does not load app.css, draws the theme menu from the same rules as the
+   tools instead of a copy that drifts. Depends on theme.css for tokens, and
+   styles its items completely, since the landing page has no button reset.
+   ========================================================================== */
+
+.menu-wrap { position: relative; flex: none; }
+.menu {
+  display: none; position: absolute; right: 0; top: calc(100% + 6px);
+  min-width: 190px; z-index: 60;
+  padding: var(--s1);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+.menu.open { display: block; }
+.menu-label {
+  padding: 5px var(--s2) var(--s1);
+  font-family: var(--ui); font-size: var(--fs-micro); font-weight: 600;
+  color: var(--faint); letter-spacing: 0.02em;
+}
+.menu-item {
+  display: flex; align-items: center; gap: var(--s2);
+  width: 100%; padding: 6px var(--s2); margin: 0;
+  border-radius: var(--radius);
+  font-family: var(--ui); font-size: var(--fs-base); font-weight: 500;
+  line-height: 1.35;
+  text-align: left; text-decoration: none; white-space: nowrap;
+  color: var(--ink); border: none; background: transparent;
+  cursor: pointer;
+}
+.menu-item:hover { background: var(--row-hover); }
+.menu-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+.menu-item[disabled]:hover { background: transparent; }
+/* the chosen radio, the ticked checkbox and the current page all read bold */
+.menu-item[aria-checked="true"], .menu-item[aria-current="page"] { font-weight: 600; }
+.menu-item .tick { margin-left: auto; color: var(--hue); opacity: 0; font-size: var(--fs-small); }
+.menu-item[aria-checked="true"] .tick,
+.menu-item[aria-current="page"] .tick { opacity: 1; }
+/* a key hint sits where the tick would, quieter than the label */
+.menu-item .menu-key {
+  margin-left: auto; padding-left: var(--s4);
+  font-size: var(--fs-small); font-weight: 400; color: var(--faint);
+}
+.menu-sep { height: var(--hairline); background: var(--line); margin: var(--s1) var(--s2); }
+
+/* A 16px leading icon, in the column the swatches and tool tiles use, so a
+   checkbox item lines up with the radios above it. */
+.menu-icon { width: 16px; height: 16px; flex: none; color: var(--muted); }
+
+/* Theme swatch: a diagonal of two colours — surface and line for a single
+   theme, the light and dark surfaces for System */
+.swatch {
+  width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none;
+  border: var(--hairline) solid var(--line-strong);
+  background: linear-gradient(135deg, var(--sw-bg) 0 50%, var(--sw-fg) 50% 100%);
+}
+
+/* with more contrast the hue is not guaranteed legible on the surface, so
+   the tick takes the ink */
+[data-contrast="more"] .menu-item .tick { color: var(--ink); }

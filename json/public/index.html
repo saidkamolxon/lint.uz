@@ -545,19 +545,6 @@ var app = LintApp.init({
   sample: SAMPLE
 });
 
-/* ponytail: stop-gap for a shared app.js that does not yet read
-   LINT_CONFIG.more — slot the item into the ⋮ menu ahead of Copy */
-if (!document.getElementById('btnEscape') && document.getElementById('btnCopy')) {
-  var escItem = document.createElement('button');
-  escItem.className = 'menu-item';
-  escItem.id = 'btnEscape';
-  escItem.setAttribute('role', 'menuitem');
-  escItem.textContent = LINT_CONFIG.more[0].label;
-  escItem.title = LINT_CONFIG.more[0].title;
-  escItem.addEventListener('click', function () { LintApp.closeMenus(); });
-  document.getElementById('btnCopy').before(escItem);
-}
-
 document.getElementById('btnFormat').addEventListener('click', function () {
   var res = parse(app.editor.getValue());
   if (!res.ok) { app.run(); LintApp.toast('Fix the JSON before formatting'); return; }

@@ -6,16 +6,9 @@
 (function (global) {
 'use strict';
 
-/* ---------- theme registry — mirrors the blocks in theme.css ----------
-   The ids are the old theme names, kept so a saved choice still applies. */
-var THEMES = [
-  { id: '',          name: 'System', bg: 'var(--surface)', fg: 'var(--hue)' },
-  { id: 'daylight',  name: 'Light',  bg: '#FBFBFC',        fg: '#1A1D23' },
-  { id: 'slate',     name: 'Dark',   bg: '#1B1E25',        fg: '#82B5F0' }
-];
-
-/* reading, writing and applying live in theme-boot.js, loaded first */
-var readTheme = LintTheme.read, writeTheme = LintTheme.write, applyTheme = LintTheme.apply;
+/* The themes, their menu and the contrast switch live in theme-boot.js,
+   loaded first, so the landing page and the tools share one copy. */
+var THEMES = LintTheme.THEMES;
 
 /* ---------- the seven tools, for the suite switcher ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a
@@ -55,16 +48,97 @@ function svg(paths, size) {
 
 var ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-  expand: '<path d="M12 5v14M5 12h14"/>',
-  collapse: '<path d="M5 12h14"/>',
+  /* chevrons pointing apart and together — a plus and a minus read as
+     zoom, which the text size now is */
+  expand: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  collapse: '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
   wrap: '<path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-4m0 0 2.5-2.5M12 18l2.5 2.5M3 18h5"/>',
   theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
-  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   filter: '<path d="M4 5h16l-6.2 7.4V19l-3.6 1.6v-8.2z"/>',
   up: '<path d="M6 15l6-6 6 6"/>',
   down: '<path d="M6 9l6 6 6-6"/>',
   more: '<circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/>'
 };
+
+/* ---------- keys ----------
+   One way to write a shortcut everywhere: tokens joined by '+', e.g.
+   'mod+shift+]' or 'shift+alt+f'. mod is Ctrl, or ⌘ on a Mac. The same
+   string is bound (keyMatches), shown in a tooltip (keyText) and listed in
+   the shortcuts panel (kbd), so none of the three can disagree. */
+var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+
+/* modifiers in each platform's own order: VS Code's Ctrl+Shift+Alt on a
+   PC, Apple's ⌥⇧⌘ on a Mac */
+var MOD_ORDER = IS_MAC ? ['alt', 'shift', 'mod'] : ['mod', 'shift', 'alt'];
+var MOD_NAMES = IS_MAC
+  ? { mod: '⌘', shift: '⇧', alt: '⌥' }
+  : { mod: 'Ctrl', shift: 'Shift', alt: 'Alt' };
+/* ↵ is a Mac keycap; a PC keyboard says Enter */
+var KEY_NAMES = {
+  enter: IS_MAC ? '↵' : 'Enter', esc: 'Esc', space: 'Space',
+  up: '↑', down: '↓', left: '←', right: '→',
+  pageup: 'PgUp', pagedown: 'PgDn', home: 'Home', end: 'End', wheel: 'scroll'
+};
+/* what KeyboardEvent.key says for the named keys */
+var EVENT_KEYS = {
+  enter: 'Enter', esc: 'Escape', space: ' ',
+  up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
+  pageup: 'PageUp', pagedown: 'PageDown', home: 'Home', end: 'End'
+};
+/* the physical key, for when a modifier or the layout changes the character
+   (Shift+] types "}", Alt+Z on a Mac types "Ω", a Cyrillic layout "я") */
+var EVENT_CODES = { '[': 'BracketLeft', ']': 'BracketRight', '=': 'Equal', '-': 'Minus', '/': 'Slash' };
+
+function parseKey(spec) {
+  var parts = spec.split('+'), key = parts.pop();
+  return {
+    mod: parts.indexOf('mod') !== -1,
+    shift: parts.indexOf('shift') !== -1,
+    alt: parts.indexOf('alt') !== -1,
+    key: key
+  };
+}
+
+/* 'mod+shift+]' as this platform writes it: Ctrl+Shift+] or ⇧⌘] */
+function keyText(spec) {
+  var k = parseKey(spec);
+  var mods = MOD_ORDER.filter(function (m) { return k[m]; })
+    .map(function (m) { return MOD_NAMES[m]; });
+  /* a modifier alone is a key too — PDF's "hold Alt to show links" */
+  var name = MOD_NAMES[k.key] || KEY_NAMES[k.key] ||
+    k.key.charAt(0).toUpperCase() + k.key.slice(1);
+  /* a Mac runs glyphs together (⇧⌘]); a word keeps its space (⌘ Home) */
+  if (IS_MAC) return mods.join('') + (mods.length && /^[A-Za-z]{2,}$/.test(name) ? ' ' : '') + name;
+  return mods.concat([name]).join('+');
+}
+
+/* Same rendering the toolbar hints use, so empty-state copy never claims a
+   key the user's platform does not have. */
+function kbd(spec) { return '<kbd>' + esc(keyText(spec)) + '</kbd>'; }
+
+function keyMatches(e, spec) {
+  var k = parseKey(spec);
+  if (k.mod !== (e.ctrlKey || e.metaKey) || k.alt !== e.altKey) return false;
+  /* ? is Shift+/ on one layout and something else on another; the
+     character is what the user means */
+  if (k.key === '?') return e.key === '?';
+  if (k.shift !== e.shiftKey) return false;
+  if (EVENT_KEYS[k.key]) return e.key === EVENT_KEYS[k.key];
+  if (/^fd+$/.test(k.key)) return e.key.toLowerCase() === k.key;
+  if (/^[a-z0-9]$/.test(k.key)) {
+    var ch = e.key.length === 1 ? e.key.toLowerCase() : '';
+    if (/^[a-z0-9]$/.test(ch)) return ch === k.key;
+    return e.code === (/d/.test(k.key) ? 'Digit' : 'Key') + k.key.toUpperCase();
+  }
+  return e.key === k.key || (!!EVENT_CODES[k.key] && e.code === EVENT_CODES[k.key]);
+}
+
+/* where a typed character belongs to the field, not to a shortcut */
+function isTyping(el) {
+  return !!(el && el.closest &&
+    el.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'));
+}
 
 /* ---------- clipboard ---------- */
 var toastTimer;
@@ -248,32 +322,12 @@ function buildThemeMenu(container) {
 
   var menu = document.createElement('div');
   menu.className = 'menu';
-  menu.setAttribute('role', 'menu');
-  var label = document.createElement('div');
-  label.className = 'menu-label';
-  label.textContent = 'Theme';
-  menu.appendChild(label);
-
-  var current = readTheme();
-  THEMES.forEach(function (t) {
-    var item = document.createElement('button');
-    item.className = 'menu-item';
-    item.setAttribute('role', 'menuitemradio');
-    item.setAttribute('aria-checked', String(t.id === current));
-    item.innerHTML =
-      '<span class="swatch" style="--sw-bg:' + t.bg + ';--sw-fg:' + t.fg + '"></span>' +
-      '<span>' + t.name + '</span><span class="tick">✓</span>';
-    item.addEventListener('click', function () {
-      applyTheme(t.id);
-      writeTheme(t.id);
-      var items = menu.querySelectorAll('.menu-item');
-      for (var i = 0; i < items.length; i++) items[i].setAttribute('aria-checked', 'false');
-      item.setAttribute('aria-checked', 'true');
-      /* no toast: the whole page just changed, which says it better */
-      closeAllMenus();
-    });
-    menu.appendChild(item);
-  });
+  /* the same menu the landing page shows, built in theme-boot.js — and
+     rebuilt on each opening, so its ticks match a choice made in another
+     tab or a contrast that followed the OS */
+  function fill() { LintTheme.buildMenu(menu, function () { closeAllMenus(); }); }
+  fill();
+  btn.addEventListener('click', fill);
 
   wrap.appendChild(btn);
   wrap.appendChild(menu);
@@ -281,23 +335,40 @@ function buildThemeMenu(container) {
   wireMenu(btn, menu);
 }
 
-function buildSuiteMenu(container, activeId) {
+/* The lint.one mark at the far left of every tool's toolbar, like the Apple
+   menu: the suite's own glyph, which opens the suite — the seven tools, the
+   way home and the keyboard shortcuts. It goes in front of the tool's
+   brand, which then only names the tool; a page that still renders the
+   brand as a link to / keeps its children and loses the link, since the
+   menu now does that job. */
+function buildSuiteMark(activeId) {
+  var brand = document.querySelector('.toolbar .brand');
+  if (!brand || document.querySelector('.toolbar .suite-wrap')) return;
+  if (brand.tagName === 'A') {
+    var span = document.createElement('span');
+    span.className = brand.className;
+    while (brand.firstChild) span.appendChild(brand.firstChild);
+    brand.parentNode.replaceChild(span, brand);
+    brand = span;
+  }
+
   var wrap = document.createElement('div');
-  wrap.className = 'menu-wrap';
+  wrap.className = 'menu-wrap suite-wrap';
 
   var btn = document.createElement('button');
-  btn.className = 'icon-btn';
-  btn.title = 'Other tools';
-  btn.setAttribute('aria-label', 'Switch tool');
+  btn.type = 'button';
+  btn.className = 'suite-btn';
+  btn.title = 'lint.one';
+  btn.setAttribute('aria-label', 'lint.one');
   btn.setAttribute('aria-haspopup', 'true');
-  btn.innerHTML = svg(ICONS.grid);
+  btn.innerHTML = '<span class="suite-mark" aria-hidden="true"></span>';
 
   var menu = document.createElement('div');
-  menu.className = 'menu';
+  menu.className = 'menu suite-menu';
   menu.setAttribute('role', 'menu');
   var label = document.createElement('div');
   label.className = 'menu-label';
-  label.textContent = 'Tools';
+  label.textContent = 'lint.one';
   menu.appendChild(label);
 
   /* each tool as a small app icon — its glyph on its hue — so the menu
@@ -309,28 +380,38 @@ function buildSuiteMenu(container, activeId) {
     a.href = t.host;
     a.innerHTML =
       '<span class="tool-tile dot-' + t.id + '" aria-hidden="true"></span>' +
-      '<span>' + t.name + '</span>' +
-      (t.id === activeId ? '<span class="tick" style="opacity:1">✓</span>' : '');
-    if (t.id === activeId) {
-      a.setAttribute('aria-current', 'page');
-      a.style.fontWeight = '600';
-    }
+      '<span>' + t.name + '</span><span class="tick" aria-hidden="true">✓</span>';
+    if (t.id === activeId) a.setAttribute('aria-current', 'page');
     menu.appendChild(a);
   });
 
   menu.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
   var home = document.createElement('a');
   home.className = 'menu-item';
+  home.setAttribute('role', 'menuitem');
   home.href = '/';
   home.textContent = 'All tools';
   menu.appendChild(home);
 
+  var keys = document.createElement('button');
+  keys.type = 'button';
+  keys.className = 'menu-item';
+  keys.setAttribute('role', 'menuitem');
+  keys.innerHTML = '<span>Keyboard shortcuts</span><span class="menu-key">' + esc(keyText('?')) + '</span>';
+  keys.addEventListener('click', function () {
+    closeAllMenus();
+    /* the item is about to vanish with its menu, so focus comes back to
+       the mark when the panel closes */
+    btn.focus();
+    showShortcuts();
+  });
+  menu.appendChild(keys);
+
   wrap.appendChild(btn);
   wrap.appendChild(menu);
-  container.appendChild(wrap);
+  brand.parentNode.insertBefore(wrap, brand);
   wireMenu(btn, menu);
 }
-
 
 /* ---------- more menu ----------
    The ⋮ every tool ends its toolbar with, just before the suite and theme
@@ -408,6 +489,206 @@ function buildOverflowMenu(container, items) {
   });
   return rebuild;
 }
+
+/* ==========================================================================
+   Text size — LintApp.textZoom(onChange)
+   Ctrl/⌘ with + − 0, or with the wheel, sizes the document's text and never
+   the chrome: the browser's own zoom would scale the toolbar with it. The
+   size is one setting for the whole suite, kept in localStorage.
+   ========================================================================== */
+var ZOOM_KEY = 'lintuz-zoom';
+var zoomOn = false, zoomScale = 1, zoomListeners = [];
+
+function setZoom(scale, announce) {
+  /* 70% to 200% in steps of ten, held as tenths so the steps never drift */
+  scale = Math.min(20, Math.max(7, Math.round(scale * 10))) / 10;
+  zoomScale = scale;
+  var root = document.documentElement.style;
+  root.setProperty('--code-scale', String(scale));
+  root.setProperty('--code-size', 'calc(var(--fs-base) * var(--code-scale))');
+  try { localStorage.setItem(ZOOM_KEY, String(scale)); } catch (e) {}
+  if (announce) showToast('Text size ' + Math.round(scale * 100) + '%');
+  zoomListeners.forEach(function (fn) { fn(scale); });
+}
+
+function textZoom(onChange) {
+  if (onChange) zoomListeners.push(onChange);
+  if (zoomOn) { if (onChange) onChange(zoomScale); return; }
+  zoomOn = true;
+
+  var saved = NaN;
+  try { saved = parseFloat(localStorage.getItem(ZOOM_KEY)); } catch (e) {}
+  setZoom(isNaN(saved) ? 1 : saved, false);
+
+  function step(dir) { setZoom(dir ? zoomScale + dir / 10 : 1, true); }
+
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    var dir = null;
+    if (e.key === '=' || e.key === '+' || e.code === 'Equal' || e.code === 'NumpadAdd') dir = 1;
+    else if (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract') dir = -1;
+    else if (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') dir = 0;
+    if (dir === null) return;
+    e.preventDefault();
+    step(dir);
+  });
+
+  /* A trackpad pinch arrives as a burst of ctrl+wheel events; one step per
+     120ms keeps it from racing through the whole range in a single gesture. */
+  var last = 0;
+  window.addEventListener('wheel', function (e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (shortcutsOpen() || !e.deltaY) return;
+    var now = Date.now();
+    if (now - last < 120) return;
+    last = now;
+    step(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+}
+
+/* ==========================================================================
+   Keyboard shortcuts — LintApp.shortcuts(groups), LintApp.showShortcuts()
+   One panel lists every key the page answers to. The General group is the
+   suite's own; each tool appends its groups. Keys follow what developers
+   already know from VS Code and Windows Terminal.
+   ========================================================================== */
+var shortcutGroups = [];
+
+/* groups = [{title, items: [{keys: ['mod+g'], label: 'Go to line'}]}].
+   A group whose title is already listed gains the new items. */
+function shortcuts(groups) {
+  (groups || []).forEach(function (g) {
+    for (var i = 0; i < shortcutGroups.length; i++) {
+      if (shortcutGroups[i].title === g.title) {
+        shortcutGroups[i].items = shortcutGroups[i].items.concat(g.items || []);
+        return;
+      }
+    }
+    shortcutGroups.push({ title: g.title, items: (g.items || []).slice() });
+  });
+}
+
+function generalGroup() {
+  var items = [
+    { keys: ['mod+o'], label: 'Open a file' },
+    { keys: ['alt+w'], label: 'Close the file' }
+  ];
+  /* only on pages with something to search (Audio has none) */
+  if (document.querySelector('#search, #filter, #findInput')) {
+    items.push({ keys: ['mod+f'], label: 'Find' });
+  }
+  /* only where the text size can actually change */
+  if (zoomOn) {
+    items.push(
+      { keys: ['mod+='], label: 'Bigger text' },
+      { keys: ['mod+-'], label: 'Smaller text' },
+      { keys: ['mod+0'], label: 'Reset text size' },
+      { keys: ['mod+wheel'], label: 'Change text size' }
+    );
+  }
+  items.push({ keys: ['?', 'mod+/'], label: 'Keyboard shortcuts' });
+  return { title: 'General', items: items };
+}
+
+var scDialog = null, scReturn = null;
+
+function shortcutsOpen() { return !!(scDialog && scDialog.open); }
+
+function showShortcuts() {
+  if (!scDialog) {
+    scDialog = document.createElement('dialog');
+    scDialog.className = 'shortcuts';
+    scDialog.setAttribute('aria-labelledby', 'scTitle');
+    /* a click that lands on the dialog itself, not its contents, is on the
+       backdrop */
+    scDialog.addEventListener('click', function (e) {
+      if (e.target === scDialog || e.target.closest('.sc-close')) scDialog.close();
+    });
+    scDialog.addEventListener('close', function () {
+      if (scReturn && scReturn.focus && document.contains(scReturn)) scReturn.focus();
+      scReturn = null;
+    });
+    document.body.appendChild(scDialog);
+  }
+  if (scDialog.open) return;
+
+  /* built on every opening, so a group added late is still listed */
+  var groups = [generalGroup()].concat(shortcutGroups);
+  scDialog.innerHTML =
+    '<div class="sc-head">' +
+      '<h2 id="scTitle">Keyboard shortcuts</h2>' +
+      '<button type="button" class="icon-btn sc-close" aria-label="Close" title="Close (' +
+        keyText('esc') + ')">' + svg(ICONS.close) + '</button>' +
+    '</div>' +
+    '<div class="sc-body">' + groups.map(function (g) {
+      return '<section class="sc-group"><h3>' + esc(g.title) + '</h3>' +
+        g.items.map(function (it) {
+          return '<div class="sc-row"><span>' + esc(it.label) + '</span>' +
+            '<span class="sc-keys">' + it.keys.map(kbd).join(' or ') + '</span></div>';
+        }).join('') +
+      '</section>';
+    }).join('') + '</div>';
+
+  scReturn = document.activeElement;
+  closeAllMenus();
+  scDialog.showModal();
+}
+
+/* While the panel is open nothing else answers a key: this listener runs
+   first of all (window, capture) and stops the event there. The browser
+   still closes the dialog on Esc, which is its default action, not a
+   listener. */
+window.addEventListener('keydown', function (e) {
+  if (shortcutsOpen()) e.stopImmediatePropagation();
+}, true);
+
+/* ? opens the panel wherever a ? is not being typed; Ctrl/⌘+/ anywhere */
+document.addEventListener('keydown', function (e) {
+  if (keyMatches(e, 'mod+/') || (keyMatches(e, '?') && !isTyping(e.target))) {
+    e.preventDefault();
+    showShortcuts();
+  }
+});
+
+/* ==========================================================================
+   The open document — LintApp.setDocument(name, onClose)
+   A chip after the toolbar's Open button names what is open and closes it,
+   with its × or Alt+W. setDocument(null) takes it away.
+   ========================================================================== */
+var docClose = null;
+
+function setDocument(name, onClose) {
+  var chip = $('docChip');
+  if (typeof name !== 'string') {
+    if (chip) chip.remove();
+    docClose = null;
+    return;
+  }
+  docClose = onClose || null;
+  if (!chip) {
+    var open = document.querySelector('.toolbar button.primary');
+    if (!open) return;
+    chip = document.createElement('span');
+    chip.className = 'doc-chip';
+    chip.id = 'docChip';
+    chip.innerHTML = '<span class="doc-name"></span>' +
+      '<button type="button" class="doc-close">' + svg(ICONS.close) + '</button>';
+    chip.lastChild.addEventListener('click', function () { if (docClose) docClose(); });
+    open.parentNode.insertBefore(chip, open.nextSibling);
+  }
+  chip.firstChild.textContent = name;
+  chip.firstChild.title = name;
+  chip.lastChild.setAttribute('aria-label', 'Close ' + name);
+  chip.lastChild.title = 'Close (' + keyText('alt+w') + ')';
+}
+
+/* only while something is open and no menu is; the panel stops it above */
+document.addEventListener('keydown', function (e) {
+  if (!docClose || !keyMatches(e, 'alt+w') || document.querySelector('.menu.open')) return;
+  e.preventDefault();
+  docClose();
+});
 
 /* ==========================================================================
    Editor — gutter, syntax overlay, scroll sync
@@ -792,11 +1073,15 @@ function Tree(opts) {
   $('btnPrevHit').addEventListener('click', function () { gotoHit(hitIdx - 1); });
   $('btnNextHit').addEventListener('click', function () { gotoHit(hitIdx + 1); });
 
+  /* F3 and Shift+F3 step from anywhere; Ctrl+G stays as an old alias */
   document.addEventListener('keydown', function (e) {
     if (!stepMode || !hits.length) return;
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'g' || e.key === 'G')) {
+    if (keyMatches(e, 'f3') || keyMatches(e, 'mod+g')) {
       e.preventDefault();
-      gotoHit(hitIdx + (e.shiftKey ? -1 : 1));
+      gotoHit(hitIdx + 1);
+    } else if (keyMatches(e, 'shift+f3') || keyMatches(e, 'mod+shift+g')) {
+      e.preventDefault();
+      gotoHit(hitIdx - 1);
     }
   });
 
@@ -972,19 +1257,29 @@ function init(config) {
 
   /* chrome */
   var slot = $('chromeSlot');
-  buildSuiteMenu(slot, config.id);
-  buildThemeMenu(slot);
-  var refreshOverflow = buildOverflowMenu(slot, [
+  mountChrome(slot, config.id);
+  /* a tool's own quieter commands (LINT_CONFIG.more) come first; closing
+     the document is the chip's job, not an item here */
+  var lc = global.LINT_CONFIG || {};
+  var refreshOverflow = buildOverflowMenu(slot, (lc.more || []).concat([
     { id: 'btnCopy', label: 'Copy ' + config.label, title: 'Copy the editor contents' },
-    { id: 'btnSample', label: 'Load a sample', title: 'Replace the editor contents with a sample document' },
-    { id: 'btnClear', label: 'Clear', title: 'Empty the editor' }
-  ]);
+    { id: 'btnSample', label: 'Load a sample', title: 'Replace the editor contents with a sample document' }
+  ]));
 
-  /* icons into the treebar buttons */
+  /* the document's text follows the reader's text size */
+  textZoom();
+
+  /* icons into the treebar buttons, and each one's key in its tooltip */
   $('btnWrap').innerHTML = svg(ICONS.wrap);
   $('btnExpand').innerHTML = svg(ICONS.expand);
   $('btnCollapse').innerHTML = svg(ICONS.collapse);
   $('searchIcon').innerHTML = svg(ICONS.search);
+  function hint(id, key) { var b = $(id); if (b) b.title += ' (' + key + ')'; }
+  hint('btnWrap', keyText('alt+z'));
+  hint('btnExpand', keyText('mod+shift+]'));
+  hint('btnCollapse', keyText('mod+shift+['));
+  hint('btnNextHit', keyText('enter') + ' or ' + keyText('f3'));
+  hint('btnPrevHit', keyText('shift+enter') + ' or ' + keyText('shift+f3'));
 
   /* status — a message, or a list of facts laid out with space between
      them rather than a row of middle dots */
@@ -1010,8 +1305,22 @@ function init(config) {
 
   var editor = new Editor({
     highlighter: config.highlighter,
-    onChange: function () { syncEmpty(); schedule(); }
+    onChange: function () { syncEmpty(); syncDocument(); schedule(); }
   });
+
+  /* What the chip calls the document: the file's name when one was opened,
+     dropped or handed over; otherwise "Pasted JSON" once there is text.
+     Editing keeps the name; emptying the editor by hand closes it. */
+  var docName = null;
+  function syncDocument() {
+    if (!editor.getValue()) {
+      docName = null;
+      setDocument(null);
+      return;
+    }
+    if (docName === null) docName = 'Pasted ' + config.label;
+    setDocument(docName, closeDocument);
+  }
 
   /* While the editor is empty the page is just the editor and a prompt
      over it (body.is-empty; the CSS hides the rest). The first character
@@ -1082,13 +1391,18 @@ function init(config) {
     if (v) copyText(v, config.label);
   });
 
-  on('btnClear', function () {
-    editor.setValue('');
+  /* Closing the document: the chip's × or Alt+W. Back to the empty prompt,
+     with the search cleared so the next document starts fresh. */
+  function closeDocument() {
     $('search').value = '';
+    editor.setValue('');
     editor.input.focus();
-  });
+  }
 
-  on('btnSample', function () { editor.setValue(config.sample.trim()); });
+  on('btnSample', function () {
+    docName = 'Sample ' + config.label;
+    editor.setValue(config.sample.trim());
+  });
   /* the empty prompt (and a tree empty state) offer Open and the sample
      where a first-time visitor looks */
   function onEmptyAction(e) {
@@ -1119,6 +1433,7 @@ function init(config) {
     }
     var reader = new FileReader();
     reader.onload = function () {
+      docName = file.name;
       editor.setValue(String(reader.result));
       showToast('Opened ' + file.name + ' (' + fmtBytes(file.size) + ')');
     };
@@ -1156,66 +1471,112 @@ function init(config) {
   $('tabTree').addEventListener('click', function () { setView('tree'); });
   setView('text');
 
-  /* split divider */
-  var divider = $('divider'), editorPane = $('editorPane');
+  /* Split divider. The editor's share of the width is kept as a ratio in
+     localStorage, so it survives a reload and a resized window alike. The
+     drag and Alt+Shift+←/→ share one clamp: at least 240px of editor and
+     280px of tree. */
+  var SPLIT_KEY = 'lintuz-split';
+  var divider = $('divider'), editorPane = $('editorPane'), split = document.querySelector('.split');
+  function setSplit(px, save) {
+    var total = split.getBoundingClientRect().width;
+    if (!total) return;
+    var w = Math.min(Math.max(px, 240), total - 280);
+    editorPane.style.width = (w / total * 100).toFixed(2) + '%';
+    if (save) try { localStorage.setItem(SPLIT_KEY, (w / total).toFixed(4)); } catch (e) {}
+  }
+  var savedSplit = NaN;
+  try { savedSplit = parseFloat(localStorage.getItem(SPLIT_KEY)); } catch (e) {}
+  if (savedSplit > 0 && savedSplit < 1) editorPane.style.width = (savedSplit * 100).toFixed(2) + '%';
+
   divider.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     divider.classList.add('dragging');
     divider.setPointerCapture(e.pointerId);
     function move(ev) {
-      var rect = document.querySelector('.split').getBoundingClientRect();
-      var w = Math.min(Math.max(ev.clientX - rect.left, 240), rect.width - 280);
-      editorPane.style.width = w + 'px';
+      setSplit(ev.clientX - split.getBoundingClientRect().left, false);
     }
     function up() {
       divider.classList.remove('dragging');
       divider.removeEventListener('pointermove', move);
       divider.removeEventListener('pointerup', up);
+      setSplit(editorPane.getBoundingClientRect().width, true);
     }
     divider.addEventListener('pointermove', move);
     divider.addEventListener('pointerup', up);
   });
 
+  /* Windows Terminal's resize-pane: 5% of the width a press */
+  function nudgeSplit(dir) {
+    if (divider.offsetParent === null) return false;   /* no split showing */
+    setSplit(editorPane.getBoundingClientRect().width +
+      dir * split.getBoundingClientRect().width * 0.05, true);
+    return true;
+  }
+
   /* Buttons declaring data-key bind themselves, so a tool adds a shortcut
-     by naming it in its config and nothing here needs to change. */
-  var keyed = document.querySelectorAll('.toolbar button[data-key]');
-  var keyMap = [];
-  for (var ki = 0; ki < keyed.length; ki++) {
-    var spec = keyed[ki].dataset.key.split('+');
-    keyMap.push({
-      btn: keyed[ki],
-      mod: spec.indexOf('mod') !== -1,
-      shift: spec.indexOf('shift') !== -1,
-      key: spec[spec.length - 1]
-    });
+     by naming it in its config and nothing here needs to change. The same
+     key goes into the button's tooltip and the shortcuts panel. */
+  var keyed = Array.prototype.slice.call(document.querySelectorAll('.toolbar button[data-key]'));
+  keyed.forEach(function (b) { b.title += ' (' + keyText(b.dataset.key) + ')'; });
+
+  /* every declared toolbar action except Open, which General lists; Format
+     keeps Ctrl/⌘+Enter as a second key */
+  var fmtBtn = $('btnFormat');
+  shortcuts([{ title: config.label, items: keyed.filter(function (b) {
+    return b.id !== 'btnLoad';
+  }).map(function (b) {
+    var keys = [b.dataset.key];
+    if (b === fmtBtn && keys[0] !== 'mod+enter') keys.push('mod+enter');
+    return { keys: keys, label: labelOf(b) };
+  }).concat([
+    { keys: ['shift+alt+left', 'shift+alt+right'], label: 'Resize the split' },
+    { keys: ['alt+z'], label: 'Wrap long values' },
+    { keys: ['mod+shift+]'], label: 'Expand all' },
+    { keys: ['mod+shift+['], label: 'Collapse all' },
+    { keys: ['enter', 'f3'], label: 'Next match' },
+    { keys: ['shift+enter', 'shift+f3'], label: 'Previous match' },
+    { keys: ['shift+alt+c'], label: 'Copy the path of the selected row' }
+  ]) }]);
+
+  function labelOf(b) {
+    var t = b.firstChild && b.firstChild.nodeType === 3 ? b.firstChild.textContent : b.textContent;
+    return t.trim() || b.title;
   }
 
   /* keyboard */
   document.addEventListener('keydown', function (e) {
-    var mod = e.ctrlKey || e.metaKey;
-
-    for (var i = 0; i < keyMap.length; i++) {
-      var m = keyMap[i];
-      if (m.mod !== mod) continue;
-      if (m.shift !== e.shiftKey) continue;
-      if (e.key.toLowerCase() !== m.key) continue;
+    for (var i = 0; i < keyed.length; i++) {
+      if (!keyMatches(e, keyed[i].dataset.key)) continue;
       e.preventDefault();
-      m.btn.click();
+      keyed[i].click();
       return;
     }
 
-    if (mod && e.key === 'Enter') {
-      e.preventDefault();
-      var fmt = $('btnFormat');
-      if (fmt) fmt.click();
-    } else if (mod && (e.key === 'f' || e.key === 'F')) {
+    if (keyMatches(e, 'mod+enter')) {
+      if (fmtBtn) { e.preventDefault(); fmtBtn.click(); }
+    } else if (keyMatches(e, 'mod+f')) {
       e.preventDefault();
       if (window.innerWidth <= 720) setView('tree');
       $('search').focus();
       $('search').select();
-    } else if (mod && (e.key === 'k' || e.key === 'K')) {
+    } else if (keyMatches(e, 'shift+alt+left') || keyMatches(e, 'shift+alt+right')) {
+      /* on a Mac ⌥⇧← / → select by word while typing; the editor keeps them */
+      if (IS_MAC && e.target.closest && e.target.closest('textarea, input')) return;
+      if (nudgeSplit(e.key === 'ArrowLeft' ? -1 : 1)) e.preventDefault();
+    } else if (keyMatches(e, 'alt+z')) {
       e.preventDefault();
-      editor.input.focus();
+      $('btnWrap').click();
+    } else if (keyMatches(e, 'mod+shift+]')) {
+      e.preventDefault();
+      $('btnExpand').click();
+    } else if (keyMatches(e, 'mod+shift+[')) {
+      e.preventDefault();
+      $('btnCollapse').click();
+    } else if (keyMatches(e, 'shift+alt+c')) {
+      e.preventDefault();
+      var path = $('pathBox');
+      if (path.textContent) path.click();
+      else showToast('Select a row first');
     }
   });
 
@@ -1316,19 +1677,6 @@ function copyAndOffer(text, label, from, to) {
   } else fallbackCopy(text, done);
 }
 
-/* Same rendering the toolbar hints use, so empty-state copy never claims a
-   key the user's platform does not have. */
-var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-function kbd(key) {
-  var out = key.split('+').map(function (p) {
-    if (p === 'mod') return IS_MAC ? '\u2318' : 'Ctrl';
-    if (p === 'shift') return IS_MAC ? '\u21E7' : 'Shift';
-    if (p === 'enter') return IS_MAC ? '\u21B5' : 'Enter';
-    return p.toUpperCase();
-  });
-  return '<kbd>' + (IS_MAC ? out.join('') : out.join('+')) + '</kbd>';
-}
-
 /* The empty state every tool opens on: a heading saying what to do, one
    sentence on what happens, optional buttons, and the keys. `extra` is raw
    HTML placed between the sentence and the keys (a tool's own choices). */
@@ -1341,10 +1689,11 @@ function emptyState(o) {
   '</div>';
 }
 
-/* A tool with no editor/tree (PDF) builds its own frame, so it needs the
-   suite switcher and theme picker on their own. */
+/* The chrome every page shares: the lint.one menu in front of the tool's
+   brand, and the theme menu in `slot`. init() calls it for the editor
+   tools; Logs, PDF and Audio build their own frame and call it directly. */
 function mountChrome(slot, activeId) {
-  buildSuiteMenu(slot, activeId);
+  buildSuiteMark(activeId);
   buildThemeMenu(slot);
 }
 
@@ -1354,6 +1703,11 @@ global.LintApp = {
   wireMenu: wireMenu,
   closeMenus: closeAllMenus,
   isMac: IS_MAC,
+  textZoom: textZoom,
+  shortcuts: shortcuts,
+  showShortcuts: showShortcuts,
+  setDocument: setDocument,
+  keyText: keyText,
   copyAndOffer: copyAndOffer,
   takeHandoff: takeHandoff,
   kbd: kbd,

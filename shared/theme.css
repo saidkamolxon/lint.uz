@@ -93,9 +93,11 @@
 /* ==========================================================================
    THEMES
    Three choices: System (no data-theme), Light ("daylight") and Dark
-   ("slate"). Each block defines the same tokens. Contrast is not a choice
-   but a response to the OS asking for more contrast on a light theme. The
-   ids keep their old names so a saved cookie still means the same thing.
+   ("slate"). Each block defines the same tokens. Increase contrast is a
+   separate switch (data-contrast="more") laid over whichever of light or
+   dark is showing; theme-boot.js turns it on from the OS setting until
+   someone chooses. The ids keep their old names so a saved cookie still
+   means the same thing.
    ========================================================================== */
 
 /* ---------- Light ("daylight") ---------- */
@@ -174,48 +176,6 @@
   color-scheme: dark;
 }
 
-/* ---------- Contrast — WCAG AAA, heavier lines ----------
-   Applied when the OS asks for more contrast and the theme is light. It
-   comes before the System dark block so a dark OS still gets dark. */
-@media (prefers-contrast: more) {
-  :root:not([data-theme]),
-  :root[data-theme="daylight"] {
-    --gutter-tint: 7%;
-    --gutter-ink: 0%;
-    --gutter-cur: var(--hue);
-    --surface: #FFFFFF;
-    --raised: #FFFFFF;
-    --sunken: #F0F0F0;
-    --line: #7A7A7A;
-    --line-strong: #000000;
-    --ink: #000000;
-    --muted: #3D3D3D;
-    --faint: #5C5C5C;
-
-    --ok: #006B3C;
-    --bad: #B10000;
-    --warn: #7A4B00;
-
-    --t-key: #0033A0;
-    --t-str: #006B3C;
-    --t-num: #5C1F99;
-    --t-bool: #8A3400;
-    --t-null: #4A4A4A;
-    --t-cont: #00575E;
-    --t-date: #7A4B00;
-    --t-punct: #3D3D3D;
-
-    --row-hover: #E8E8E8;
-    --row-active: color-mix(in srgb, var(--hue) 20%, transparent);
-    --mark: #FFE55C;
-    --mark-ink: #000000;
-    --scroll: #7A7A7A;
-    --shadow: 0 0 0 2px #000000;
-    --hairline: 1.5px;
-    color-scheme: light;
-  }
-}
-
 /* ---------- System — follows the OS when no explicit theme is set ---------- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -250,6 +210,128 @@
     --mark-ink: #FFF3D0;
     --scroll: #3A404C;
     --shadow: 0 8px 26px -8px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.35);
+    color-scheme: dark;
+  }
+}
+
+/* ==========================================================================
+   INCREASE CONTRAST — data-contrast="more"
+   AAA text on both palettes, heavier lines and the gutter's numbers at full
+   strength. These come after the System block so they win over it. The
+   dark one is written twice, like Dark itself, because System can only
+   know the OS is dark from inside a media query.
+   ========================================================================== */
+
+/* ---------- light + contrast ---------- */
+:root[data-contrast="more"]:not([data-theme="slate"]) {
+  --gutter-tint: 7%;
+  --gutter-ink: 0%;
+  --gutter-cur: var(--hue);
+  --surface: #FFFFFF;
+  --raised: #FFFFFF;
+  --sunken: #F0F0F0;
+  --line: #7A7A7A;
+  --line-strong: #000000;
+  --ink: #000000;
+  --muted: #3D3D3D;
+  --faint: #5C5C5C;
+
+  --ok: #006B3C;
+  --bad: #B10000;
+  --warn: #7A4B00;
+
+  --t-key: #0033A0;
+  --t-str: #006B3C;
+  --t-num: #5C1F99;
+  --t-bool: #8A3400;
+  --t-null: #4A4A4A;
+  --t-cont: #00575E;
+  --t-date: #7A4B00;
+  --t-punct: #3D3D3D;
+
+  --row-hover: #E8E8E8;
+  --row-active: color-mix(in srgb, var(--hue) 20%, transparent);
+  --mark: #FFE55C;
+  --mark-ink: #000000;
+  --scroll: #7A7A7A;
+  --shadow: 0 0 0 2px #000000;
+  --hairline: 1.5px;
+  color-scheme: light;
+}
+
+/* ---------- dark + contrast ----------
+   Black surfaces, white ink, grey lines a reader can actually see, and
+   syntax colours lifted until every one is above 10:1 on the surface. */
+:root[data-contrast="more"][data-theme="slate"] {
+  --gutter-tint: 10%;
+  --gutter-ink: 0%;
+  --gutter-cur: color-mix(in srgb, var(--hue) 30%, #FFFFFF);
+  --surface: #000000;
+  --raised: #0D0D0D;
+  --sunken: #000000;
+  --line: #8A8A8A;
+  --line-strong: #FFFFFF;
+  --ink: #FFFFFF;
+  --muted: #D9D9D9;
+  --faint: #B3B3B3;
+
+  --ok: #5BE38F;
+  --bad: #FF8F85;
+  --warn: #FFC247;
+
+  --t-key: #8CC8FF;
+  --t-str: #7EE2A0;
+  --t-num: #D4B3FF;
+  --t-bool: #FFAE6B;
+  --t-null: #C4C4C4;
+  --t-cont: #5CE1EC;
+  --t-date: #FFD166;
+  --t-punct: #C4C4C4;
+
+  --row-hover: #262626;
+  --row-active: color-mix(in srgb, var(--hue) 40%, transparent);
+  --mark: #FFE55C;
+  --mark-ink: #000000;
+  --scroll: #8A8A8A;
+  --shadow: 0 0 0 2px #FFFFFF;
+  --hairline: 1.5px;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"]:not([data-theme]) {
+    --gutter-tint: 10%;
+    --gutter-ink: 0%;
+    --gutter-cur: color-mix(in srgb, var(--hue) 30%, #FFFFFF);
+    --surface: #000000;
+    --raised: #0D0D0D;
+    --sunken: #000000;
+    --line: #8A8A8A;
+    --line-strong: #FFFFFF;
+    --ink: #FFFFFF;
+    --muted: #D9D9D9;
+    --faint: #B3B3B3;
+
+    --ok: #5BE38F;
+    --bad: #FF8F85;
+    --warn: #FFC247;
+
+    --t-key: #8CC8FF;
+    --t-str: #7EE2A0;
+    --t-num: #D4B3FF;
+    --t-bool: #FFAE6B;
+    --t-null: #C4C4C4;
+    --t-cont: #5CE1EC;
+    --t-date: #FFD166;
+    --t-punct: #C4C4C4;
+
+    --row-hover: #262626;
+    --row-active: color-mix(in srgb, var(--hue) 40%, transparent);
+    --mark: #FFE55C;
+    --mark-ink: #000000;
+    --scroll: #8A8A8A;
+    --shadow: 0 0 0 2px #FFFFFF;
+    --hairline: 1.5px;
     color-scheme: dark;
   }
 }

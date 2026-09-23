@@ -14,22 +14,9 @@ document.documentElement.style.setProperty('--hue-ink', c.hueInk || '#FFFFFF');
    mark for a page that never sets it */
 document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/' + c.id + '.svg")');
 
-/* A declared `key` is named in the button's tooltip and bound by app.js —
-   so the shortcut and the label can never drift apart. */
-var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-
-function keyHint(key) {
-  if (!key) return '';
-  var parts = key.split('+');
-  var out = parts.map(function (p) {
-    if (p === 'mod') return IS_MAC ? '\u2318' : 'Ctrl';
-    if (p === 'shift') return IS_MAC ? '\u21E7' : 'Shift';
-    /* \u21B5 is a Mac keycap; a PC keyboard says Enter */
-    if (p === 'enter') return IS_MAC ? '\u21B5' : 'Enter';
-    return p.toUpperCase();
-  });
-  return IS_MAC ? out.join('') : out.join('+');
-}
+/* A declared `key` becomes data-key. app.js binds it, names it in the
+   button's tooltip and lists it in the shortcuts panel, all from that one
+   attribute, so the shortcut, the tooltip and the panel cannot drift. */
 
 /* Three weights of button, so the eye reads the toolbar in order: Open is
    the one filled button in every tool, the `primary` action is outlined,
@@ -41,26 +28,28 @@ var actions = (c.actions || []).map(function (a) {
   return '<button id="' + a.id + '"' + (a.primary ? ' class="bordered"' : '') +
     (hide ? ' data-hide="' + hide + '"' : '') +
     (a.key ? ' data-key="' + a.key + '"' : '') +
-    ' title="' + a.title + (a.key ? ' (' + keyHint(a.key) + ')' : '') + '">' +
+    ' title="' + a.title + '">' +
     a.label + '</button>';
 }).join('');
 
 document.getElementById('app').innerHTML =
 '<header class="toolbar">' +
-  '<a class="brand" href="/" title="All tools">' +
+  /* app.js puts the lint.one menu in front of the brand; the brand itself
+     names the tool and goes nowhere */
+  '<span class="brand">' +
     '<span class="mark" aria-hidden="true"></span>' +
     '<span class="brand-text">' +
       '<span class="brand-name">' + c.name + '</span>' +
     '</span>' +
-  '</a>' +
+  '</span>' +
   '<nav class="tabs" aria-label="View">' +
     '<button id="tabText" class="active">Text</button>' +
     '<button id="tabTree">Tree</button>' +
   '</nav>' +
-  /* Open sits right after the brand in every tool; Copy, Sample and Clear
-     live in the ⋮ menu that app.js adds to the chrome slot */
+  /* Open sits right after the brand in every tool, and the open document's
+     chip after it; Copy and Sample live in the ⋮ menu app.js adds */
   '<button id="btnLoad" class="primary" data-key="mod+o" ' +
-    'title="Open a file — or drop one on the editor (' + keyHint('mod+o') + ')">Open</button>' +
+    'title="Open a file — or drop one on the editor">Open</button>' +
   '<span class="sep hide-sm tool-actions"></span>' +
   '<div class="group tool-actions">' + actions + '</div>' +
   '<span class="spacer"></span>' +
@@ -112,13 +101,13 @@ document.getElementById('app').innerHTML =
       '</label>' +
       '<span id="matchCount"></span>' +
       '<span class="step-nav" id="stepNav" hidden>' +
-        '<button id="btnPrevHit" class="icon-btn" title="Previous match (⇧↵)" aria-label="Previous match"></button>' +
-        '<button id="btnNextHit" class="icon-btn" title="Next match (↵)" aria-label="Next match"></button>' +
+        '<button id="btnPrevHit" class="icon-btn" title="Previous match" aria-label="Previous match"></button>' +
+        '<button id="btnNextHit" class="icon-btn" title="Next match" aria-label="Next match"></button>' +
       '</span>' +
       '<button id="btnSearchMode" class="icon-btn" aria-pressed="true"></button>' +
       '<button id="btnWrap" class="icon-btn" title="Wrap long values" aria-pressed="false" aria-label="Wrap long values"></button>' +
-      '<button id="btnExpand" class="icon-btn" title="Expand everything" aria-label="Expand everything"></button>' +
-      '<button id="btnCollapse" class="icon-btn" title="Collapse everything" aria-label="Collapse everything"></button>' +
+      '<button id="btnExpand" class="icon-btn" title="Expand all" aria-label="Expand all"></button>' +
+      '<button id="btnCollapse" class="icon-btn" title="Collapse all" aria-label="Collapse all"></button>' +
     '</div>' +
     '<div id="tree"></div>' +
   '</section>' +

@@ -1,3 +1,7 @@
+/* The menu component is its own file so the landing page can load it
+   without the rest; @import has to be the first rule. */
+@import url("menu.css");
+
 /* ==========================================================================
    lint.uz — shared components
    Depends on theme.css for all tokens.
@@ -34,6 +38,12 @@ body {
   outline: 2px solid var(--hue);
   outline-offset: 1px;
 }
+/* with more contrast the hue may be too close to the surface to see, so the
+   ring is drawn in the ink, thicker and further out */
+[data-contrast="more"] :focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
 
 .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
@@ -48,7 +58,34 @@ body {
   flex: none;
 }
 
-/* Brand: the hue lives here and nowhere else in the chrome */
+/* The lint.one mark, like the Apple menu: the suite's glyph in the ink, a
+   size smaller than the tool's own tile and without its colour, so the eye
+   reads "the system, then the app". It opens the suite menu (app.js). */
+.suite-wrap { margin-right: 10px; }
+.suite-btn {
+  width: 28px; height: 28px; padding: 0;
+  display: grid; place-items: center;
+}
+.suite-mark {
+  width: 22px; height: 22px; flex: none;
+  /* the favicon's corner, 15 of 64, at this size */
+  border-radius: calc(22px * 15 / 64);
+  background: var(--ink);
+  opacity: 0.82;
+  transition: opacity var(--t-fast);
+}
+.suite-btn:hover .suite-mark, .suite-btn[aria-expanded="true"] .suite-mark { opacity: 1; }
+.suite-mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: var(--surface);
+  -webkit-mask: url("/shared/glyph.svg") center / 100% no-repeat;
+  mask: url("/shared/glyph.svg") center / 100% no-repeat;
+}
+/* it is the first thing in the toolbar, so its menu opens rightwards */
+.suite-menu { left: 0; right: auto; min-width: 220px; }
+
+/* Brand: the tool's own tile and name. The hue lives here and nowhere else
+   in the chrome. Not a link — the lint.one menu before it goes home. */
 .brand {
   display: flex; align-items: center; gap: var(--s2);
   margin-right: var(--s3); padding-right: var(--s3);
@@ -56,7 +93,6 @@ body {
   text-decoration: none; color: inherit; user-select: none;
   flex: none;
 }
-.brand:hover .brand-name { color: var(--hue); }
 /* The tool's glyph on its hue, same tile proportions as the favicon (rx 15
    of 64). Each tool sets --glyph (shell.js does it for the editor tools);
    a page that does not gets the suite mark. */
@@ -75,8 +111,34 @@ body {
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-name {
   font-size: var(--fs-mid); font-weight: 600; letter-spacing: -0.01em;
-  transition: color var(--t-fast);
 }
+
+/* The open document, right after Open: its name and the way to close it.
+   Quiet — a sunken chip, not a button — because it is a fact about the
+   page, with one action on its edge. */
+.doc-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  min-width: 0; flex: 0 1 auto;
+  margin-left: var(--s1);
+  padding: 0 2px 0 var(--s2);
+  height: 28px;
+  background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+.doc-name {
+  max-width: 28ch; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-small); font-weight: 500; color: var(--ink);
+}
+.doc-close {
+  width: 22px; height: 22px; padding: 0;
+  display: grid; place-items: center; flex: none;
+  color: var(--muted); border-radius: var(--radius-sm);
+}
+.doc-close:hover { color: var(--ink); }
+.doc-close svg { width: 13px; height: 13px; display: block; }
 
 /* Buttons */
 button {
@@ -156,43 +218,8 @@ kbd {
 .tabs button.active { background: var(--raised); color: var(--ink); font-weight: 600; }
 
 /* ==========================================================================
-   Menus (theme picker, suite switcher, overflow)
+   Menus — the component itself lives in menu.css, imported above
    ========================================================================== */
-.menu-wrap { position: relative; flex: none; }
-.menu {
-  display: none; position: absolute; right: 0; top: calc(100% + 6px);
-  min-width: 190px; z-index: 60;
-  padding: var(--s1);
-  background: var(--raised);
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-}
-.menu.open { display: block; }
-.menu-label {
-  padding: 5px var(--s2) var(--s1);
-  font-size: var(--fs-micro); font-weight: 600;
-  color: var(--faint); letter-spacing: 0.02em;
-}
-.menu-item {
-  display: flex; align-items: center; gap: var(--s2);
-  width: 100%; padding: 6px var(--s2);
-  border-radius: var(--radius);
-  font-size: var(--fs-base); text-align: left; text-decoration: none;
-  color: var(--ink); border: none; background: transparent;
-}
-.menu-item:hover { background: var(--row-hover); }
-.menu-item[aria-checked="true"] { font-weight: 600; }
-.menu-item .tick { margin-left: auto; color: var(--hue); opacity: 0; font-size: var(--fs-small); }
-.menu-item[aria-checked="true"] .tick { opacity: 1; }
-.menu-sep { height: var(--hairline); background: var(--line); margin: var(--s1) var(--s2); }
-
-/* Theme swatch: two-tone chip previewing surface + hue */
-.swatch {
-  width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none;
-  border: var(--hairline) solid var(--line-strong);
-  background: linear-gradient(135deg, var(--sw-bg) 0 50%, var(--sw-fg) 50% 100%);
-}
 
 /* Suite switcher: each tool as a tiny app icon, its glyph on its hue.
    The paths are absolute because a url() inside a custom property resolves
@@ -243,8 +270,9 @@ kbd {
   display: grid;
   grid-template-columns: var(--gutter-w) 1fr;
   overflow: hidden;
-  /* every layer below inherits these — they MUST stay in lockstep */
-  --ed-font: var(--fs-base)/1.6 var(--mono);
+  /* every layer below inherits these — they MUST stay in lockstep. The size
+     is the reader's text size (LintApp.textZoom), never the chrome's. */
+  --ed-font: var(--code-size, var(--fs-base))/1.6 var(--mono);
   --ed-pad-y: var(--s3);
   --ed-pad-x: var(--s3);
 }
@@ -262,10 +290,11 @@ kbd {
   user-select: none;
   padding: var(--ed-pad-y) var(--s2) var(--ed-pad-y) 0;
   font-variant-numeric: tabular-nums;
-  font-size: var(--fs-small);
+  font-size: calc(var(--fs-small) * var(--code-scale, 1));
 }
 .gutter-inner { will-change: transform; }
-.gutter .ln { display: block; height: calc(var(--fs-base) * 1.6); }
+/* one number per line of text, so its height follows the text's size */
+.gutter .ln { display: block; height: calc(var(--code-size, var(--fs-base)) * 1.6); }
 /* the current line is marked by its number alone; an error stays a filled
    block, because an error should be loud */
 .gutter .ln.cur {
@@ -397,7 +426,7 @@ kbd {
 
 #tree {
   flex: 1; overflow: auto;
-  font-family: var(--mono); font-size: var(--fs-base); line-height: 1.55;
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.55;
   padding: var(--s2) var(--s3) 40vh var(--s2);
   scroll-padding-block: var(--s5);
 }
@@ -711,17 +740,76 @@ body.dragover .empty-prompt h2 { color: var(--hue); }
 
 @media (max-width: 720px) {
   .tabs { display: inline-flex; }
-  .tabs button { padding: 4px 10px; }
+  /* tighter tabs and icon buttons pay for the lint.one mark and the
+     document's ×, so a 375px phone still fits the whole toolbar */
+  .tabs button { padding: 4px 7px; }
+  .toolbar .icon-btn { width: 26px; }
   #divider { display: none; }
   #editorPane { width: 100% !important; }
   body[data-view="tree"] #editorPane { display: none; }
   body[data-view="text"] #treePane { display: none; }
   .hide-sm { display: none; }
-  .brand { margin-right: var(--s2); padding-right: var(--s2); }
   .brand-text { display: none; }
+  /* A phone has no room for two separators: the mark and the tile sit
+     together as one group, set apart from the rest by a little space. */
+  .suite-wrap { margin-right: 2px; }
+  .suite-btn { width: 24px; }
+  .brand { border-right: 0; padding-right: 0; margin-right: 2px; }
+  /* the name gives way first; the × stays so a phone can still close */
+  .doc-name { display: none; }
+  .doc-chip { flex: none; margin-left: 0; padding: 0; border: 0; background: transparent; }
   :root { --gutter-w: 40px; }
-  .toolbar { gap: 2px; padding: var(--s2); }
+  .toolbar { gap: 2px; padding: var(--s2) 6px; }
 }
+
+/* ==========================================================================
+   Keyboard shortcuts — LintApp.showShortcuts(), a native modal dialog
+   ========================================================================== */
+dialog.shortcuts {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(640px, calc(100dvh - 48px));
+  padding: 0; overflow: auto;
+  background: var(--raised); color: var(--ink);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  font-family: var(--ui);
+}
+dialog.shortcuts::backdrop { background: rgb(0 0 0 / 0.32); }
+.sc-head {
+  display: flex; align-items: center; gap: var(--s2);
+  position: sticky; top: 0; z-index: 1;
+  padding: var(--s3) var(--s3) var(--s3) var(--s5);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+}
+.sc-head h2 { margin: 0; flex: 1; font-size: var(--fs-large); font-weight: 600; letter-spacing: -0.01em; }
+.sc-body { padding: var(--s4) var(--s5) var(--s5); columns: 2 300px; column-gap: var(--s6); }
+.sc-group { break-inside: avoid; margin: 0 0 var(--s5); }
+.sc-group h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.02em;
+  color: var(--faint);
+}
+.sc-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4);
+  padding: 5px 0;
+  border-bottom: var(--hairline) solid var(--line);
+  font-size: var(--fs-base);
+}
+.sc-row:last-child { border-bottom: 0; }
+.sc-keys { flex: none; text-align: right; color: var(--faint); font-size: var(--fs-small); }
+.sc-keys kbd { color: var(--ink); }
+
+/* ==========================================================================
+   Increase contrast — what the tokens alone cannot do: text drawn in the
+   hue is not guaranteed legible on the surface, so it takes the ink
+   ========================================================================== */
+[data-contrast="more"] button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+[data-contrast="more"] .more-btn, [data-contrast="more"] .trunc-btn { color: var(--ink); text-decoration: underline; }
+[data-contrast="more"] #divider { background: var(--line); }
+[data-contrast="more"] .gutter { border-right-color: var(--ink); }
+[data-contrast="more"] kbd { color: var(--ink); border-color: var(--line); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
