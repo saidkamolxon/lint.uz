@@ -1,5 +1,5 @@
 {
-  "name": "Audio Player · lint.one",
+  "name": "lint.one Audio",
   "short_name": "Audio",
   "description": "Play audio with a live spectrum. Nothing leaves the device.",
   "start_url": "/audio/",

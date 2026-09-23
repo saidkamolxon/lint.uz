@@ -20,22 +20,31 @@
 <link rel="stylesheet" href="/shared/app.css">
 <style>
 /* ==========================================================================
-   Listening is the point, so the stage takes the page. It is pure black in
-   every theme — on a screen whose black is truly off, only the visuals are
-   lit — while the chrome around it follows the theme like every other tool.
+   Listening is the point, so the stage takes the page. In a window it
+   follows the theme like every other tool; full screen is pure black — on a
+   screen whose black is truly off, only the bars are lit.
    ========================================================================== */
 .au-main { flex: 1; min-height: 0; display: flex; position: relative; }
 
 #stage {
+  --st-bg: var(--surface);
+  --st-ink: var(--ink);
+  --st-muted: var(--muted);
+  --st-faint: var(--faint);
+  --st-glass: color-mix(in srgb, var(--raised) 72%, transparent);
+  --st-line: var(--line);
+  flex: 1; min-width: 0; position: relative; overflow: hidden;
+  background: var(--st-bg); color: var(--st-ink);
+  user-select: none;
+}
+#stage:fullscreen, body.pseudo-full #stage {
   --st-bg: #000;
   --st-ink: #EEF0F6;
   --st-muted: rgb(238 240 246 / 0.62);
   --st-faint: rgb(238 240 246 / 0.38);
   --st-glass: rgb(16 18 26 / 0.62);
   --st-line: rgb(255 255 255 / 0.09);
-  flex: 1; min-width: 0; position: relative; overflow: hidden;
-  background: var(--st-bg); color: var(--st-ink);
-  user-select: none;
+  color-scheme: dark;
 }
 #viz { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
@@ -46,47 +55,32 @@
   pointer-events: none;
   transition: opacity 400ms ease;
 }
-.now[hidden] { display: none; }
 .now img {
-  width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex: none;
+  width: 52px; height: 52px; border-radius: var(--radius); object-fit: cover; flex: none;
   box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.6);
 }
-.now img[hidden] { display: none; }
-.now .t { font-size: 17px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25;
+.now .t { font-size: var(--fs-large); font-weight: 650; letter-spacing: -0.015em; line-height: 1.25;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.now .a { font-size: 13px; color: var(--st-muted); margin-top: 2px;
+.now .a { font-size: var(--fs-base); color: var(--st-muted); margin-top: 2px;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now .txt { min-width: 0; }
 
 /* ---------- nothing playing yet ---------- */
-/* the shared empty state, placed over the stage and recoloured for it —
-   the stage stays dark whatever the theme */
+/* the shared empty state, placed over the stage and coloured by it */
 .au-empty {
   --empty-drop: 52px;
   position: absolute; left: 0; right: 0; top: 0;
   pointer-events: none;
 }
-.au-empty .empty-state { max-width: 600px; pointer-events: auto; }
-.au-empty[hidden] { display: none; }
+.au-empty .empty-state { max-width: 560px; pointer-events: auto; }
 .au-empty h2 { color: var(--st-ink); }
 .au-empty p { color: var(--st-muted); }
-.au-empty .keys { color: var(--st-faint); }
-.au-empty .choices { display: flex; gap: var(--s2); justify-content: center; flex-wrap: wrap; margin: var(--s4) 0; }
-.au-empty .choice {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
-  width: 170px; padding: var(--s3) var(--s3) var(--s3);
-  background: var(--st-glass); color: var(--st-ink);
-  border: 1px solid var(--st-line); border-radius: var(--radius-lg);
+.au-empty .empty-actions button { padding: 7px 14px; font-size: var(--fs-base); }
+.au-empty .empty-actions .bordered {
+  color: var(--st-ink); border-color: var(--st-line); background: var(--st-glass);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  text-align: left; white-space: normal;
 }
-.au-empty .choice[hidden] { display: none; }
-.au-empty .choice:hover { border-color: color-mix(in srgb, var(--hue) 60%, transparent); background: rgb(24 26 36 / 0.75); }
-.au-empty .choice b { font-size: 13.5px; font-weight: 600; }
-.au-empty .choice span { font-size: 11.5px; color: var(--st-faint); line-height: 1.4; font-weight: 400; }
-.au-empty kbd {
-  background: rgb(255 255 255 / 0.07); border-color: var(--st-line); color: var(--st-muted);
-}
+.au-empty .empty-actions .bordered:hover { border-color: color-mix(in srgb, var(--hue) 60%, transparent); }
 
 /* ---------- transport ---------- */
 .transport {
@@ -94,48 +88,44 @@
   display: flex; align-items: center; gap: var(--s3);
   padding: var(--s2) var(--s3);
   background: var(--st-glass);
-  border: 1px solid var(--st-line); border-radius: 14px;
+  border: 1px solid var(--st-line); border-radius: var(--radius-lg);
   backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
   transition: opacity 400ms ease, transform 400ms ease;
 }
-.transport[hidden], .transport [hidden] { display: none !important; }
 .transport button { color: var(--st-ink); }
-.transport button:hover { background: rgb(255 255 255 / 0.08); }
+.transport button:hover { background: color-mix(in srgb, var(--st-ink) 8%, transparent); }
 .transport .icon-btn { color: var(--st-muted); }
 .transport .icon-btn:hover { color: var(--st-ink); }
 .play {
   width: 38px; height: 38px; padding: 0; border-radius: 50%; flex: none;
   display: grid; place-items: center;
-  background: var(--st-ink) !important; color: #0B0C10 !important;
+  background: var(--st-ink) !important; color: var(--st-bg) !important;
 }
 .play:hover { transform: scale(1.05); }
 .play svg { width: 17px; height: 17px; display: block; }
 .time {
-  font-family: var(--mono); font-size: 11.5px; color: var(--st-muted);
+  font-family: var(--mono); font-size: var(--fs-small); color: var(--st-muted);
   font-variant-numeric: tabular-nums; flex: none; min-width: 4.5ch; text-align: center;
 }
 .seek { flex: 1; min-width: 60px; height: 40px; position: relative; cursor: pointer; }
 .seek canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .seek-tip {
   position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%);
-  padding: 2px 6px; border-radius: 5px;
-  background: rgb(0 0 0 / 0.8); color: var(--st-ink);
-  font-family: var(--mono); font-size: 11px; pointer-events: none;
+  padding: 2px 6px; border-radius: var(--radius);
+  background: var(--st-ink); color: var(--st-bg);
+  font-family: var(--mono); font-size: var(--fs-micro); pointer-events: none;
   white-space: nowrap;
 }
-.seek-tip[hidden] { display: none; }
 .vol { width: 84px; flex: none; accent-color: var(--st-ink); }
 
 /* a live source has no timeline, only a name and a way to stop */
-.live-row { flex: 1; display: flex; align-items: center; gap: var(--s2); min-width: 0; font-size: 13px; }
-.live-row[hidden] { display: none; }
+.live-row { flex: 1; display: flex; align-items: center; gap: var(--s2); min-width: 0; font-size: var(--fs-base); }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #F43F5E; flex: none;
             box-shadow: 0 0 0 0 rgb(244 63 94 / 0.6); animation: live 1.6s ease-out infinite; }
 @keyframes live { to { box-shadow: 0 0 0 8px rgb(244 63 94 / 0); } }
 .live-row .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--st-muted); }
-.live-row .lbl b { color: var(--st-ink); font-weight: 600; }
+.live-row .lbl b { color: var(--st-ink); font-weight: 600; margin-right: var(--s2); }
 .file-row { flex: 1; display: flex; align-items: center; gap: var(--s3); min-width: 0; }
-.file-row[hidden] { display: none; }
 
 /* full screen, and the controls get out of the way when the pointer rests */
 #stage.idle { cursor: none; }
@@ -159,26 +149,16 @@ body.pseudo-full .transport {
   right: calc(var(--s3) + env(safe-area-inset-right));
 }
 
-/* style choices move into the colour menu where the toolbar has no room */
-.narrow-only { display: none; }
-@media (max-width: 760px) { .narrow-only { display: flex; } .menu-label.narrow-only { display: block; } }
-/* in full screen the menu rides in the transport, styles and all, opening upward */
-.transport .narrow-only { display: flex; }
-.transport .menu-label.narrow-only { display: block; }
-.transport .menu { top: auto; bottom: calc(100% + 10px); }
-.transport .menu button { color: var(--ink); }
-.transport .menu button:hover { background: var(--row-hover); }
-#stage.idle .transport:has(.menu.open) { opacity: 1; transform: none; pointer-events: auto; }
-
 /* ---------- toolbar controls ---------- */
+/* the other two sources are actions, not a mode: pressed only while live */
+.src-btn { display: inline-flex; align-items: center; gap: 6px; }
+.src-btn svg { width: 14px; height: 14px; display: block; flex: none; }
 #inputSelect {
-  max-width: 190px; font-family: var(--ui); font-size: 12px;
+  max-width: 190px; font-family: var(--ui); font-size: var(--fs-small);
   color: var(--ink); background: var(--sunken);
   border: var(--hairline) solid var(--line); border-radius: var(--radius);
   padding: 4px 6px;
 }
-#inputSelect[hidden] { display: none; }
-.pal-swatch { width: 34px; height: 12px; border-radius: 6px; flex: none; }
 
 /* ---------- details drawer ---------- */
 #drawer {
@@ -194,8 +174,7 @@ body.pseudo-full .transport {
 #drawer h3:first-child { margin-top: 0; }
 #drawer .cover { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-lg);
                  margin-bottom: var(--s3); display: block; }
-#drawer .cover[hidden] { display: none; }
-.meta { margin: 0; font-size: 12.5px; }
+.meta { margin: 0; font-size: var(--fs-base); }
 .meta div {
   display: grid; grid-template-columns: 96px 1fr; gap: var(--s3);
   padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
@@ -203,9 +182,9 @@ body.pseudo-full .transport {
 }
 .meta div:last-child { border-bottom: none; }
 .meta dt { color: var(--muted); }
-.meta dd { margin: 0; font-family: var(--mono); font-size: 11.5px; overflow-wrap: anywhere; color: var(--ink); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: var(--fs-small); overflow-wrap: anywhere; color: var(--ink); }
 .meta dd.none { color: var(--faint); font-style: italic; font-family: var(--ui); }
-.drawer-note { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin-top: var(--s3); }
+.drawer-note { font-size: var(--fs-small); color: var(--faint); line-height: 1.5; margin-top: var(--s3); }
 @media (max-width: 760px) {
   #drawer { position: absolute; inset: 0 0 0 auto; width: min(320px, 88vw); z-index: 30; box-shadow: var(--shadow); }
 }
@@ -215,13 +194,14 @@ body.dragover #stage::after {
   display: grid; place-items: center;
   border: 2px dashed var(--hue); border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--hue) 12%, transparent);
-  color: var(--st-ink); font-size: 16px; font-weight: 600;
+  color: var(--st-ink); font-size: var(--fs-large); font-weight: 600;
   pointer-events: none; z-index: 20;
 }
 
 @media (max-width: 760px) {
   .brand-text { display: none; }
-  .vol, .hide-narrow { display: none; }
+  .vol { display: none; }
+  .src-btn span { display: none; }
   .now { left: var(--s4); top: var(--s4); right: var(--s4); }
   .transport { left: var(--s2); right: var(--s2); bottom: var(--s2); gap: var(--s2); }
 }
@@ -234,7 +214,7 @@ body.dragover #stage::after {
 <script>
 window.LINT_CONFIG = {
   id: 'audio',
-  name: 'Audio Player',
+  name: 'Audio',
   host: 'lint.one/audio',
   label: 'audio',
   hue: '#C026D3',
@@ -251,6 +231,7 @@ const c = window.LINT_CONFIG;
 
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/audio.svg")');
 
 const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
@@ -263,8 +244,10 @@ const ICON = {
   exitFull: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.01"/>',
   stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none"/>',
-  palette: '<path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.6 1.8-1.6H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15" cy="7.8" r="1.2" fill="currentColor"/>'
+  screen: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'
 };
+const MOD_O = LintApp.isMac ? '⌘O' : 'Ctrl+O';
 
 /* ==========================================================================
    Chrome
@@ -275,31 +258,15 @@ $('app').innerHTML = `
       <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>
-        <span class="brand-host">${c.host}</span>
       </span>
     </a>
-    <button id="btnOpen" class="primary" title="Open an audio file — or drop one anywhere (⌘O)">Open</button>
-    <span class="sep hide-sm"></span>
-    <span class="seg" role="group" aria-label="Source">
-      <button id="srcFile" aria-pressed="false" title="Play an audio file">File</button>
-      <button id="srcSystem" aria-pressed="false" title="Listen to another tab, or the whole system where the browser allows it">Tab / system</button>
-      <button id="srcInput" aria-pressed="false" title="Listen to a microphone or an input device — a loopback device such as BlackHole carries system sound">Input</button>
-    </span>
+    <button id="btnOpen" class="primary" title="Open an audio file, or drop one anywhere (${MOD_O})">Open</button>
+    <button id="srcSystem" class="bordered src-btn" aria-pressed="false" aria-label="Tab or system sound">${I(ICON.screen)}<span>Tab or system sound</span></button>
+    <button id="srcInput" class="bordered src-btn" aria-pressed="false" aria-label="Microphone or input">${I(ICON.mic)}<span>Microphone or input</span></button>
     <select id="inputSelect" aria-label="Input device" hidden></select>
     <span class="spacer"></span>
-    <span class="seg hide-narrow" role="group" aria-label="Style">
-      <button data-style="bars" aria-pressed="true" title="Spectrum along the floor">Bars</button>
-      <button data-style="radial" aria-pressed="false" title="Spectrum around a circle">Radial</button>
-      <button data-style="aura" aria-pressed="false" title="Soft colour that breathes with the music">Aura</button>
-      <button data-style="particles" aria-pressed="false" title="A swirl of light thrown outward on the beat">Particles</button>
-      <button data-style="wave" aria-pressed="false" title="The waveform itself, as an oscilloscope draws it">Wave</button>
-    </span>
-    <div class="menu-wrap">
-      <button id="btnPalette" class="icon-btn" title="Colours" aria-label="Colours" aria-haspopup="true"></button>
-      <div class="menu" id="paletteMenu" role="menu"></div>
-    </div>
-    <button id="btnInfo" class="icon-btn" title="What the file holds (I)" aria-label="File details" aria-pressed="false"></button>
-    <button id="btnFull" class="icon-btn" title="Full screen (F)" aria-label="Full screen"></button>
+    <button id="btnInfo" class="icon-btn" title="File details (I)" aria-label="File details" aria-pressed="false" hidden></button>
+    <button id="btnFull" class="icon-btn" title="Full screen (F)" aria-label="Full screen" hidden></button>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
   </header>
@@ -318,22 +285,19 @@ $('app').innerHTML = `
 
       <div class="au-empty" id="empty"><div class="empty-state">
         <h2>Play a sound to watch it move</h2>
-        <p>Play a file, or let the spectrum follow whatever your computer is
-           playing. Everything stays in this tab — there is nowhere for the
-           sound to go.</p>
-        <div class="choices">
-          <button class="choice" id="chFile"><b>Open a file</b><span>MP3, WAV, FLAC, OGG, M4A — or drop one here</span></button>
-          <button class="choice" id="chSystem"><b>Tab or system sound</b><span>Pick a tab and turn on “Share audio”</span></button>
-          <button class="choice" id="chInput"><b>Microphone or input</b><span>The room, or a loopback device</span></button>
+        <p>Open a file, or let the bars follow what your computer is playing. The sound never leaves this tab.</p>
+        <div class="empty-actions">
+          <button class="primary" id="chFile" title="Open an audio file (${MOD_O})">Open a file</button>
+          <button class="bordered" id="chSystem" title="Pick a tab or screen and turn on sharing its audio">Tab or system sound</button>
+          <button class="bordered" id="chInput" title="Listen to a microphone, or a loopback device that carries system sound">Microphone or input</button>
         </div>
-        <p class="keys">${LintApp.kbd('mod+o')} open · <kbd>Space</kbd> play · <kbd>←</kbd> <kbd>→</kbd> seek · <kbd>F</kbd> full screen</p>
       </div></div>
 
       <div class="transport" id="transport" hidden>
         <div class="file-row" id="fileRow">
-          <button class="play" id="btnPlay" aria-label="Play"></button>
+          <button class="play" id="btnPlay" title="Play (Space)" aria-label="Play"></button>
           <span class="time" id="tCur">0:00</span>
-          <div class="seek" id="seek" role="slider" aria-label="Position" tabindex="0">
+          <div class="seek" id="seek" role="slider" aria-label="Position" title="Seek (arrow keys)" tabindex="0">
             <canvas id="wave"></canvas>
             <span class="seek-tip" id="seekTip" hidden></span>
           </div>
@@ -354,9 +318,9 @@ $('app').innerHTML = `
     <aside id="drawer" aria-label="File details"></aside>
   </main>
 
-  <footer class="status" id="statusBar">
+  <footer class="status" id="statusBar" hidden>
     <span class="dot"></span>
-    <span id="statusMsg">Ready</span>
+    <span id="statusMsg"></span>
     <span id="pathBox"></span>
   </footer>
 `;
@@ -365,15 +329,14 @@ LintApp.mountChrome($('chromeSlot'), 'audio');
 $('btnInfo').innerHTML = I(ICON.info);
 $('btnFull').innerHTML = I(ICON.full);
 $('btnFullOut').innerHTML = I(ICON.exitFull);
-$('btnPalette').innerHTML = I(ICON.palette);
 $('btnStop').innerHTML = I(ICON.stop);
 $('btnPlay').innerHTML = I(ICON.play);
 $('btnMute').innerHTML = I(ICON.vol);
-LintApp.wireMenu($('btnPalette'), $('paletteMenu'));
 
+/* a list of facts becomes one span each; the shared bar spaces them */
 function setStatus(kind, msg) {
   $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
-  $('statusMsg').textContent = msg;
+  $('statusMsg').innerHTML = [].concat(msg).map((m) => '<span>' + esc(m) + '</span>').join('');
 }
 
 /* set when something other than sound changes the picture — the drawing
@@ -385,69 +348,32 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('lintuz-audio-' + k); return v === null ? d : v; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('lintuz-audio-' + k, v); } catch (e) {} }
 };
+/* there used to be five styles and four palettes to choose from */
+try { localStorage.removeItem('lintuz-audio-style'); localStorage.removeItem('lintuz-audio-palette'); } catch (e) {}
 
 /* ==========================================================================
-   Palettes — stops run from the lowest frequency to the highest
+   Colour — one ramp off the tool's hue, lowest frequency to highest. On a
+   dark stage it climbs toward light; on a light one it stays deep enough
+   to read against paper.
    ========================================================================== */
-const PALETTES = {
-  aurora: { name: 'Aurora', stops: ['#22D3EE', '#818CF8', '#C084FC', '#F472B6'] },
-  ember:  { name: 'Ember',  stops: ['#E11D48', '#F97316', '#FBBF24', '#FEF3C7'] },
-  lagoon: { name: 'Lagoon', stops: ['#10B981', '#22D3EE', '#3B82F6', '#A5B4FC'] },
-  orchid: { name: 'Orchid', stops: ['#7E22CE', '#C026D3', '#F0ABFC', '#FDF4FF'] }
+const RAMP = {
+  dark: ['#7E22CE', '#C026D3', '#E879F9', '#F5D0FE'],
+  light: ['#6B21A8', '#86198F', '#C026D3', '#D946EF']
 };
-let paletteId = store.get('palette', 'aurora');
-if (!PALETTES[paletteId]) paletteId = 'aurora';
-
-const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-function paletteAt(t) {
-  const s = PALETTES[paletteId].stops.map(hexRgb);
-  const x = Math.min(0.9999, Math.max(0, t)) * (s.length - 1);
-  const i = Math.floor(x), f = x - i;
-  return s[i].map((v, k) => Math.round(v + (s[i + 1][k] - v) * f));
-}
-const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-
-const STYLE_NAMES = { bars: 'Bars', radial: 'Radial', aura: 'Aura', particles: 'Particles', wave: 'Wave' };
-const STYLES = Object.keys(STYLE_NAMES);
-let style = STYLES.includes(store.get('style', 'bars')) ? store.get('style', 'bars') : 'bars';
-function paintPaletteMenu() {
-  $('paletteMenu').innerHTML =
-    '<div class="menu-label narrow-only">Style</div>' +
-    Object.keys(STYLE_NAMES).map((id) =>
-      `<button class="menu-item narrow-only" role="menuitemradio" data-pick-style="${id}" aria-checked="${id === style}">` +
-      `${STYLE_NAMES[id]}<span class="tick">✓</span></button>`).join('') +
-    '<div class="menu-sep narrow-only"></div>' +
-    '<div class="menu-label">Colours</div>' +
-    Object.keys(PALETTES).map((id) =>
-      `<button class="menu-item" role="menuitemradio" data-pal="${id}" aria-checked="${id === paletteId}">` +
-      `<span class="pal-swatch" style="background:linear-gradient(90deg,${PALETTES[id].stops.join(',')})"></span>` +
-      `${PALETTES[id].name}<span class="tick">✓</span></button>`).join('');
-}
-paintPaletteMenu();
-$('paletteMenu').addEventListener('click', (e) => {
-  const st = e.target.closest('[data-pick-style]');
-  if (st) { setStyle(st.dataset.pickStyle); LintApp.closeMenus(); return; }
-  const b = e.target.closest('[data-pal]');
-  if (!b) return;
-  paletteId = b.dataset.pal;
-  store.set('palette', paletteId);
-  paintPaletteMenu();
+let dark = true, stageBg = '#000';
+function readColours() {
+  dark = isFull() || /dark/.test(getComputedStyle(document.documentElement).colorScheme);
+  stageBg = getComputedStyle(stage).getPropertyValue('--st-bg').trim() || (dark ? '#000' : '#FFF');
   gradCache = null;
   drawWave();
   invalidate();
-  LintApp.closeMenus();
-});
-
-function setStyle(s) {
-  style = s;
-  invalidate();
-  paintPaletteMenu();
-  store.set('style', s);
-  document.querySelectorAll('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === s)));
 }
-setStyle(style);
-document.querySelectorAll('[data-style]').forEach((b) =>
-  b.addEventListener('click', () => setStyle(b.dataset.style)));
+function hGradient(ctx, x0, x1) {
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  const stops = RAMP[dark ? 'dark' : 'light'];
+  stops.forEach((s, i) => g.addColorStop(i / (stops.length - 1), s));
+  return g;
+}
 
 /* ==========================================================================
    Audio graph
@@ -585,11 +511,25 @@ function stopLive() {
   live = null;
 }
 
+const SRC_TITLE = {
+  srcSystem: ['system', 'Listen to another tab, or the whole system where the browser allows it'],
+  srcInput: ['input', 'Listen to a microphone, or a loopback device such as BlackHole that carries system sound']
+};
 function setSource(s) {
   source = s;
-  $('srcFile').setAttribute('aria-pressed', String(s === 'file'));
-  $('srcSystem').setAttribute('aria-pressed', String(s === 'system'));
-  $('srcInput').setAttribute('aria-pressed', String(s === 'input'));
+  for (const id in SRC_TITLE) {
+    const on = s === SRC_TITLE[id][0];
+    $(id).setAttribute('aria-pressed', String(on));
+    $(id).title = on ? 'Stop listening' : SRC_TITLE[id][1];
+  }
+  /* nothing to show details of, or to fill the screen with, until a sound */
+  $('btnInfo').hidden = $('btnFull').hidden = s === 'none';
+  $('statusBar').hidden = s === 'none';
+  if (s === 'none') {
+    $('drawer').classList.remove('open');
+    $('btnInfo').setAttribute('aria-pressed', 'false');
+    if (isFull()) toggleFull();
+  }
   $('empty').hidden = s !== 'none';
   $('transport').hidden = s === 'none';
   $('fileRow').hidden = s !== 'file';
@@ -600,8 +540,10 @@ function setSource(s) {
   paintDrawer();
 }
 
-/* ---------- a file ---------- */
-async function openFile(file) {
+/* ---------- a file ----------
+   `auto` false loads it ready to play without starting: a file handed over
+   from the landing page arrives with no tap to unlock the sound. */
+async function openFile(file, auto = true) {
   if (!file) return;
   if (!/^audio\//.test(file.type) && !/\.(mp3|wav|flac|ogg|oga|opus|m4a|aac|webm|aif|aiff|wma)$/i.test(file.name)) {
     LintApp.toast('That does not look like an audio file');
@@ -621,13 +563,13 @@ async function openFile(file) {
   drawWave();
   setSource('file');
   paintNow();
-  setStatus('', 'Opening ' + file.name + '…');
+  setStatus('', 'Opening…');
   $('pathBox').textContent = file.name;
 
   /* On iOS the decoded buffer will play, so the element must not start —
      handing over mid-song would jump by the element's own delay. */
-  if (!IOS) { try { await audio.play(); } catch (e) { /* autoplay may wait for a gesture */ } }
-  else setStatus('', 'Decoding ' + file.name + '…');
+  if (!IOS) { if (auto) try { await audio.play(); } catch (e) { /* autoplay may wait for a gesture */ } }
+  else setStatus('', 'Decoding…');
 
   /* what the container says, then the whole signal for the overview */
   const buf = await file.arrayBuffer();
@@ -661,19 +603,21 @@ async function openFile(file) {
       $('tDur').textContent = fmtTime(decoded.duration);
     }
     /* the context was unlocked by the tap that chose the file */
-    player.play();
+    if (auto) player.play();
   }
   setReadyStatus();
 }
 
+/* the name sits at the right of the bar; the message says what it is */
 function setReadyStatus() {
   if (!fileInfo) return;
   const h = fileInfo.head || {};
-  const bits = [fileInfo.name];
+  const bits = [];
   if (isFinite(player.duration())) bits.push(fmtTime(player.duration()));
   if (h.sampleRate) bits.push((h.sampleRate / 1000).toFixed(h.sampleRate % 1000 ? 1 : 0) + ' kHz');
   if (fileInfo.channels) bits.push(fileInfo.channels === 1 ? 'mono' : fileInfo.channels === 2 ? 'stereo' : fileInfo.channels + ' channels');
-  setStatus('ok', bits.join(' · '));
+  setStatus('ok', bits);
+  $('pathBox').textContent = fileInfo.name;
 }
 
 audio.addEventListener('error', () => {
@@ -702,7 +646,7 @@ function togglePlay() {
 /* ---------- another tab, or the whole system ---------- */
 async function listenSystem() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    LintApp.toast('This browser cannot share audio — try Chrome or Edge on a computer');
+    LintApp.toast('This browser cannot share audio. Try Chrome or Edge on a computer');
     return;
   }
   ensureAudio();
@@ -725,7 +669,7 @@ async function listenSystem() {
   if (!track) {
     stream.getTracks().forEach((t) => t.stop());
     setStatus('err', 'No sound was shared');
-    LintApp.toast('No sound came with that — choose a tab and turn on “Share tab audio”');
+    LintApp.toast('No sound came with that. Choose a tab and turn on “Share tab audio”');
     return;
   }
   const video = stream.getVideoTracks()[0];
@@ -771,37 +715,34 @@ function startLive(stream, kind, label, detail) {
   const node = actx.createMediaStreamSource(stream);
   node.connect(analyser);
   live = { stream, node, kind, label, detail };
-  stream.getAudioTracks().forEach((t) => { t.onended = () => { stopLive(); setSource(fileInfo ? 'file' : 'none'); setStatus('', 'Stopped listening'); }; });
+  stream.getAudioTracks().forEach((t) => { t.onended = stopListening; });
   setSource(kind);
-  $('liveLabel').innerHTML = `<b>${esc(label)}</b>` + (detail ? ' · ' + esc(detail) : '');
-  setStatus('ok', 'Listening to ' + label.toLowerCase() + (detail ? ' · ' + detail : ''));
-  $('pathBox').textContent = '';
+  $('liveLabel').innerHTML = `<b>${esc(label)}</b>` + esc(detail || '');
+  setStatus('ok', 'Listening to ' + label.toLowerCase());
+  $('pathBox').textContent = detail || '';
 }
 
-$('btnStop').addEventListener('click', () => {
+/* back to the file, if there is one */
+function stopListening() {
   stopLive();
-  setSource(fileInfo ? 'file' : 'none');
-  setStatus('', 'Stopped listening');
-});
+  if (fileInfo) { attachFile(); setSource('file'); setReadyStatus(); }
+  else setSource('none');
+}
+$('btnStop').addEventListener('click', stopListening);
 
 /* ---------- source buttons ---------- */
-function chooseFile() {
-  if (fileInfo && source !== 'file') { stopLive(); attachFile(); setSource('file'); setReadyStatus(); return; }
-  $('fileInput').click();
-}
 $('btnOpen').addEventListener('click', () => $('fileInput').click());
-$('srcFile').addEventListener('click', chooseFile);
 $('chFile').addEventListener('click', () => $('fileInput').click());
-$('srcSystem').addEventListener('click', listenSystem);
+/* pressed while live, so pressing again stops */
+$('srcSystem').addEventListener('click', () => source === 'system' ? stopListening() : listenSystem());
+$('srcInput').addEventListener('click', () => source === 'input' ? stopListening() : listenInput());
 /* iPhone and iPad let no page hear other apps — offering it would only
    fail; the microphone is what they allow */
 if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) {
   $('srcSystem').hidden = true;
   $('chSystem').hidden = true;
-  $('chInput').querySelector('span').textContent = 'Hear the room — music from a speaker nearby';
 }
 $('chSystem').addEventListener('click', listenSystem);
-$('srcInput').addEventListener('click', () => listenInput());
 $('chInput').addEventListener('click', () => listenInput());
 $('fileInput').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
 
@@ -1034,9 +975,8 @@ function analyseSignal(buf) {
    Now playing, details, media keys
    ========================================================================== */
 const coverImg = $('nowCover');
-coverImg.addEventListener('load', () => { coverImg.hidden = false; coverArt = coverImg; invalidate(); });
-coverImg.addEventListener('error', () => { coverImg.hidden = true; coverArt = null; });
-let coverArt = null;
+coverImg.addEventListener('load', () => { coverImg.hidden = false; });
+coverImg.addEventListener('error', () => { coverImg.hidden = true; });
 
 function displayTitle() {
   const t = fileInfo && fileInfo.tags;
@@ -1046,8 +986,8 @@ function paintNow() {
   if (!fileInfo) return;
   const t = fileInfo.tags || {};
   $('nowTitle').textContent = displayTitle();
-  $('nowArtist').textContent = [t.artist, t.album].filter(Boolean).join(' — ');
-  if (!t.cover) { coverImg.hidden = true; coverArt = null; }
+  $('nowArtist').textContent = [t.artist, t.album].filter(Boolean).join(', ');
+  if (!t.cover) coverImg.hidden = true;
   $('now').hidden = source !== 'file';
   document.title = displayTitle() + ' · Audio Player · lint.one';
 }
@@ -1087,10 +1027,7 @@ function paintDrawer() {
       '</dl><p class="drawer-note">Live sound is only analysed, never recorded or played back — what you hear still comes from where it was already playing.</p>';
     return;
   }
-  if (!fileInfo) {
-    d.innerHTML = '<h3>Details</h3><p class="drawer-note">Open a file to see its format, sample rate, bit depth, loudness and tags.</p>';
-    return;
-  }
+  if (!fileInfo) { d.innerHTML = ''; return; }
   const h = fileInfo.head || {}, t = fileInfo.tags || {};
   const dur = isFinite(player.duration()) ? player.duration() : fileInfo.duration;
   const bitrate = h.bitrate && !h.vbr ? Math.round(h.bitrate / 1000) + ' kbps'
@@ -1158,28 +1095,28 @@ $('vol').value = String(isFinite(savedVol) ? savedVol : 1);
 /* the seek bar is the file's own waveform, played part in colour */
 const wave = $('wave'), wctx = wave.getContext('2d');
 function drawWave() {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
   const w = wave.clientWidth, h = wave.clientHeight;
   if (!w || !h) return;
-  if (wave.width !== Math.round(w * dpr)) { wave.width = Math.round(w * dpr); wave.height = Math.round(h * dpr); }
+  if (wave.width !== Math.round(w * dpr) || wave.height !== Math.round(h * dpr)) { wave.width = Math.round(w * dpr); wave.height = Math.round(h * dpr); }
   wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   wctx.clearRect(0, 0, w, h);
   const dur = player.duration();
   const at = !isFinite(dur) || dur <= 0 ? 0 : (scrubTo !== null ? scrubTo : player.time()) / dur;
   const mid = h / 2;
+  const rest = dark ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.16)';
 
   if (!peaks) {
     /* no overview yet — a plain line, filled as it plays */
-    wctx.fillStyle = 'rgba(255,255,255,0.18)';
+    wctx.fillStyle = rest;
     wctx.fillRect(0, mid - 1.5, w, 3);
-    wctx.fillStyle = rgba(paletteAt(0.5), 1);
+    wctx.fillStyle = c.hue;
     wctx.fillRect(0, mid - 1.5, w * at, 3);
     return;
   }
   const bar = 2, gap = 1, pitch = bar + gap;
   const n = Math.floor(w / pitch);
-  const grad = wctx.createLinearGradient(0, 0, w, 0);
-  PALETTES[paletteId].stops.forEach((s, i, a) => grad.addColorStop(i / (a.length - 1), s));
+  const grad = hGradient(wctx, 0, w);
   let max = 0;
   for (let i = 0; i < peaks.length; i++) if (peaks[i] > max) max = peaks[i];
   const norm = max > 0 ? 1 / max : 1;
@@ -1189,7 +1126,7 @@ function drawWave() {
     for (let k = from; k < to; k++) if (peaks[k] > m) m = peaks[k];
     const bh = Math.max(1.5, Math.pow(m * norm, 0.8) * (h - 6));
     const x = i * pitch;
-    wctx.fillStyle = x / w < at ? grad : 'rgba(255,255,255,0.24)';
+    wctx.fillStyle = x / w < at ? grad : rest;
     wctx.fillRect(x, mid - bh / 2, bar, bh);
   }
 }
@@ -1243,7 +1180,7 @@ let pseudoTipShown = false;
 function setPseudo(on) {
   document.body.classList.toggle('pseudo-full', on);
   $('btnFull').innerHTML = I(on ? ICON.exitFull : ICON.full);
-  placeMenu();
+  readColours();
   wake();
 }
 function isFull() { return !!document.fullscreenElement || document.body.classList.contains('pseudo-full'); }
@@ -1257,7 +1194,7 @@ function toggleFull() {
     setPseudo(true);
     if (IOS && !navigator.standalone && !videoFull() && !pseudoTipShown) {
       pseudoTipShown = true;
-      LintApp.toast('For true full screen: Share → Add to Home Screen');
+      LintApp.toast('For true full screen, choose Share, then Add to Home Screen');
     }
   }
 }
@@ -1265,17 +1202,12 @@ $('btnFull').addEventListener('click', toggleFull);
 $('btnFullOut').addEventListener('click', toggleFull);
 document.addEventListener('fullscreenchange', () => {
   $('btnFull').innerHTML = I(document.fullscreenElement ? ICON.exitFull : ICON.full);
-  placeMenu();
+  readColours();
   wake();
 });
-/* the toolbar is gone in full screen, so its style and colour menu moves
-   into the transport, and back again on the way out */
-const menuWrap = $('btnPalette').parentElement;
-function placeMenu() {
-  LintApp.closeMenus();
-  if (isFull()) $('transport').insertBefore(menuWrap, $('btnFullOut'));
-  else $('btnInfo').before(menuWrap);
-}
+/* full screen is always black; a window follows the theme */
+new MutationObserver(readColours).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColours);
 
 let idleTimer;
 function wake() {
@@ -1302,14 +1234,10 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowRight') { e.preventDefault(); seekBy(e.shiftKey ? 30 : 5); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); setVolume(+$('vol').value + 0.05); }
   else if (e.key === 'ArrowDown') { e.preventDefault(); setVolume(+$('vol').value - 0.05); }
+  else if (source === 'none') return;
   else if (e.key === 'f' || e.key === 'F') toggleFull();
   else if (e.key === 'm' || e.key === 'M') $('btnMute').click();
   else if (e.key === 'i' || e.key === 'I') $('btnInfo').click();
-  else if (e.key === 'b' || e.key === 'B') setStyle('bars');
-  else if (e.key === 'r' || e.key === 'R') setStyle('radial');
-  else if (e.key === 'a' || e.key === 'A') setStyle('aura');
-  else if (e.key === 'p' || e.key === 'P') setStyle('particles');
-  else if (e.key === 'w' || e.key === 'W') setStyle('wave');
 });
 
 /* ---------- drag and drop ---------- */
@@ -1330,12 +1258,13 @@ document.addEventListener('drop', (e) => {
    Bars sit on a logarithmic scale, as hearing does: an octave gets the same
    width at 60 Hz as at 6 kHz, so the bass is not crushed into the first few
    pixels. Each bar rises quickly and falls slowly, a peak cap hangs above it
-   and drops under gravity, and the lows push a pulse through the whole scene.
+   and drops under gravity, and the lows push a pulse through the glow.
+   Everything is laid out in whole device pixels, so every bar and every gap
+   is the same width and no edge is smeared across two pixels.
    ========================================================================== */
 const viz = $('viz'), vctx = viz.getContext('2d');
 const layer = document.createElement('canvas'), lctx = layer.getContext('2d');   // the bars
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');     // a soft copy
-const aura = document.createElement('canvas'), actxA = aura.getContext('2d');    // aura, at half size
 let W = 0, H = 0, DPR = 1;
 
 const F_MIN = 28, F_MAX = 16000;
@@ -1346,16 +1275,14 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 let N = 0;
 let bands = [];             // [{ lo, hi, fc }] in bins
 let level, target, peak, peakV, peakHold;
-let bassAvg = 0, pulse = 0, lastBeat = 0, agc = 0.6, beats = 0;
+let bassAvg = 0, pulse = 0, lastBeat = 0, agc = 0.6;
 let gradCache = null;
 
 function resize() {
-  DPR = Math.min(2, window.devicePixelRatio || 1);
+  DPR = Math.min(3, window.devicePixelRatio || 1);
   W = stage.clientWidth; H = stage.clientHeight;
   for (const cv of [viz, layer]) { cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR)); }
   glow.width = Math.max(1, Math.round(W / 4)); glow.height = Math.max(1, Math.round(H / 4));
-  /* half the css size: a quarter looked stepped on the ribbons' edges */
-  aura.width = Math.max(1, Math.round(W / 2)); aura.height = Math.max(1, Math.round(H / 2));
   gradCache = null;
   buildBands();
   drawWave();
@@ -1391,7 +1318,6 @@ function videoFull() {
 }
 
 function barCount() {
-  if (style !== 'bars') return 64;
   const usable = W - 2 * Math.max(24, W * 0.05);
   return Math.max(36, Math.min(128, Math.round(usable / 12)));
 }
@@ -1423,10 +1349,13 @@ function readSpectrum(t) {
     return 0;
   }
   if (!active) {
-    /* nothing chosen yet: a slow breath, so the stage never looks switched off */
+    /* nothing chosen yet: one low swell drifting across, slowly enough to
+       read as breathing — the stage should never look switched off, nor
+       compete with the words in front of it */
     for (let i = 0; i < N; i++) {
       const x = i / N;
-      target[i] = reduceMotion ? 0.04 : 0.045 + 0.035 * Math.sin(t * 0.9 + x * 7) * Math.sin(t * 0.37 + x * 3) + 0.03 * Math.exp(-x * 4);
+      const swell = 0.5 + 0.5 * Math.sin(t * 0.55 - x * 5.5);
+      target[i] = reduceMotion ? 0.04 : 0.03 + 0.07 * swell * swell * (0.75 + 0.25 * Math.sin(t * 0.21 + x * 2.3));
     }
     return 0;
   }
@@ -1458,13 +1387,21 @@ function readSpectrum(t) {
      still fills the stage — slow enough never to pump with the beat */
   agc = maxV > agc ? agc + (maxV - agc) * 0.08 : agc * 0.9975 + maxV * 0.0025;
   const g = Math.min(2.6, 0.9 / Math.max(0.28, agc));
-  for (let i = 0; i < N; i++) target[i] = Math.min(1, Math.pow(target[i] * g, 1.35));
+  /* a touch of each neighbour: one loud bin no longer stands as a lone
+     spike, and the skyline reads as a shape rather than noise */
+  let prev = target[0];
+  for (let i = 0; i < N; i++) {
+    const cur = target[i], next = i + 1 < N ? target[i + 1] : cur;
+    target[i] = Math.min(1, Math.pow((0.18 * prev + 0.64 * cur + 0.18 * next) * g, 1.35));
+    prev = cur;
+  }
   return bassN ? Math.min(1, (bass / bassN) * g) : 0;
 }
 
 function step(dt, t) {
   const bass = readSpectrum(t);
-  const up = 1 - Math.exp(-dt / 0.03), down = 1 - Math.exp(-dt / 0.2);
+  /* quick to rise, and a longer, eased fall — a bar settles, it never snaps */
+  const up = 1 - Math.exp(-dt / 0.03), down = 1 - Math.exp(-dt / 0.24);
   for (let i = 0; i < N; i++) {
     const v = target[i];
     level[i] += (v - level[i]) * (v > level[i] ? up : down);
@@ -1474,420 +1411,109 @@ function step(dt, t) {
   }
   /* a beat is the low end jumping above its own recent average */
   bassAvg += (bass - bassAvg) * (1 - Math.exp(-dt / 0.45));
-  if (bass > 0.3 && bass > bassAvg * 1.28 + 0.04 && t - lastBeat > 0.2) { pulse = 1; lastBeat = t; beats++; }
+  if (bass > 0.3 && bass > bassAvg * 1.28 + 0.04 && t - lastBeat > 0.2) { pulse = 1; lastBeat = t; }
   pulse *= Math.exp(-dt / 0.28);
   return bass;
 }
 
-function hGradient(ctx, x0, x1) {
-  const g = ctx.createLinearGradient(x0, 0, x1, 0);
-  PALETTES[paletteId].stops.forEach((s, i, a) => g.addColorStop(i / (a.length - 1), s));
-  return g;
-}
-
-function drawBars(bass) {
-  const side = Math.max(24, W * 0.05);
-  const usable = W - 2 * side;
-  const pitch = usable / N;
-  const gap = Math.max(1.5, pitch * 0.26), bw = pitch - gap;
-  const base = Math.round(H * 0.64);
-  const top = Math.max(70, H * 0.12);
+function drawBars() {
+  /* all in device pixels: a whole-pixel pitch, the spare split between the
+     two sides, so bars and gaps come out identical across the width */
+  const Wd = layer.width, Hd = layer.height;
+  const side = Math.round(Math.max(24, W * 0.05) * DPR);
+  const pitch = Math.max(2, Math.floor((Wd - 2 * side) / N));
+  const gap = Math.max(1, Math.round(pitch * 0.26));
+  const bw = pitch - gap;
+  const x0 = Math.round((Wd - pitch * N + gap) / 2);
+  const base = Math.round(Hd * 0.64);
+  const top = Math.round(Math.max(70, H * 0.12) * DPR);
   const maxH = base - top;
+  const stub = Math.max(2, Math.round(2 * DPR));
+  const capH = Math.max(2, Math.round(2.5 * DPR)), capGap = Math.round(5 * DPR);
+  const idle = source === 'none';
 
-  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  lctx.clearRect(0, 0, W, H);
-  if (!gradCache || gradCache.key !== 'bars' + W) gradCache = { key: 'bars' + W, g: hGradient(lctx, side, W - side) };
+  lctx.setTransform(1, 0, 0, 1, 0, 0);
+  lctx.clearRect(0, 0, Wd, Hd);
+  const key = Wd + (dark ? 'd' : 'l');
+  if (!gradCache || gradCache.key !== key) gradCache = { key, g: hGradient(lctx, x0, x0 + pitch * N) };
   lctx.fillStyle = gradCache.g;
-  const r = Math.min(bw / 2, 3.5);
+
+  const hs = new Array(N);
+  for (let i = 0; i < N; i++) hs[i] = Math.max(stub, Math.round(level[i] * maxH));
+  const r = Math.min(bw / 2, Math.round(3 * DPR));
   lctx.beginPath();
-  for (let i = 0; i < N; i++) {
-    const h = Math.max(2, level[i] * maxH);
-    const x = side + i * pitch + gap / 2;
-    lctx.roundRect(x, base - h, bw, h, [r, r, 0, 0]);
-  }
+  for (let i = 0; i < N; i++) lctx.roundRect(x0 + i * pitch, base - hs[i], bw, hs[i], [Math.min(r, hs[i] / 2), Math.min(r, hs[i] / 2), 0, 0]);
   lctx.fill();
-  /* peak caps */
-  lctx.globalAlpha = 0.9;
-  lctx.beginPath();
-  for (let i = 0; i < N; i++) {
-    if (peak[i] < 0.02) continue;
-    const x = side + i * pitch + gap / 2;
-    lctx.roundRect(x, base - peak[i] * maxH - 7, bw, 2.5, 1.25);
+  /* peak caps — left out while idle, where they would only add fuss */
+  if (!idle) {
+    lctx.globalAlpha = 0.9;
+    lctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      if (peak[i] < 0.02) continue;
+      lctx.rect(x0 + i * pitch, base - Math.round(peak[i] * maxH) - capGap - capH, bw, capH);
+    }
+    lctx.fill();
+    lctx.globalAlpha = 1;
   }
-  lctx.fill();
-  lctx.globalAlpha = 1;
 
   /* The floor: the same bars drawn again, downward, then faded by erasing
      from the layer itself — a second full-size canvas and two more
      full-screen copies a frame cost more than the effect is worth. */
-  const floor = base + 6;
+  const floor = base + Math.round(4 * DPR);
   lctx.beginPath();
   for (let i = 0; i < N; i++) {
-    const h = Math.max(2, level[i] * maxH);
-    lctx.rect(side + i * pitch + gap / 2, floor, bw, h);
-    if (peak[i] >= 0.02) lctx.rect(side + i * pitch + gap / 2, floor + peak[i] * maxH + 4.5, bw, 2.5);
+    lctx.rect(x0 + i * pitch, floor, bw, hs[i]);
+    if (!idle && peak[i] >= 0.02) lctx.rect(x0 + i * pitch, floor + Math.round(peak[i] * maxH) + capGap, bw, capH);
   }
   lctx.fill();
   lctx.globalCompositeOperation = 'destination-out';
-  const fade = lctx.createLinearGradient(0, floor, 0, floor + (H - base) * 0.75);
-  fade.addColorStop(0, 'rgba(0,0,0,0.7)');
+  const fade = lctx.createLinearGradient(0, floor, 0, floor + (Hd - base) * 0.75);
+  /* paper shows a reflection more than black does — keep it fainter */
+  fade.addColorStop(0, dark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.82)');
   fade.addColorStop(1, 'rgba(0,0,0,1)');
   lctx.fillStyle = fade;
-  lctx.fillRect(0, floor, W, H - floor);
+  lctx.fillRect(0, floor, Wd, Hd - floor);
   lctx.globalCompositeOperation = 'source-over';
 
-  paintScene();
+  paintScene(idle);
 
-  /* the line they stand on */
-  vctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const line = vctx.createLinearGradient(side, 0, W - side, 0);
-  line.addColorStop(0, 'rgba(255,255,255,0)');
-  line.addColorStop(0.5, 'rgba(255,255,255,0.16)');
-  line.addColorStop(1, 'rgba(255,255,255,0)');
+  /* the line they stand on, one device pixel thick */
+  const line = vctx.createLinearGradient(x0, 0, x0 + pitch * N, 0);
+  const ink = dark ? '255,255,255' : '0,0,0';
+  line.addColorStop(0, `rgba(${ink},0)`);
+  line.addColorStop(0.5, `rgba(${ink},${dark ? 0.16 : 0.12})`);
+  line.addColorStop(1, `rgba(${ink},0)`);
   vctx.fillStyle = line;
-  vctx.fillRect(side, base + 2, W - 2 * side, 1);
+  vctx.fillRect(x0, base + Math.round(2 * DPR), pitch * N - gap, 1);
 }
 
-function drawRadial(bass, t) {
-  const cx = W / 2;
-  const cy = source === 'none' ? H * 0.44 : H * 0.46;
-  const s = Math.min(W, H);
-  const R = s * 0.16 * (1 + 0.05 * pulse + 0.04 * bass);
-  const maxL = s * 0.24;
-  const half = N;
-  const arc = Math.PI / half;
-  const bw = Math.max(2, (2 * Math.PI * R / (2 * half)) * 0.55);
-
-  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  lctx.clearRect(0, 0, W, H);
-  lctx.lineCap = 'round';
-  lctx.lineWidth = bw;
-  /* bass at the top, climbing down both sides to meet at the bottom */
-  for (let side = -1; side <= 1; side += 2) {
-    for (let i = 0; i < half; i++) {
-      const a = -Math.PI / 2 + side * (i + 0.5) * arc;
-      const ca = Math.cos(a), sa = Math.sin(a);
-      const L = Math.max(2, level[i] * maxL);
-      const col = paletteAt(i / (half - 1));
-      lctx.strokeStyle = rgba(col, 1);
-      lctx.beginPath();
-      lctx.moveTo(cx + ca * (R + 6), cy + sa * (R + 6));
-      lctx.lineTo(cx + ca * (R + 6 + L), cy + sa * (R + 6 + L));
-      lctx.stroke();
-      if (peak[i] > 0.02) {
-        const P = R + 6 + peak[i] * maxL + 7;
-        lctx.fillStyle = rgba(col, 0.85);
-        lctx.beginPath();
-        lctx.arc(cx + ca * P, cy + sa * P, bw * 0.42, 0, Math.PI * 2);
-        lctx.fill();
-      }
-    }
-  }
-
-  paintScene();
-
-  /* the disc: the cover if there is one, a lit sphere if not */
-  vctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const r = R - 2;
-  vctx.save();
-  vctx.beginPath();
-  vctx.arc(cx, cy, r, 0, Math.PI * 2);
-  vctx.clip();
-  if (coverArt && coverArt.complete && coverArt.naturalWidth && source === 'file') {
-    const k = 1 + 0.03 * pulse;
-    const d = 2 * r * k;
-    vctx.drawImage(coverArt, cx - d / 2, cy - d / 2, d, d);
-    vctx.fillStyle = 'rgba(0,0,0,0.12)';
-    vctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
-  } else {
-    const a = paletteAt(0.15), b = paletteAt(0.85);
-    const g = vctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r);
-    g.addColorStop(0, rgba(b, 0.55 + 0.3 * pulse));
-    g.addColorStop(0.6, rgba(a, 0.28 + 0.2 * bass));
-    g.addColorStop(1, 'rgba(0,0,0,0.92)');
-    vctx.fillStyle = g;
-    vctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
-  }
-  vctx.restore();
-  vctx.strokeStyle = `rgba(255,255,255,${0.1 + 0.25 * pulse})`;
-  vctx.lineWidth = 1.5;
-  vctx.beginPath();
-  vctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
-  vctx.stroke();
-}
-
-/* ---------- aura ----------
-   Five soft fields of colour, each listening to its own part of the
-   spectrum, drift over black; three ribbons ride the low and middle notes.
-   It is drawn at half the screen's css size and scaled up — soft gradients
-   lose nothing to it, and on a retina display that is a sixteenth of the
-   pixels. */
-const BLOBS = [
-  { t: 0.04, band: 0, r: 0.62, speed: 0.11, ox: 0.0, oy: 1.3 },
-  { t: 0.30, band: 1, r: 0.52, speed: 0.15, ox: 2.1, oy: 0.4 },
-  { t: 0.55, band: 2, r: 0.46, speed: 0.19, ox: 4.2, oy: 2.6 },
-  { t: 0.78, band: 3, r: 0.40, speed: 0.24, ox: 1.1, oy: 3.9 },
-  { t: 0.97, band: 4, r: 0.32, speed: 0.30, ox: 5.3, oy: 5.0 }
-];
-const RIBBONS = [
-  { band: 1, y: 0.56, f: 1.1, dir: 1, t: 0.2 },
-  { band: 2, y: 0.61, f: 1.7, dir: -1, t: 0.55 },
-  { band: 3, y: 0.66, f: 2.4, dir: 1, t: 0.85 }
-];
-const EDGES = [0, 90, 300, 1200, 4500, 1e9];     // Hz: sub, bass, low mid, mid, high
-const blobPhase = BLOBS.map((b, i) => i * 1.7);
-const ribbonPhase = RIBBONS.map((r, i) => i * 2.1);
-
-function energies() {
-  const sum = [0, 0, 0, 0, 0], n = [0, 0, 0, 0, 0];
-  for (let i = 0; i < N; i++) {
-    const f = bands[i].fc;
-    let k = 0;
-    while (k < 4 && f >= EDGES[k + 1]) k++;
-    sum[k] += level[i]; n[k]++;
-  }
-  return sum.map((v, k) => (n[k] ? v / n[k] : 0));
-}
-
-function drawAura(dt) {
-  const a = actxA, w = aura.width, h = aura.height, m = Math.min(w, h);
-  const e = energies();
-  /* louder music moves faster; silence nearly stops it */
-  const drive = 0.2 + 1.8 * (e[0] * 0.3 + e[1] * 0.3 + e[2] * 0.2 + e[3] * 0.12 + e[4] * 0.08);
-
-  a.globalCompositeOperation = 'source-over';
-  a.fillStyle = '#000';
-  a.fillRect(0, 0, w, h);
-  a.globalCompositeOperation = 'lighter';
-
-  BLOBS.forEach((b, k) => {
-    blobPhase[k] += dt * b.speed * drive * (reduceMotion ? 0.3 : 1);
-    const p = blobPhase[k];
-    const x = w * (0.5 + 0.33 * Math.sin(p + b.ox) + 0.08 * Math.sin(p * 2.3 + b.oy));
-    const y = h * (0.48 + 0.24 * Math.cos(p * 0.8 + b.oy) + 0.06 * Math.sin(p * 1.7 + b.ox));
-    const en = e[b.band];
-    const r = m * b.r * (0.72 + 0.75 * en + 0.1 * pulse);
-    const alpha = Math.min(0.85, 0.08 + 0.6 * en + 0.12 * pulse);
-    const col = paletteAt(b.t);
-    const g = a.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, rgba(col, alpha));
-    g.addColorStop(0.45, rgba(col, alpha * 0.42));
-    g.addColorStop(1, rgba(col, 0));
-    a.fillStyle = g;
-    a.fillRect(x - r, y - r, 2 * r, 2 * r);
-  });
-
-  const across = a.createLinearGradient(0, 0, w, 0);
-  PALETTES[paletteId].stops.forEach((s, i, arr) => across.addColorStop(i / (arr.length - 1), s));
-  const STEP = Math.max(2, w / 64);
-  RIBBONS.forEach((rb, k) => {
-    const en = e[rb.band];
-    ribbonPhase[k] += dt * (0.3 + 1.6 * en) * rb.dir * (reduceMotion ? 0.3 : 1);
-    const ph = ribbonPhase[k];
-    const amp = h * (0.025 + 0.15 * en);
-    const thick = h * (0.01 + 0.045 * en);
-    const y0 = h * rb.y;
-    const edge = (x, off) => y0 + amp * (0.7 * Math.sin((x / w) * 6.283 * rb.f + ph + off) +
-      0.3 * Math.sin((x / w) * 6.283 * rb.f * 2.3 - ph * 1.3));
-    a.beginPath();
-    a.moveTo(0, edge(0, 0));
-    for (let x = STEP; x <= w + STEP; x += STEP) a.lineTo(x, edge(x, 0));
-    for (let x = w + STEP; x >= -STEP; x -= STEP) a.lineTo(x, edge(x, 0.6) + thick);
-    a.closePath();
-    a.globalAlpha = Math.min(0.9, 0.18 + 0.6 * en + 0.15 * pulse);
-    a.fillStyle = across;
-    a.fill();
-    a.globalAlpha = 1;
-  });
-
-  /* back to black at the edges, so the colour floats instead of filling */
-  a.globalCompositeOperation = 'source-over';
-  const v = a.createRadialGradient(w / 2, h / 2, m * 0.25, w / 2, h / 2, Math.max(w, h) * 0.72);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,1)');
-  a.fillStyle = v;
-  a.fillRect(0, 0, w, h);
-
-  vctx.setTransform(1, 0, 0, 1, 0, 0);
-  vctx.imageSmoothingEnabled = true;
-  vctx.imageSmoothingQuality = 'high';
-  vctx.drawImage(aura, 0, 0, viz.width, viz.height);
-}
-
-/* ---------- particles ----------
-   A disc of points turning about the centre, inner ones faster, as a
-   galaxy does. Distance from the centre is frequency: the core answers the
-   bass, the rim the highs, and the palette runs outward the same way. A
-   beat throws every point out and a spring pulls it home.
-
-   Each point is drawn as a short streak from where it was a moment ago,
-   rather than by fading the last frame: fading leaves a faint residue that
-   8-bit alpha never quite removes, and the glow brings it back up. The
-   streaks are batched by colour and brightness — 48 strokes, not 2400. */
-const P_BUCKETS = 12, P_LEVELS = 4;
-let parts = null;
-
-function initParticles() {
-  const n = Math.round(Math.min(2400, Math.max(600, (W * H) / 450)));
-  const r0 = new Float32Array(n), th = new Float32Array(n), om = new Float32Array(n);
-  const dr = new Float32Array(n), vr = new Float32Array(n), bucket = new Uint8Array(n);
-  const px = new Float32Array(n), py = new Float32Array(n), lvl = new Uint8Array(n);
-  const x1 = new Float32Array(n), y1 = new Float32Array(n);
-  const radii = Array.from({ length: n }, () => 0.06 + 0.94 * Math.sqrt(Math.random())).sort((a, b) => a - b);
-  for (let i = 0; i < n; i++) {
-    r0[i] = radii[i];
-    th[i] = Math.random() * Math.PI * 2;
-    om[i] = (0.05 + 0.1 * Math.random()) / (0.25 + r0[i]);
-    bucket[i] = Math.min(P_BUCKETS - 1, Math.floor(r0[i] * P_BUCKETS));
-    px[i] = NaN;
-  }
-  parts = { n, r0, th, om, dr, vr, bucket, px, py, lvl, x1, y1, W, H, beats };
-}
-
-function drawParticles(dt, bass) {
-  if (!parts || parts.W !== W || parts.H !== H) initParticles();
-  const cx = W / 2, cy = source === 'none' ? H * 0.44 : H * 0.46;
-  const R = Math.min(W, H) * 0.44;
-  const e = energies();
-  const drive = 0.3 + 1.6 * (e[0] * 0.35 + e[1] * 0.3 + e[2] * 0.2 + e[3] * 0.15);
-  const kick = parts.beats !== beats;
-  parts.beats = beats;
-
-  const { n, r0, th, om, dr, vr, bucket, px, py, lvl, x1, y1 } = parts;
-  const spin = dt * drive * (reduceMotion ? 0.3 : 1);
-  /* move everything, remembering where each point was */
-  for (let i = 0; i < n; i++) {
-    const lv = level[Math.min(N - 1, Math.floor(r0[i] * N))];
-    if (kick && !reduceMotion) vr[i] += 0.9 + 1.4 * lv;
-    vr[i] += (-dr[i] * 22 - vr[i] * 6.5) * dt;      // a damped spring back to the orbit
-    dr[i] += vr[i] * dt;
-    th[i] += om[i] * spin;
-    const r = (r0[i] * (1 + 0.18 * lv) + dr[i] * 0.12) * R;
-    x1[i] = cx + Math.cos(th[i]) * r;
-    y1[i] = cy + Math.sin(th[i]) * r * 0.86;
-    lvl[i] = Math.min(P_LEVELS - 1, Math.floor(lv * P_LEVELS));
-  }
-
-  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  lctx.clearRect(0, 0, W, H);
-  lctx.lineCap = 'round';
-  for (let b = 0; b < P_BUCKETS; b++) {
-    lctx.strokeStyle = rgba(paletteAt((b + 0.5) / P_BUCKETS), 1);
-    for (let l = 0; l < P_LEVELS; l++) {
-      lctx.globalAlpha = 0.28 + 0.72 * (l + 0.5) / P_LEVELS;
-      lctx.lineWidth = 1 + 2.2 * (l / (P_LEVELS - 1));
-      lctx.beginPath();
-      let any = false;
-      for (let i = 0; i < n; i++) {
-        if (bucket[i] !== b || lvl[i] !== l) continue;
-        /* the streak: a little longer than one frame's travel */
-        const ox = isNaN(px[i]) ? x1[i] : x1[i] + (px[i] - x1[i]) * 2.5;
-        const oy = isNaN(px[i]) ? y1[i] : y1[i] + (py[i] - y1[i]) * 2.5;
-        lctx.moveTo(ox, oy);
-        lctx.lineTo(x1[i] + 0.01, y1[i]);
-        any = true;
-      }
-      if (any) lctx.stroke();
-    }
-  }
-  lctx.globalAlpha = 1;
-  px.set(x1); py.set(y1);
-  paintScene();
-}
-
-/* ---------- wave ----------
-   The signal itself rather than its spectrum. Each frame starts on a
-   rising zero crossing, as an oscilloscope's trigger does, so a steady
-   tone stands still instead of crawling across the screen. */
-const SCOPE_POINTS = 480, SCOPE_WINDOW = 2048;
-let timeBuf = null, scopePeak = 0.3;
-const scopeY = new Float32Array(SCOPE_POINTS), want = new Float32Array(SCOPE_POINTS);
-
-function drawScope(dt, bass, t) {
-  const active = analyser && ((source === 'file' && !player.paused()) || live);
-  want.fill(0);
-  if (active) {
-    if (!timeBuf || timeBuf.length !== analyser.fftSize) timeBuf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(timeBuf);
-    let trig = 0;
-    for (let i = 1; i < timeBuf.length - SCOPE_WINDOW; i++) {
-      if (timeBuf[i - 1] < 0 && timeBuf[i] >= 0) { trig = i; break; }
-    }
-    let m = 0;
-    for (let k = 0; k < SCOPE_POINTS; k++) {
-      const v = timeBuf[trig + Math.floor(k * SCOPE_WINDOW / SCOPE_POINTS)];
-      want[k] = v;
-      if (Math.abs(v) > m) m = Math.abs(v);
-    }
-    /* quiet passages still fill the height, loud ones never clip it */
-    scopePeak = m > scopePeak ? m : scopePeak * 0.995 + m * 0.005;
-    const g = Math.min(10, 0.85 / Math.max(0.04, scopePeak));
-    for (let k = 0; k < SCOPE_POINTS; k++) want[k] *= g;
-  } else if (source === 'none') {
-    for (let k = 0; k < SCOPE_POINTS; k++) {
-      const x = k / SCOPE_POINTS;
-      want[k] = reduceMotion ? 0 : 0.12 * Math.sin(x * 12.6 + t * 1.2) * Math.sin(x * 3.1 - t * 0.5);
-    }
-  }
-  const follow = 1 - Math.exp(-dt / 0.025);
-  for (let k = 0; k < SCOPE_POINTS; k++) scopeY[k] += (want[k] - scopeY[k]) * follow;
-
-  const side = Math.max(24, W * 0.05);
-  const cy = source === 'none' ? H * 0.46 : H * 0.44;
-  const amp = H * 0.28;
-  const xAt = (k) => side + (k / (SCOPE_POINTS - 1)) * (W - 2 * side);
-
-  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  lctx.clearRect(0, 0, W, H);
-  const grad = hGradient(lctx, side, W - side);
-
-  /* a faint body between the line and its axis */
-  lctx.beginPath();
-  lctx.moveTo(xAt(0), cy);
-  for (let k = 0; k < SCOPE_POINTS; k++) lctx.lineTo(xAt(k), cy - scopeY[k] * amp);
-  lctx.lineTo(xAt(SCOPE_POINTS - 1), cy);
-  lctx.closePath();
-  lctx.globalAlpha = 0.12 + 0.1 * pulse;
-  lctx.fillStyle = grad;
-  lctx.fill();
-
-  lctx.globalAlpha = 1;
-  lctx.beginPath();
-  for (let k = 0; k < SCOPE_POINTS; k++) {
-    const x = xAt(k), y = cy - scopeY[k] * amp;
-    if (k) lctx.lineTo(x, y); else lctx.moveTo(x, y);
-  }
-  lctx.lineJoin = 'round';
-  lctx.lineCap = 'round';
-  lctx.lineWidth = 2.2 + 2.5 * bass;
-  lctx.strokeStyle = grad;
-  lctx.stroke();
-
-  paintScene();
-}
-
-/* black, then glow, then the sharp layer on top — shared by both styles.
+/* the stage colour, then — on a dark stage — the glow, then the sharp
+   layer on top. Light has nothing to add light to, so paper gets none.
    Nothing lights the background itself: the beat shows in the glow. */
-function paintScene() {
+function paintScene(idle) {
   vctx.setTransform(1, 0, 0, 1, 0, 0);
-  vctx.fillStyle = '#000';
+  vctx.fillStyle = stageBg;
   vctx.fillRect(0, 0, viz.width, viz.height);
 
-  /* glow: a quarter-size copy, blurred and added back — cheap light */
-  gctx.clearRect(0, 0, glow.width, glow.height);
-  gctx.filter = 'blur(4px)';
-  gctx.drawImage(layer, 0, 0, glow.width, glow.height);
-  gctx.filter = 'none';
-  vctx.save();
-  vctx.globalCompositeOperation = 'lighter';
-  vctx.globalAlpha = reduceMotion ? 0.5 : 0.55 + 0.35 * pulse;
-  vctx.imageSmoothingQuality = 'high';
-  /* stretched over the whole canvas in device pixels, not css pixels */
-  vctx.drawImage(glow, 0, 0, viz.width, viz.height);
-  vctx.restore();
+  if (dark) {
+    /* glow: a quarter-size copy, blurred and added back — cheap light */
+    gctx.clearRect(0, 0, glow.width, glow.height);
+    gctx.filter = 'blur(4px)';
+    gctx.drawImage(layer, 0, 0, glow.width, glow.height);
+    gctx.filter = 'none';
+    vctx.save();
+    vctx.globalCompositeOperation = 'lighter';
+    vctx.globalAlpha = idle ? 0.3 : reduceMotion ? 0.5 : 0.55 + 0.35 * pulse;
+    vctx.imageSmoothingQuality = 'high';
+    /* stretched over the whole canvas in device pixels, not css pixels */
+    vctx.drawImage(glow, 0, 0, viz.width, viz.height);
+    vctx.restore();
+  }
 
-  vctx.setTransform(1, 0, 0, 1, 0, 0);
+  /* the idle swell sits back behind the words in front of it */
+  vctx.globalAlpha = idle ? (dark ? 0.6 : 0.4) : 1;
   vctx.drawImage(layer, 0, 0);
+  vctx.globalAlpha = 1;
 }
 
 /* ---------- pacing ----------
@@ -1938,12 +1564,8 @@ function frame(now) {
   /* one bad frame must not end the animation for good */
   try {
     if (W && H) {
-      const bass = step(dt, t);
-      if (style === 'radial') drawRadial(bass, t);
-      else if (style === 'aura') drawAura(dt);
-      else if (style === 'particles') drawParticles(dt, bass);
-      else if (style === 'wave') drawScope(dt, bass, t);
-      else drawBars(bass);
+      step(dt, t);
+      drawBars();
     }
     if (source === 'file' && !player.paused() && scrubTo === null) {
       $('tCur').textContent = fmtTime(player.time());
@@ -1962,9 +1584,12 @@ audio.addEventListener('seeked', onSeeked);
 /* ==========================================================================
    Start
    ========================================================================== */
+readColours();
 setSource('none');
 setVolume(+$('vol').value);
 requestAnimationFrame(frame);
+/* a file dropped on the landing page arrives loaded, waiting for a tap */
+if (LintApp.takeHandoff) LintApp.takeHandoff('audio', (file) => openFile(file, false));
 </script>
 </body>
 </html>
