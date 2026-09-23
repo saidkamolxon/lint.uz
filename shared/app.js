@@ -58,7 +58,8 @@ var SUITE = [
   { id: 'yaml', name: 'YAML', host: '/yaml' },
   { id: 'csv',  name: 'CSV',  host: '/csv'  },
   { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
-  { id: 'log',  name: 'Log',  host: '/log'  }
+  { id: 'log',  name: 'Log',  host: '/log'  },
+  { id: 'audio', name: 'Audio', host: '/audio' }
 ];
 
 /* ---------- small helpers ---------- */

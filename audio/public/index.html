@@ -1,0 +1,1575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Player &amp; Visualizer · lint.one</title>
+<meta name="description" content="Play an audio file, or the sound of a browser tab or your whole system, with a live spectrum visualizer. See what the file holds — sample rate, bit depth, loudness, tags. Nothing is uploaded.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<style>
+/* ==========================================================================
+   Listening is the point, so the stage takes the page. It is pure black in
+   every theme — on a screen whose black is truly off, only the visuals are
+   lit — while the chrome around it follows the theme like every other tool.
+   ========================================================================== */
+.au-main { flex: 1; min-height: 0; display: flex; position: relative; }
+
+#stage {
+  --st-bg: #000;
+  --st-ink: #EEF0F6;
+  --st-muted: rgb(238 240 246 / 0.62);
+  --st-faint: rgb(238 240 246 / 0.38);
+  --st-glass: rgb(16 18 26 / 0.62);
+  --st-line: rgb(255 255 255 / 0.09);
+  flex: 1; min-width: 0; position: relative; overflow: hidden;
+  background: var(--st-bg); color: var(--st-ink);
+  user-select: none;
+}
+#viz { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* what is playing, quietly, top left */
+.now {
+  position: absolute; left: var(--s5); top: var(--s5); right: 30%;
+  display: flex; align-items: center; gap: var(--s3);
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+.now[hidden] { display: none; }
+.now img {
+  width: 52px; height: 52px; border-radius: 8px; object-fit: cover; flex: none;
+  box-shadow: 0 6px 24px -6px rgb(0 0 0 / 0.6);
+}
+.now img[hidden] { display: none; }
+.now .t { font-size: 17px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now .a { font-size: 13px; color: var(--st-muted); margin-top: 2px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now .txt { min-width: 0; }
+
+/* ---------- nothing playing yet ---------- */
+.au-empty {
+  position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px));
+  text-align: center;
+}
+.au-empty[hidden] { display: none; }
+.au-empty .big { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; margin-bottom: var(--s2); }
+.au-empty p { color: var(--st-muted); line-height: 1.6; font-size: 13.5px; margin: 0 0 var(--s4); }
+.au-empty .choices { display: flex; gap: var(--s2); justify-content: center; flex-wrap: wrap; }
+.au-empty .choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 170px; padding: var(--s3) var(--s3) var(--s3);
+  background: var(--st-glass); color: var(--st-ink);
+  border: 1px solid var(--st-line); border-radius: var(--radius-lg);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  text-align: left; white-space: normal;
+}
+.au-empty .choice:hover { border-color: color-mix(in srgb, var(--hue) 60%, transparent); background: rgb(24 26 36 / 0.75); }
+.au-empty .choice b { font-size: 13.5px; font-weight: 600; }
+.au-empty .choice span { font-size: 11.5px; color: var(--st-faint); line-height: 1.4; font-weight: 400; }
+.au-empty kbd {
+  font-family: var(--mono); font-size: 11px;
+  background: rgb(255 255 255 / 0.07); border: 1px solid var(--st-line);
+  border-radius: 4px; padding: 1px 5px; color: var(--st-muted);
+}
+.au-empty .hint { margin-top: var(--s4); font-size: 12px; color: var(--st-faint); }
+
+/* ---------- transport ---------- */
+.transport {
+  position: absolute; left: var(--s4); right: var(--s4); bottom: var(--s4);
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--st-glass);
+  border: 1px solid var(--st-line); border-radius: 14px;
+  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  transition: opacity 400ms ease, transform 400ms ease;
+}
+.transport[hidden], .transport [hidden] { display: none !important; }
+.transport button { color: var(--st-ink); }
+.transport button:hover { background: rgb(255 255 255 / 0.08); }
+.transport .icon-btn { color: var(--st-muted); }
+.transport .icon-btn:hover { color: var(--st-ink); }
+.play {
+  width: 38px; height: 38px; padding: 0; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: var(--st-ink) !important; color: #0B0C10 !important;
+}
+.play:hover { transform: scale(1.05); }
+.play svg { width: 17px; height: 17px; display: block; }
+.time {
+  font-family: var(--mono); font-size: 11.5px; color: var(--st-muted);
+  font-variant-numeric: tabular-nums; flex: none; min-width: 4.5ch; text-align: center;
+}
+.seek { flex: 1; min-width: 60px; height: 40px; position: relative; cursor: pointer; }
+.seek canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.seek-tip {
+  position: absolute; bottom: calc(100% + 6px); transform: translateX(-50%);
+  padding: 2px 6px; border-radius: 5px;
+  background: rgb(0 0 0 / 0.8); color: var(--st-ink);
+  font-family: var(--mono); font-size: 11px; pointer-events: none;
+  white-space: nowrap;
+}
+.seek-tip[hidden] { display: none; }
+.vol { width: 84px; flex: none; accent-color: var(--st-ink); }
+
+/* a live source has no timeline, only a name and a way to stop */
+.live-row { flex: 1; display: flex; align-items: center; gap: var(--s2); min-width: 0; font-size: 13px; }
+.live-row[hidden] { display: none; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #F43F5E; flex: none;
+            box-shadow: 0 0 0 0 rgb(244 63 94 / 0.6); animation: live 1.6s ease-out infinite; }
+@keyframes live { to { box-shadow: 0 0 0 8px rgb(244 63 94 / 0); } }
+.live-row .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--st-muted); }
+.live-row .lbl b { color: var(--st-ink); font-weight: 600; }
+.file-row { flex: 1; display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.file-row[hidden] { display: none; }
+
+/* full screen, and the controls get out of the way when the pointer rests */
+#stage.idle { cursor: none; }
+#stage.idle .transport { opacity: 0; transform: translateY(8px); pointer-events: none; }
+#stage.idle .now { opacity: 0; }
+.fs-only { display: none; }
+#stage:fullscreen .fs-only { display: grid; }
+
+/* ---------- toolbar controls ---------- */
+.seg {
+  display: inline-flex; gap: 2px; padding: 2px; flex: none;
+  background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+}
+.seg button { padding: 3px 10px; font-size: 12px; color: var(--muted); border-radius: 5px; }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); border-color: transparent; font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+#inputSelect {
+  max-width: 190px; font-family: var(--ui); font-size: 12px;
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: 4px 6px;
+}
+#inputSelect[hidden] { display: none; }
+.pal-swatch { width: 34px; height: 12px; border-radius: 6px; flex: none; }
+
+/* ---------- details drawer ---------- */
+#drawer {
+  width: 320px; flex: none; overflow: auto;
+  border-left: var(--hairline) solid var(--line);
+  background: var(--raised);
+  padding: var(--s3) var(--s4) var(--s5);
+  display: none;
+}
+#drawer.open { display: block; }
+#drawer h3 { margin: var(--s3) 0 var(--s2); font-size: var(--fs-small); color: var(--muted); font-weight: 600;
+             text-transform: uppercase; letter-spacing: 0.05em; }
+#drawer h3:first-child { margin-top: 0; }
+#drawer .cover { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius-lg);
+                 margin-bottom: var(--s3); display: block; }
+#drawer .cover[hidden] { display: none; }
+.meta { margin: 0; font-size: 12.5px; }
+.meta div {
+  display: grid; grid-template-columns: 96px 1fr; gap: var(--s3);
+  padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
+  align-items: baseline;
+}
+.meta div:last-child { border-bottom: none; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: 11.5px; overflow-wrap: anywhere; color: var(--ink); }
+.meta dd.none { color: var(--faint); font-style: italic; font-family: var(--ui); }
+.drawer-note { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin-top: var(--s3); }
+@media (max-width: 760px) {
+  #drawer { position: absolute; inset: 0 0 0 auto; width: min(320px, 88vw); z-index: 30; box-shadow: var(--shadow); }
+}
+
+body.dragover #stage::after {
+  content: "Drop to play"; position: absolute; inset: var(--s3);
+  display: grid; place-items: center;
+  border: 2px dashed var(--hue); border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--hue) 12%, transparent);
+  color: var(--st-ink); font-size: 16px; font-weight: 600;
+  pointer-events: none; z-index: 20;
+}
+
+@media (max-width: 760px) {
+  .brand-text { display: none; }
+  .vol, .hide-narrow { display: none; }
+  .now { left: var(--s4); top: var(--s4); right: var(--s4); }
+  .transport { left: var(--s2); right: var(--s2); bottom: var(--s2); gap: var(--s2); }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'audio',
+  name: 'Audio Player',
+  host: 'lint.one/audio',
+  label: 'audio',
+  mark: '♪',
+  hue: '#C026D3',
+  hueInk: '#FFFFFF',
+  accept: 'audio/*,.mp3,.wav,.flac,.ogg,.oga,.opus,.m4a,.aac,.webm,.aif,.aiff'
+};
+</script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/app.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = LintApp.esc;
+const c = window.LINT_CONFIG;
+
+document.documentElement.style.setProperty('--hue', c.hue);
+document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+
+const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const ICON = {
+  play: '<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/>',
+  pause: '<rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/>',
+  vol: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
+  full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  exitFull: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.01"/>',
+  stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none"/>',
+  palette: '<path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.6 1.8-1.6H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15" cy="7.8" r="1.2" fill="currentColor"/>'
+};
+
+/* ==========================================================================
+   Chrome
+   ========================================================================== */
+$('app').innerHTML = `
+  <header class="toolbar">
+    <a class="brand" href="/" title="All tools">
+      <span class="mark">${c.mark}</span>
+      <span class="brand-text">
+        <span class="brand-name">${c.name}</span>
+        <span class="brand-host">${c.host}</span>
+      </span>
+    </a>
+    <button id="btnOpen" class="primary" title="Open an audio file — or drop one anywhere (⌘O)">Open</button>
+    <span class="seg" role="group" aria-label="Source">
+      <button id="srcFile" aria-pressed="false" title="Play an audio file">File</button>
+      <button id="srcSystem" aria-pressed="false" title="Listen to another tab, or the whole system where the browser allows it">Tab / system</button>
+      <button id="srcInput" aria-pressed="false" title="Listen to a microphone or an input device — a loopback device such as BlackHole carries system sound">Input</button>
+    </span>
+    <select id="inputSelect" aria-label="Input device" hidden></select>
+    <span class="spacer"></span>
+    <span class="seg hide-narrow" role="group" aria-label="Style">
+      <button data-style="bars" aria-pressed="true" title="Spectrum along the floor">Bars</button>
+      <button data-style="radial" aria-pressed="false" title="Spectrum around a circle">Radial</button>
+      <button data-style="aura" aria-pressed="false" title="Soft colour that breathes with the music">Aura</button>
+    </span>
+    <div class="menu-wrap">
+      <button id="btnPalette" class="icon-btn" title="Colours" aria-label="Colours" aria-haspopup="true"></button>
+      <div class="menu" id="paletteMenu" role="menu"></div>
+    </div>
+    <button id="btnInfo" class="icon-btn" title="What the file holds (I)" aria-label="File details" aria-pressed="false"></button>
+    <button id="btnFull" class="icon-btn" title="Full screen (F)" aria-label="Full screen"></button>
+    <div class="group" id="chromeSlot"></div>
+    <input type="file" id="fileInput" accept="${c.accept}" hidden>
+  </header>
+
+  <main class="au-main">
+    <div id="stage">
+      <canvas id="viz"></canvas>
+
+      <div class="now" id="now" hidden>
+        <img id="nowCover" alt="" hidden>
+        <div class="txt">
+          <div class="t" id="nowTitle"></div>
+          <div class="a" id="nowArtist"></div>
+        </div>
+      </div>
+
+      <div class="au-empty" id="empty">
+        <div class="big">Listen, and watch it move</div>
+        <p>Play a file, or let the spectrum follow whatever your computer is
+           playing. Everything stays in this tab — there is nowhere for the
+           sound to go.</p>
+        <div class="choices">
+          <button class="choice" id="chFile"><b>Open a file</b><span>MP3, WAV, FLAC, OGG, M4A — or drop one here</span></button>
+          <button class="choice" id="chSystem"><b>Tab or system sound</b><span>Pick a tab and turn on “Share audio”</span></button>
+          <button class="choice" id="chInput"><b>Microphone or input</b><span>The room, or a loopback device</span></button>
+        </div>
+        <div class="hint"><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> seek · <kbd>F</kbd> full screen</div>
+      </div>
+
+      <div class="transport" id="transport" hidden>
+        <div class="file-row" id="fileRow">
+          <button class="play" id="btnPlay" aria-label="Play"></button>
+          <span class="time" id="tCur">0:00</span>
+          <div class="seek" id="seek" role="slider" aria-label="Position" tabindex="0">
+            <canvas id="wave"></canvas>
+            <span class="seek-tip" id="seekTip" hidden></span>
+          </div>
+          <span class="time" id="tDur">0:00</span>
+        </div>
+        <div class="live-row" id="liveRow" hidden>
+          <span class="live-dot"></span>
+          <span class="lbl" id="liveLabel"></span>
+          <span class="spacer"></span>
+          <button class="icon-btn" id="btnStop" title="Stop listening" aria-label="Stop listening"></button>
+        </div>
+        <button class="icon-btn" id="btnMute" title="Mute (M)" aria-label="Mute"></button>
+        <input class="vol" id="vol" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+        <button class="icon-btn fs-only" id="btnFullOut" title="Leave full screen (F)" aria-label="Leave full screen"></button>
+      </div>
+    </div>
+
+    <aside id="drawer" aria-label="File details"></aside>
+  </main>
+
+  <footer class="status" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusMsg">Ready</span>
+    <span id="pathBox"></span>
+  </footer>
+`;
+
+LintApp.mountChrome($('chromeSlot'), 'audio');
+$('btnInfo').innerHTML = I(ICON.info);
+$('btnFull').innerHTML = I(ICON.full);
+$('btnFullOut').innerHTML = I(ICON.exitFull);
+$('btnPalette').innerHTML = I(ICON.palette);
+$('btnStop').innerHTML = I(ICON.stop);
+$('btnPlay').innerHTML = I(ICON.play);
+$('btnMute').innerHTML = I(ICON.vol);
+LintApp.wireMenu($('btnPalette'), $('paletteMenu'));
+
+function setStatus(kind, msg) {
+  $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusMsg').textContent = msg;
+}
+
+/* set when something other than sound changes the picture — the drawing
+   loop rests while a paused spectrum is still, and this wakes it */
+let dirty = true;
+function invalidate() { dirty = true; }
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('lintuz-audio-' + k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('lintuz-audio-' + k, v); } catch (e) {} }
+};
+
+/* ==========================================================================
+   Palettes — stops run from the lowest frequency to the highest
+   ========================================================================== */
+const PALETTES = {
+  aurora: { name: 'Aurora', stops: ['#22D3EE', '#818CF8', '#C084FC', '#F472B6'] },
+  ember:  { name: 'Ember',  stops: ['#E11D48', '#F97316', '#FBBF24', '#FEF3C7'] },
+  lagoon: { name: 'Lagoon', stops: ['#10B981', '#22D3EE', '#3B82F6', '#A5B4FC'] },
+  orchid: { name: 'Orchid', stops: ['#7E22CE', '#C026D3', '#F0ABFC', '#FDF4FF'] }
+};
+let paletteId = store.get('palette', 'aurora');
+if (!PALETTES[paletteId]) paletteId = 'aurora';
+
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+function paletteAt(t) {
+  const s = PALETTES[paletteId].stops.map(hexRgb);
+  const x = Math.min(0.9999, Math.max(0, t)) * (s.length - 1);
+  const i = Math.floor(x), f = x - i;
+  return s[i].map((v, k) => Math.round(v + (s[i + 1][k] - v) * f));
+}
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+function paintPaletteMenu() {
+  $('paletteMenu').innerHTML = '<div class="menu-label">Colours</div>' +
+    Object.keys(PALETTES).map((id) =>
+      `<button class="menu-item" role="menuitemradio" data-pal="${id}" aria-checked="${id === paletteId}">` +
+      `<span class="pal-swatch" style="background:linear-gradient(90deg,${PALETTES[id].stops.join(',')})"></span>` +
+      `${PALETTES[id].name}<span class="tick">✓</span></button>`).join('');
+}
+paintPaletteMenu();
+$('paletteMenu').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pal]');
+  if (!b) return;
+  paletteId = b.dataset.pal;
+  store.set('palette', paletteId);
+  paintPaletteMenu();
+  gradCache = null;
+  drawWave();
+  invalidate();
+  LintApp.closeMenus();
+});
+
+const STYLES = ['bars', 'radial', 'aura'];
+let style = STYLES.includes(store.get('style', 'bars')) ? store.get('style', 'bars') : 'bars';
+function setStyle(s) {
+  style = s;
+  invalidate();
+  store.set('style', s);
+  document.querySelectorAll('[data-style]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === s)));
+}
+setStyle(style);
+document.querySelectorAll('[data-style]').forEach((b) =>
+  b.addEventListener('click', () => setStyle(b.dataset.style)));
+
+/* ==========================================================================
+   Audio graph
+   file:   <audio> → source ─┬→ analyser
+                             └→ gain → speakers
+   live:   stream  → source ──→ analyser          (never to the speakers —
+                                                   it is already playing)
+   ========================================================================== */
+const audio = new Audio();
+audio.preload = 'auto';
+let actx = null, analyser = null, gain = null, mediaNode = null;
+let freq = null;
+let live = null;            // { stream, node, kind, label }
+let source = 'none';        // 'none' | 'file' | 'system' | 'input'
+let fileInfo = null;        // what we learned about the current file
+let objectUrl = null, coverUrl = null;
+
+function ensureAudio() {
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    analyser = actx.createAnalyser();
+    /* 8192 points puts ~6 Hz between bins at 48 kHz — enough to tell a kick
+       at 50 Hz from a bass note at 80 */
+    analyser.fftSize = 8192;
+    analyser.smoothingTimeConstant = 0;     // smoothed per bar, below
+    analyser.minDecibels = -110;
+    analyser.maxDecibels = -10;
+    freq = new Float32Array(analyser.frequencyBinCount);
+    gain = actx.createGain();
+    const v = +$('vol').value;
+    gain.gain.value = v * v;
+    gain.connect(actx.destination);
+  }
+  if (actx.state === 'suspended') actx.resume();
+}
+
+function attachFile() {
+  ensureAudio();
+  if (!mediaNode) mediaNode = actx.createMediaElementSource(audio);
+  mediaNode.disconnect();
+  mediaNode.connect(analyser);
+  mediaNode.connect(gain);
+}
+
+function stopLive() {
+  if (!live) return;
+  live.stream.getTracks().forEach((t) => { t.onended = null; t.stop(); });
+  try { live.node.disconnect(); } catch (e) {}
+  live = null;
+}
+
+function setSource(s) {
+  source = s;
+  $('srcFile').setAttribute('aria-pressed', String(s === 'file'));
+  $('srcSystem').setAttribute('aria-pressed', String(s === 'system'));
+  $('srcInput').setAttribute('aria-pressed', String(s === 'input'));
+  $('empty').hidden = s !== 'none';
+  $('transport').hidden = s === 'none';
+  $('fileRow').hidden = s !== 'file';
+  $('liveRow').hidden = s === 'file' || s === 'none';
+  $('btnMute').hidden = $('vol').hidden = s !== 'file';
+  $('inputSelect').hidden = s !== 'input';
+  $('now').hidden = s !== 'file' || !fileInfo;
+  paintDrawer();
+}
+
+/* ---------- a file ---------- */
+async function openFile(file) {
+  if (!file) return;
+  if (!/^audio\//.test(file.type) && !/\.(mp3|wav|flac|ogg|oga|opus|m4a|aac|webm|aif|aiff|wma)$/i.test(file.name)) {
+    LintApp.toast('That does not look like an audio file');
+    return;
+  }
+  stopLive();
+  ensureAudio();
+  attachFile();
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  if (coverUrl) { URL.revokeObjectURL(coverUrl); coverUrl = null; }
+  objectUrl = URL.createObjectURL(file);
+  audio.src = objectUrl;
+
+  fileInfo = { name: file.name, size: file.size, type: file.type, tags: {}, head: {} };
+  peaks = null;
+  drawWave();
+  setSource('file');
+  paintNow();
+  setStatus('', 'Opening ' + file.name + '…');
+  $('pathBox').textContent = file.name;
+
+  try { await audio.play(); } catch (e) { /* autoplay may wait for a gesture */ }
+
+  /* what the container says, then the whole signal for the overview */
+  const buf = await file.arrayBuffer();
+  if (fileInfo.name !== file.name) return;
+  fileInfo.head = readHeader(new DataView(buf), file.name);
+  fileInfo.tags = fileInfo.head.tags || {};
+  if (fileInfo.tags.cover) {
+    coverUrl = URL.createObjectURL(fileInfo.tags.cover);
+    coverImg.src = coverUrl;
+  } else coverImg.removeAttribute('src');
+  paintNow();
+  paintMediaSession();
+  paintDrawer();
+
+  if (file.size > 400 * 1024 * 1024) { setReadyStatus(); return; }
+  try {
+    const decoded = await actx.decodeAudioData(buf.slice(0));
+    if (fileInfo.name !== file.name) return;
+    analyseSignal(decoded);
+    drawWave();
+    paintDrawer();
+  } catch (e) {
+    /* playable but not decodable here happens (some containers) — the
+       player still works, only the overview is missing */
+  }
+  setReadyStatus();
+}
+
+function setReadyStatus() {
+  if (!fileInfo) return;
+  const h = fileInfo.head || {};
+  const bits = [fileInfo.name];
+  if (isFinite(audio.duration)) bits.push(fmtTime(audio.duration));
+  if (h.sampleRate) bits.push((h.sampleRate / 1000).toFixed(h.sampleRate % 1000 ? 1 : 0) + ' kHz');
+  if (fileInfo.channels) bits.push(fileInfo.channels === 1 ? 'mono' : fileInfo.channels === 2 ? 'stereo' : fileInfo.channels + ' channels');
+  setStatus('ok', bits.join(' · '));
+}
+
+audio.addEventListener('error', () => {
+  if (source !== 'file') return;
+  setStatus('err', 'This browser cannot play that file');
+  LintApp.toast('This browser cannot play that file');
+});
+audio.addEventListener('loadedmetadata', () => { $('tDur').textContent = fmtTime(audio.duration); setReadyStatus(); paintDrawer(); });
+audio.addEventListener('play', paintPlay);
+audio.addEventListener('pause', paintPlay);
+audio.addEventListener('ended', paintPlay);
+
+function paintPlay() {
+  const playing = !audio.paused && !audio.ended;
+  $('btnPlay').innerHTML = I(playing ? ICON.pause : ICON.play);
+  $('btnPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+}
+
+function togglePlay() {
+  if (source !== 'file') return;
+  ensureAudio();
+  if (audio.paused || audio.ended) audio.play().catch(() => {}); else audio.pause();
+}
+
+/* ---------- another tab, or the whole system ---------- */
+async function listenSystem() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    LintApp.toast('This browser cannot share audio — try Chrome or Edge on a computer');
+    return;
+  }
+  ensureAudio();
+  let stream;
+  try {
+    /* a picture is required to be offered sound; ask for as little as the
+       browser will accept and never look at it */
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 1, width: 320, height: 180 },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      systemAudio: 'include',
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'include'
+    });
+  } catch (e) {
+    if (e && e.name !== 'NotAllowedError') LintApp.toast('Could not start sharing');
+    return;
+  }
+  const track = stream.getAudioTracks()[0];
+  if (!track) {
+    stream.getTracks().forEach((t) => t.stop());
+    setStatus('err', 'No sound was shared');
+    LintApp.toast('No sound came with that — choose a tab and turn on “Share tab audio”');
+    return;
+  }
+  const video = stream.getVideoTracks()[0];
+  const surface = video && video.getSettings ? video.getSettings().displaySurface : '';
+  const label = surface === 'browser' ? 'Tab audio' : surface === 'monitor' ? 'System audio' : 'Shared audio';
+  startLive(stream, 'system', label, video ? video.label : '');
+}
+
+/* ---------- a microphone, or any input device ---------- */
+async function listenInput(deviceId) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    LintApp.toast('This browser cannot open an input device');
+    return;
+  }
+  ensureAudio();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      /* the processing meant for calls flattens music */
+      echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+      channelCount: { ideal: 2 }
+    } });
+  } catch (e) {
+    LintApp.toast(e && e.name === 'NotAllowedError' ? 'Input access was not allowed' : 'Could not open that input');
+    return;
+  }
+  const track = stream.getAudioTracks()[0];
+  startLive(stream, 'input', 'Input', track ? track.label : '');
+  await paintInputs(track && track.getSettings ? track.getSettings().deviceId : '');
+}
+
+async function paintInputs(currentId) {
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+  $('inputSelect').innerHTML = devices.map((d, i) =>
+    `<option value="${esc(d.deviceId)}"${d.deviceId === currentId ? ' selected' : ''}>${esc(d.label || 'Input ' + (i + 1))}</option>`).join('');
+}
+$('inputSelect').addEventListener('change', () => listenInput($('inputSelect').value));
+
+function startLive(stream, kind, label, detail) {
+  stopLive();
+  if (!audio.paused) audio.pause();
+  const node = actx.createMediaStreamSource(stream);
+  node.connect(analyser);
+  live = { stream, node, kind, label, detail };
+  stream.getAudioTracks().forEach((t) => { t.onended = () => { stopLive(); setSource(fileInfo ? 'file' : 'none'); setStatus('', 'Stopped listening'); }; });
+  setSource(kind);
+  $('liveLabel').innerHTML = `<b>${esc(label)}</b>` + (detail ? ' · ' + esc(detail) : '');
+  setStatus('ok', 'Listening to ' + label.toLowerCase() + (detail ? ' · ' + detail : ''));
+  $('pathBox').textContent = '';
+}
+
+$('btnStop').addEventListener('click', () => {
+  stopLive();
+  setSource(fileInfo ? 'file' : 'none');
+  setStatus('', 'Stopped listening');
+});
+
+/* ---------- source buttons ---------- */
+function chooseFile() {
+  if (fileInfo && source !== 'file') { stopLive(); attachFile(); setSource('file'); setReadyStatus(); return; }
+  $('fileInput').click();
+}
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('srcFile').addEventListener('click', chooseFile);
+$('chFile').addEventListener('click', () => $('fileInput').click());
+$('srcSystem').addEventListener('click', listenSystem);
+$('chSystem').addEventListener('click', listenSystem);
+$('srcInput').addEventListener('click', () => listenInput());
+$('chInput').addEventListener('click', () => listenInput());
+$('fileInput').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
+
+/* ==========================================================================
+   Reading the file — the container first, then the signal
+   ========================================================================== */
+function readHeader(dv, name) {
+  try {
+    const s4 = (o) => String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+    if (dv.byteLength > 12 && s4(0) === 'RIFF' && s4(8) === 'WAVE') return readWav(dv, s4);
+    if (dv.byteLength > 8 && s4(0) === 'fLaC') return readFlac(dv, s4);
+    if (dv.byteLength > 4 && s4(0) === 'OggS') return readOgg(dv);
+    if (dv.byteLength > 12 && s4(4) === 'ftyp') return { format: 'MPEG-4 audio (' + s4(8).trim() + ')' };
+    return readMp3(dv);
+  } catch (e) {
+    return {};
+  }
+}
+
+function readWav(dv, s4) {
+  const out = { format: 'WAV' };
+  let o = 12;
+  while (o + 8 <= dv.byteLength) {
+    const id = s4(o), size = dv.getUint32(o + 4, true);
+    if (id === 'fmt ') {
+      const fmt = dv.getUint16(o + 8, true);
+      out.channels = dv.getUint16(o + 10, true);
+      out.sampleRate = dv.getUint32(o + 12, true);
+      out.bitrate = dv.getUint32(o + 16, true) * 8;
+      out.bitDepth = dv.getUint16(o + 22, true);
+      out.codec = fmt === 1 ? 'PCM' : fmt === 3 ? 'PCM float' : fmt === 0xFFFE ? 'PCM (extensible)' : 'format ' + fmt;
+    }
+    o += 8 + size + (size & 1);
+  }
+  return out;
+}
+
+function readFlac(dv, s4) {
+  const out = { format: 'FLAC', codec: 'FLAC (lossless)', tags: {} };
+  let o = 4, last = false;
+  while (!last && o + 4 <= dv.byteLength) {
+    const h = dv.getUint8(o);
+    last = !!(h & 0x80);
+    const type = h & 0x7F;
+    const len = (dv.getUint8(o + 1) << 16) | (dv.getUint8(o + 2) << 8) | dv.getUint8(o + 3);
+    const b = o + 4;
+    if (type === 0) {
+      /* STREAMINFO: 20 bits rate, 3 bits channels-1, 5 bits depth-1 */
+      const x = dv.getUint32(b + 10);
+      out.sampleRate = x >>> 12;
+      out.channels = ((x >>> 9) & 7) + 1;
+      out.bitDepth = ((x >>> 4) & 31) + 1;
+    } else if (type === 4) {
+      Object.assign(out.tags, readVorbisComments(dv, b));
+    } else if (type === 6 && !out.tags.cover) {
+      let p = b + 4;
+      const ml = dv.getUint32(p); p += 4;
+      const mime = latin1(dv, p, ml); p += ml;
+      const dl = dv.getUint32(p); p += 4 + dl + 16;
+      const size = dv.getUint32(p); p += 4;
+      out.tags.cover = new Blob([new Uint8Array(dv.buffer, dv.byteOffset + p, size)], { type: mime || 'image/jpeg' });
+    }
+    o = b + len;
+  }
+  return out;
+}
+
+function readVorbisComments(dv, b) {
+  const tags = {};
+  const vl = dv.getUint32(b, true);
+  let p = b + 4 + vl;
+  const n = dv.getUint32(p, true); p += 4;
+  const dec = new TextDecoder('utf-8');
+  for (let i = 0; i < n && p + 4 <= dv.byteLength; i++) {
+    const l = dv.getUint32(p, true); p += 4;
+    const kv = dec.decode(new Uint8Array(dv.buffer, dv.byteOffset + p, l)); p += l;
+    const eq = kv.indexOf('=');
+    const k = kv.slice(0, eq).toUpperCase(), v = kv.slice(eq + 1);
+    if (k === 'TITLE') tags.title = v;
+    else if (k === 'ARTIST') tags.artist = v;
+    else if (k === 'ALBUM') tags.album = v;
+    else if (k === 'DATE') tags.year = v;
+    else if (k === 'GENRE') tags.genre = v;
+  }
+  return tags;
+}
+
+function readOgg(dv) {
+  const out = { format: 'Ogg' };
+  /* the first page carries the codec's identification header */
+  const segs = dv.getUint8(26);
+  const b = 27 + segs;
+  const head = latin1(dv, b, 8);
+  if (head.slice(1, 7) === 'vorbis') {
+    out.codec = 'Vorbis';
+    out.channels = dv.getUint8(b + 11);
+    out.sampleRate = dv.getUint32(b + 12, true);
+    const nominal = dv.getInt32(b + 20, true);
+    if (nominal > 0) out.bitrate = nominal;
+  } else if (head === 'OpusHead') {
+    out.codec = 'Opus';
+    out.channels = dv.getUint8(b + 9);
+    out.sampleRate = dv.getUint32(b + 12, true) || 48000;
+  } else if (head.slice(1, 5) === 'FLAC') {
+    out.codec = 'FLAC in Ogg';
+  }
+  return out;
+}
+
+const MP3_RATES = [[11025, 12000, 8000], null, [22050, 24000, 16000], [44100, 48000, 32000]];
+const MP3_KBPS = {
+  v1l3: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+  v2l3: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
+};
+
+function readMp3(dv) {
+  const out = { tags: {} };
+  let o = 0;
+  if (latin1(dv, 0, 3) === 'ID3') {
+    const ver = dv.getUint8(3);
+    const size = syncsafe(dv, 6);
+    out.tags = readId3(dv, 10, 10 + size, ver);
+    o = 10 + size;
+  }
+  /* the first frame sync after the tag */
+  const end = Math.min(dv.byteLength - 4, o + 65536);
+  for (; o < end; o++) {
+    if (dv.getUint8(o) !== 0xFF || (dv.getUint8(o + 1) & 0xE0) !== 0xE0) continue;
+    const b1 = dv.getUint8(o + 1), b2 = dv.getUint8(o + 2), b3 = dv.getUint8(o + 3);
+    const ver = (b1 >> 3) & 3, layer = (b1 >> 1) & 3;
+    const br = (b2 >> 4) & 15, sr = (b2 >> 2) & 3;
+    if (ver === 1 || layer !== 1 || br === 0 || br === 15 || sr === 3) continue;
+    out.format = 'MP3';
+    out.codec = 'MPEG-' + (ver === 3 ? '1' : ver === 2 ? '2' : '2.5') + ' Layer III';
+    out.sampleRate = MP3_RATES[ver][sr];
+    out.channels = ((b3 >> 6) & 3) === 3 ? 1 : 2;
+    out.bitrate = (ver === 3 ? MP3_KBPS.v1l3 : MP3_KBPS.v2l3)[br] * 1000;
+    /* a Xing or Info header means the rate above is only the first frame's */
+    const probe = latin1(dv, o + 4, Math.min(64, dv.byteLength - o - 4));
+    if (/Xing/.test(probe)) out.vbr = true;
+    break;
+  }
+  return out;
+}
+
+function readId3(dv, from, to, ver) {
+  const tags = {};
+  let o = from;
+  const MAP = { TIT2: 'title', TPE1: 'artist', TALB: 'album', TYER: 'year', TDRC: 'year', TCON: 'genre' };
+  while (o + 10 <= to && o + 10 <= dv.byteLength) {
+    const id = latin1(dv, o, 4);
+    if (!/^[A-Z0-9]{4}$/.test(id)) break;
+    const size = ver >= 4 ? syncsafe(dv, o + 4) : dv.getUint32(o + 4);
+    const b = o + 10;
+    if (size <= 0 || b + size > dv.byteLength) break;
+    if (MAP[id]) tags[MAP[id]] = id3Text(dv, b, size);
+    else if (id === 'APIC' && !tags.cover) {
+      const enc = dv.getUint8(b);
+      let p = b + 1;
+      let mime = '';
+      while (p < b + size && dv.getUint8(p) !== 0) mime += String.fromCharCode(dv.getUint8(p++));
+      p += 2;                                      // terminator, picture type
+      p = skipText(dv, p, b + size, enc);          // description
+      tags.cover = new Blob([new Uint8Array(dv.buffer, dv.byteOffset + p, b + size - p)], { type: mime || 'image/jpeg' });
+    }
+    o = b + size;
+  }
+  if (tags.genre) tags.genre = tags.genre.replace(/^\((\d+)\)$/, '$1');
+  return tags;
+}
+
+function id3Text(dv, b, size) {
+  const enc = dv.getUint8(b);
+  const bytes = new Uint8Array(dv.buffer, dv.byteOffset + b + 1, size - 1);
+  /* encoding 1 is UTF-16 with a byte-order mark, which may say big-endian */
+  const be = enc === 2 || (enc === 1 && bytes[0] === 0xFE && bytes[1] === 0xFF);
+  const label = enc === 0 ? 'latin1' : enc === 3 ? 'utf-8' : be ? 'utf-16be' : 'utf-16le';
+  return new TextDecoder(label).decode(bytes).replace(/\u0000+$/, '').replace(/\u0000/g, ' / ').trim();
+}
+function skipText(dv, p, end, enc) {
+  if (enc === 1 || enc === 2) {
+    while (p + 1 < end && (dv.getUint8(p) !== 0 || dv.getUint8(p + 1) !== 0)) p += 2;
+    return p + 2;
+  }
+  while (p < end && dv.getUint8(p) !== 0) p++;
+  return p + 1;
+}
+const syncsafe = (dv, o) => (dv.getUint8(o) << 21) | (dv.getUint8(o + 1) << 14) | (dv.getUint8(o + 2) << 7) | dv.getUint8(o + 3);
+function latin1(dv, o, n) {
+  let s = '';
+  for (let i = 0; i < n && o + i < dv.byteLength; i++) s += String.fromCharCode(dv.getUint8(o + i));
+  return s;
+}
+
+/* The whole signal, once: an overview for the seek bar and the levels a
+   mastering engineer would ask about first. */
+let peaks = null;          // per bucket: max absolute amplitude across channels
+const BUCKETS = 1600;
+function analyseSignal(buf) {
+  const n = buf.length, ch = buf.numberOfChannels;
+  const data = [];
+  for (let k = 0; k < ch; k++) data.push(buf.getChannelData(k));
+  peaks = new Float32Array(BUCKETS);
+  let peak = 0, sum = 0, count = 0;
+  const per = n / BUCKETS;
+  for (let b = 0; b < BUCKETS; b++) {
+    const from = Math.floor(b * per), to = Math.min(n, Math.floor((b + 1) * per));
+    let m = 0;
+    /* every sample for the peak would be exact but slow on an hour of audio;
+       a stride keeps it well under a second and misses nothing audible */
+    const stride = Math.max(1, Math.floor((to - from) / 2048));
+    for (let k = 0; k < ch; k++) {
+      const d = data[k];
+      for (let i = from; i < to; i += stride) {
+        const v = d[i] < 0 ? -d[i] : d[i];
+        if (v > m) m = v;
+        sum += d[i] * d[i]; count++;
+      }
+    }
+    peaks[b] = m;
+    if (m > peak) peak = m;
+  }
+  fileInfo.channels = ch;
+  fileInfo.duration = buf.duration;
+  fileInfo.peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+  fileInfo.rmsDb = count ? 10 * Math.log10(sum / count) : -Infinity;
+}
+
+/* ==========================================================================
+   Now playing, details, media keys
+   ========================================================================== */
+const coverImg = $('nowCover');
+coverImg.addEventListener('load', () => { coverImg.hidden = false; coverArt = coverImg; invalidate(); });
+coverImg.addEventListener('error', () => { coverImg.hidden = true; coverArt = null; });
+let coverArt = null;
+
+function displayTitle() {
+  const t = fileInfo && fileInfo.tags;
+  return (t && t.title) || (fileInfo ? fileInfo.name.replace(/\.[^.]+$/, '') : '');
+}
+function paintNow() {
+  if (!fileInfo) return;
+  const t = fileInfo.tags || {};
+  $('nowTitle').textContent = displayTitle();
+  $('nowArtist').textContent = [t.artist, t.album].filter(Boolean).join(' — ');
+  if (!t.cover) { coverImg.hidden = true; coverArt = null; }
+  $('now').hidden = source !== 'file';
+  document.title = displayTitle() + ' · Audio Player · lint.one';
+}
+
+function paintMediaSession() {
+  if (!('mediaSession' in navigator) || !fileInfo) return;
+  const t = fileInfo.tags || {};
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: displayTitle(), artist: t.artist || '', album: t.album || '',
+    artwork: coverUrl ? [{ src: coverUrl }] : []
+  });
+}
+if ('mediaSession' in navigator) {
+  const ms = navigator.mediaSession;
+  const on = (a, f) => { try { ms.setActionHandler(a, f); } catch (e) {} };
+  on('play', () => { if (source === 'file') audio.play(); });
+  on('pause', () => audio.pause());
+  on('seekbackward', () => seekBy(-10));
+  on('seekforward', () => seekBy(10));
+  on('seekto', (d) => { audio.currentTime = d.seekTime; });
+}
+
+const dash = '<dd class="none">—</dd>';
+const row = (k, v) => `<div><dt>${k}</dt>${v === undefined || v === null || v === '' ? dash : '<dd>' + esc(v) + '</dd>'}</div>`;
+const fmtDb = (v) => isFinite(v) ? v.toFixed(1) + ' dBFS' : '−∞';
+
+function paintDrawer() {
+  const d = $('drawer');
+  if (source === 'system' || source === 'input') {
+    const tr = live && live.stream.getAudioTracks()[0];
+    const st = tr && tr.getSettings ? tr.getSettings() : {};
+    d.innerHTML = '<h3>Listening to</h3><dl class="meta">' +
+      row('Source', live ? live.label : '') +
+      row('Device', live ? live.detail : '') +
+      row('Sample rate', actx ? (actx.sampleRate / 1000) + ' kHz' : '') +
+      row('Channels', st.channelCount) +
+      '</dl><p class="drawer-note">Live sound is only analysed, never recorded or played back — what you hear still comes from where it was already playing.</p>';
+    return;
+  }
+  if (!fileInfo) {
+    d.innerHTML = '<h3>Details</h3><p class="drawer-note">Open a file to see its format, sample rate, bit depth, loudness and tags.</p>';
+    return;
+  }
+  const h = fileInfo.head || {}, t = fileInfo.tags || {};
+  const dur = isFinite(audio.duration) ? audio.duration : fileInfo.duration;
+  const bitrate = h.bitrate && !h.vbr ? Math.round(h.bitrate / 1000) + ' kbps'
+    : dur ? '≈ ' + Math.round(fileInfo.size * 8 / dur / 1000) + ' kbps' + (h.vbr ? ' (VBR)' : '') : '';
+  d.innerHTML =
+    (coverUrl ? `<img class="cover" src="${coverUrl}" alt="">` : '') +
+    '<h3>Track</h3><dl class="meta">' +
+      row('Title', t.title) + row('Artist', t.artist) + row('Album', t.album) +
+      row('Year', t.year) + row('Genre', t.genre) +
+    '</dl><h3>Audio</h3><dl class="meta">' +
+      row('Duration', dur ? fmtTime(dur, true) : '') +
+      row('Format', h.format || (fileInfo.type || '').replace('audio/', '').toUpperCase()) +
+      row('Codec', h.codec) +
+      row('Sample rate', h.sampleRate ? h.sampleRate.toLocaleString('en-US') + ' Hz' : '') +
+      row('Bit depth', h.bitDepth ? h.bitDepth + '-bit' : '') +
+      row('Channels', fileInfo.channels || h.channels) +
+      row('Bitrate', bitrate) +
+    '</dl><h3>Levels</h3><dl class="meta">' +
+      row('Peak', fileInfo.peakDb !== undefined ? fmtDb(fileInfo.peakDb) : '') +
+      row('RMS', fileInfo.rmsDb !== undefined ? fmtDb(fileInfo.rmsDb) : '') +
+    '</dl><h3>File</h3><dl class="meta">' +
+      row('Name', fileInfo.name) + row('Size', LintApp.fmtBytes(fileInfo.size)) +
+    '</dl><p class="drawer-note">Read and decoded in this tab. Levels are measured on the decoded signal; a peak at or above 0 dBFS means the file clips.</p>';
+}
+
+$('btnInfo').addEventListener('click', () => {
+  const open = $('drawer').classList.toggle('open');
+  $('btnInfo').setAttribute('aria-pressed', String(open));
+});
+
+/* ==========================================================================
+   Transport
+   ========================================================================== */
+function fmtTime(s, long) {
+  if (!isFinite(s)) return '0:00';
+  s = Math.max(0, s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+  const mm = h ? String(m).padStart(2, '0') : String(m);
+  return (h ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0') + (long ? '.' + String(Math.floor((s % 1) * 10)) : '');
+}
+
+function seekBy(d) {
+  if (source !== 'file' || !isFinite(audio.duration)) return;
+  audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + d));
+}
+
+$('btnPlay').addEventListener('click', togglePlay);
+
+let lastVol = 1;
+function setVolume(v) {
+  v = Math.max(0, Math.min(1, v));
+  $('vol').value = String(v);
+  if (gain) gain.gain.setTargetAtTime(v * v, actx.currentTime, 0.02);   // ears hear loudness, not amplitude
+  $('btnMute').innerHTML = I(v === 0 ? ICON.mute : ICON.vol);
+  store.set('volume', String(v));
+}
+$('vol').addEventListener('input', () => setVolume(+$('vol').value));
+$('btnMute').addEventListener('click', () => {
+  const v = +$('vol').value;
+  if (v > 0) { lastVol = v; setVolume(0); } else setVolume(lastVol || 1);
+});
+const savedVol = parseFloat(store.get('volume', '1'));
+$('vol').value = String(isFinite(savedVol) ? savedVol : 1);
+
+/* the seek bar is the file's own waveform, played part in colour */
+const wave = $('wave'), wctx = wave.getContext('2d');
+function drawWave() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = wave.clientWidth, h = wave.clientHeight;
+  if (!w || !h) return;
+  if (wave.width !== Math.round(w * dpr)) { wave.width = Math.round(w * dpr); wave.height = Math.round(h * dpr); }
+  wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  wctx.clearRect(0, 0, w, h);
+  const dur = audio.duration;
+  const at = isFinite(dur) && dur > 0 ? audio.currentTime / dur : 0;
+  const mid = h / 2;
+
+  if (!peaks) {
+    /* no overview yet — a plain line, filled as it plays */
+    wctx.fillStyle = 'rgba(255,255,255,0.18)';
+    wctx.fillRect(0, mid - 1.5, w, 3);
+    wctx.fillStyle = rgba(paletteAt(0.5), 1);
+    wctx.fillRect(0, mid - 1.5, w * at, 3);
+    return;
+  }
+  const bar = 2, gap = 1, pitch = bar + gap;
+  const n = Math.floor(w / pitch);
+  const grad = wctx.createLinearGradient(0, 0, w, 0);
+  PALETTES[paletteId].stops.forEach((s, i, a) => grad.addColorStop(i / (a.length - 1), s));
+  let max = 0;
+  for (let i = 0; i < peaks.length; i++) if (peaks[i] > max) max = peaks[i];
+  const norm = max > 0 ? 1 / max : 1;
+  for (let i = 0; i < n; i++) {
+    const from = Math.floor(i / n * peaks.length), to = Math.max(from + 1, Math.floor((i + 1) / n * peaks.length));
+    let m = 0;
+    for (let k = from; k < to; k++) if (peaks[k] > m) m = peaks[k];
+    const bh = Math.max(1.5, Math.pow(m * norm, 0.8) * (h - 6));
+    const x = i * pitch;
+    wctx.fillStyle = x / w < at ? grad : 'rgba(255,255,255,0.24)';
+    wctx.fillRect(x, mid - bh / 2, bar, bh);
+  }
+}
+
+function seekFromEvent(e) {
+  const r = $('seek').getBoundingClientRect();
+  const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  return f * (audio.duration || 0);
+}
+let seeking = false;
+$('seek').addEventListener('pointerdown', (e) => {
+  if (!isFinite(audio.duration)) return;
+  seeking = true;
+  $('seek').setPointerCapture(e.pointerId);
+  audio.currentTime = seekFromEvent(e);
+});
+$('seek').addEventListener('pointermove', (e) => {
+  if (!isFinite(audio.duration)) return;
+  const tip = $('seekTip');
+  const r = $('seek').getBoundingClientRect();
+  tip.hidden = false;
+  tip.style.left = Math.max(0, Math.min(r.width, e.clientX - r.left)) + 'px';
+  tip.textContent = fmtTime(seekFromEvent(e));
+  if (seeking) audio.currentTime = seekFromEvent(e);
+});
+$('seek').addEventListener('pointerup', () => { seeking = false; });
+$('seek').addEventListener('pointerleave', () => { if (!seeking) $('seekTip').hidden = true; });
+$('seek').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); seekBy(-5); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); seekBy(5); }
+});
+
+/* ---------- full screen, and resting controls ---------- */
+const stage = $('stage');
+function toggleFull() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+}
+$('btnFull').addEventListener('click', toggleFull);
+$('btnFullOut').addEventListener('click', toggleFull);
+document.addEventListener('fullscreenchange', () => {
+  $('btnFull').innerHTML = I(document.fullscreenElement ? ICON.exitFull : ICON.full);
+  wake();
+});
+
+let idleTimer;
+function wake() {
+  stage.classList.remove('idle');
+  clearTimeout(idleTimer);
+  /* in a window the controls stay; full screen is for watching */
+  if (document.fullscreenElement) idleTimer = setTimeout(() => stage.classList.add('idle'), 2600);
+}
+stage.addEventListener('pointermove', wake);
+stage.addEventListener('pointerdown', wake);
+
+/* ---------- keys ---------- */
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  /* the volume slider answers its own arrows */
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+  if (mod && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('fileInput').click(); return; }
+  if (mod || e.altKey || typing) return;
+  wake();
+  /* space always plays — not whichever button happened to keep focus */
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); seekBy(e.shiftKey ? -30 : -5); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); seekBy(e.shiftKey ? 30 : 5); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); setVolume(+$('vol').value + 0.05); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); setVolume(+$('vol').value - 0.05); }
+  else if (e.key === 'f' || e.key === 'F') toggleFull();
+  else if (e.key === 'm' || e.key === 'M') $('btnMute').click();
+  else if (e.key === 'i' || e.key === 'I') $('btnInfo').click();
+  else if (e.key === 'b' || e.key === 'B') setStyle('bars');
+  else if (e.key === 'r' || e.key === 'R') setStyle('radial');
+  else if (e.key === 'a' || e.key === 'A') setStyle('aura');
+});
+
+/* ---------- drag and drop ---------- */
+['dragover', 'dragenter'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dragover');
+  }));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+/* ==========================================================================
+   The spectrum
+   Bars sit on a logarithmic scale, as hearing does: an octave gets the same
+   width at 60 Hz as at 6 kHz, so the bass is not crushed into the first few
+   pixels. Each bar rises quickly and falls slowly, a peak cap hangs above it
+   and drops under gravity, and the lows push a pulse through the whole scene.
+   ========================================================================== */
+const viz = $('viz'), vctx = viz.getContext('2d');
+const layer = document.createElement('canvas'), lctx = layer.getContext('2d');   // the bars
+const glow = document.createElement('canvas'), gctx = glow.getContext('2d');     // a soft copy
+const aura = document.createElement('canvas'), actxA = aura.getContext('2d');    // aura, at half size
+let W = 0, H = 0, DPR = 1;
+
+const F_MIN = 28, F_MAX = 16000;
+const DB_FLOOR = -82, DB_CEIL = -16;
+const TILT = 3;             // dB per octave: music falls off toward the top, eyes expect it flat
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let N = 0;
+let bands = [];             // [{ lo, hi, fc }] in bins
+let level, target, peak, peakV, peakHold;
+let bassAvg = 0, pulse = 0, lastBeat = 0, agc = 0.6;
+let gradCache = null;
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = stage.clientWidth; H = stage.clientHeight;
+  for (const cv of [viz, layer]) { cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR)); }
+  glow.width = Math.max(1, Math.round(W / 4)); glow.height = Math.max(1, Math.round(H / 4));
+  /* half the css size: a quarter looked stepped on the ribbons' edges */
+  aura.width = Math.max(1, Math.round(W / 2)); aura.height = Math.max(1, Math.round(H / 2));
+  gradCache = null;
+  buildBands();
+  drawWave();
+  dirty = true;
+}
+new ResizeObserver(resize).observe(stage);
+
+function barCount() {
+  if (style === 'radial' || style === 'aura') return 64;
+  const usable = W - 2 * Math.max(24, W * 0.05);
+  return Math.max(36, Math.min(128, Math.round(usable / 12)));
+}
+
+function buildBands() {
+  const n = barCount();
+  const rate = actx ? actx.sampleRate : 48000;
+  const binHz = rate / 2 / (analyser ? analyser.frequencyBinCount : 4096);
+  if (n === N && bands.binHz === binHz) return;
+  N = n;
+  bands = [];
+  bands.binHz = binHz;
+  for (let i = 0; i < n; i++) {
+    const lo = F_MIN * Math.pow(F_MAX / F_MIN, i / n);
+    const hi = F_MIN * Math.pow(F_MAX / F_MIN, (i + 1) / n);
+    bands.push({ lo: lo / binHz, hi: hi / binHz, fc: Math.sqrt(lo * hi) });
+  }
+  /* a different count means different frequencies per bar — carrying the
+     old levels over would hang peaks where they never were */
+  level = new Float32Array(n); target = new Float32Array(n);
+  peak = new Float32Array(n); peakV = new Float32Array(n); peakHold = new Float32Array(n);
+}
+
+function readSpectrum(t) {
+  const active = analyser && ((source === 'file' && !audio.paused) || live);
+  if (!active && source !== 'none') {
+    /* paused: let everything fall, then the loop stops drawing */
+    target.fill(0);
+    return 0;
+  }
+  if (!active) {
+    /* nothing chosen yet: a slow breath, so the stage never looks switched off */
+    for (let i = 0; i < N; i++) {
+      const x = i / N;
+      target[i] = reduceMotion ? 0.04 : 0.045 + 0.035 * Math.sin(t * 0.9 + x * 7) * Math.sin(t * 0.37 + x * 3) + 0.03 * Math.exp(-x * 4);
+    }
+    return 0;
+  }
+  analyser.getFloatFrequencyData(freq);
+  let maxV = 0, bass = 0, bassN = 0;
+  for (let i = 0; i < N; i++) {
+    const b = bands[i];
+    let db;
+    if (b.hi - b.lo < 1) {
+      /* narrower than a bin: read between the two nearest */
+      const x = (b.lo + b.hi) / 2, k = Math.floor(x), f = x - k;
+      const a0 = freq[k], a1 = freq[Math.min(freq.length - 1, k + 1)];
+      db = a0 + (a1 - a0) * f;
+    } else {
+      db = -Infinity;
+      const end = Math.min(freq.length - 1, Math.ceil(b.hi));
+      for (let k = Math.floor(b.lo); k <= end; k++) if (freq[k] > db) db = freq[k];
+    }
+    /* silence reads as -Infinity, and -Infinity minus itself is NaN */
+    if (!(db > -400)) db = -400;
+    db += TILT * Math.log2(b.fc / 1000);
+    let v = (db - DB_FLOOR) / (DB_CEIL - DB_FLOOR);
+    v = v < 0 ? 0 : v > 1 ? 1 : v;
+    target[i] = v;
+    if (v > maxV) maxV = v;
+    if (b.fc < 150) { bass += v; bassN++; }
+  }
+  /* a slow automatic gain, so a quiet recording or a distant microphone
+     still fills the stage — slow enough never to pump with the beat */
+  agc = maxV > agc ? agc + (maxV - agc) * 0.08 : agc * 0.9975 + maxV * 0.0025;
+  const g = Math.min(2.6, 0.9 / Math.max(0.28, agc));
+  for (let i = 0; i < N; i++) target[i] = Math.min(1, Math.pow(target[i] * g, 1.35));
+  return bassN ? Math.min(1, (bass / bassN) * g) : 0;
+}
+
+function step(dt, t) {
+  const bass = readSpectrum(t);
+  const up = 1 - Math.exp(-dt / 0.03), down = 1 - Math.exp(-dt / 0.2);
+  for (let i = 0; i < N; i++) {
+    const v = target[i];
+    level[i] += (v - level[i]) * (v > level[i] ? up : down);
+    if (level[i] >= peak[i]) { peak[i] = level[i]; peakV[i] = 0; peakHold[i] = 0.32; }
+    else if (peakHold[i] > 0) peakHold[i] -= dt;
+    else { peakV[i] += 1.6 * dt; peak[i] = Math.max(level[i], peak[i] - peakV[i] * dt); }
+  }
+  /* a beat is the low end jumping above its own recent average */
+  bassAvg += (bass - bassAvg) * (1 - Math.exp(-dt / 0.45));
+  if (bass > 0.3 && bass > bassAvg * 1.28 + 0.04 && t - lastBeat > 0.2) { pulse = 1; lastBeat = t; }
+  pulse *= Math.exp(-dt / 0.28);
+  return bass;
+}
+
+function hGradient(ctx, x0, x1) {
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  PALETTES[paletteId].stops.forEach((s, i, a) => g.addColorStop(i / (a.length - 1), s));
+  return g;
+}
+
+function drawBars(bass) {
+  const side = Math.max(24, W * 0.05);
+  const usable = W - 2 * side;
+  const pitch = usable / N;
+  const gap = Math.max(1.5, pitch * 0.26), bw = pitch - gap;
+  const base = Math.round(H * 0.64);
+  const top = Math.max(70, H * 0.12);
+  const maxH = base - top;
+
+  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  lctx.clearRect(0, 0, W, H);
+  if (!gradCache || gradCache.key !== 'bars' + W) gradCache = { key: 'bars' + W, g: hGradient(lctx, side, W - side) };
+  lctx.fillStyle = gradCache.g;
+  const r = Math.min(bw / 2, 3.5);
+  lctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    const h = Math.max(2, level[i] * maxH);
+    const x = side + i * pitch + gap / 2;
+    lctx.roundRect(x, base - h, bw, h, [r, r, 0, 0]);
+  }
+  lctx.fill();
+  /* peak caps */
+  lctx.globalAlpha = 0.9;
+  lctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    if (peak[i] < 0.02) continue;
+    const x = side + i * pitch + gap / 2;
+    lctx.roundRect(x, base - peak[i] * maxH - 7, bw, 2.5, 1.25);
+  }
+  lctx.fill();
+  lctx.globalAlpha = 1;
+
+  /* The floor: the same bars drawn again, downward, then faded by erasing
+     from the layer itself — a second full-size canvas and two more
+     full-screen copies a frame cost more than the effect is worth. */
+  const floor = base + 6;
+  lctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    const h = Math.max(2, level[i] * maxH);
+    lctx.rect(side + i * pitch + gap / 2, floor, bw, h);
+    if (peak[i] >= 0.02) lctx.rect(side + i * pitch + gap / 2, floor + peak[i] * maxH + 4.5, bw, 2.5);
+  }
+  lctx.fill();
+  lctx.globalCompositeOperation = 'destination-out';
+  const fade = lctx.createLinearGradient(0, floor, 0, floor + (H - base) * 0.75);
+  fade.addColorStop(0, 'rgba(0,0,0,0.7)');
+  fade.addColorStop(1, 'rgba(0,0,0,1)');
+  lctx.fillStyle = fade;
+  lctx.fillRect(0, floor, W, H - floor);
+  lctx.globalCompositeOperation = 'source-over';
+
+  paintScene();
+
+  /* the line they stand on */
+  vctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const line = vctx.createLinearGradient(side, 0, W - side, 0);
+  line.addColorStop(0, 'rgba(255,255,255,0)');
+  line.addColorStop(0.5, 'rgba(255,255,255,0.16)');
+  line.addColorStop(1, 'rgba(255,255,255,0)');
+  vctx.fillStyle = line;
+  vctx.fillRect(side, base + 2, W - 2 * side, 1);
+}
+
+function drawRadial(bass, t) {
+  const cx = W / 2;
+  const cy = source === 'none' ? H * 0.44 : H * 0.46;
+  const s = Math.min(W, H);
+  const R = s * 0.16 * (1 + 0.05 * pulse + 0.04 * bass);
+  const maxL = s * 0.24;
+  const half = N;
+  const arc = Math.PI / half;
+  const bw = Math.max(2, (2 * Math.PI * R / (2 * half)) * 0.55);
+
+  lctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  lctx.clearRect(0, 0, W, H);
+  lctx.lineCap = 'round';
+  lctx.lineWidth = bw;
+  /* bass at the top, climbing down both sides to meet at the bottom */
+  for (let side = -1; side <= 1; side += 2) {
+    for (let i = 0; i < half; i++) {
+      const a = -Math.PI / 2 + side * (i + 0.5) * arc;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const L = Math.max(2, level[i] * maxL);
+      const col = paletteAt(i / (half - 1));
+      lctx.strokeStyle = rgba(col, 1);
+      lctx.beginPath();
+      lctx.moveTo(cx + ca * (R + 6), cy + sa * (R + 6));
+      lctx.lineTo(cx + ca * (R + 6 + L), cy + sa * (R + 6 + L));
+      lctx.stroke();
+      if (peak[i] > 0.02) {
+        const P = R + 6 + peak[i] * maxL + 7;
+        lctx.fillStyle = rgba(col, 0.85);
+        lctx.beginPath();
+        lctx.arc(cx + ca * P, cy + sa * P, bw * 0.42, 0, Math.PI * 2);
+        lctx.fill();
+      }
+    }
+  }
+
+  paintScene();
+
+  /* the disc: the cover if there is one, a lit sphere if not */
+  vctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = R - 2;
+  vctx.save();
+  vctx.beginPath();
+  vctx.arc(cx, cy, r, 0, Math.PI * 2);
+  vctx.clip();
+  if (coverArt && coverArt.complete && coverArt.naturalWidth && source === 'file') {
+    const k = 1 + 0.03 * pulse;
+    const d = 2 * r * k;
+    vctx.drawImage(coverArt, cx - d / 2, cy - d / 2, d, d);
+    vctx.fillStyle = 'rgba(0,0,0,0.12)';
+    vctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  } else {
+    const a = paletteAt(0.15), b = paletteAt(0.85);
+    const g = vctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r);
+    g.addColorStop(0, rgba(b, 0.55 + 0.3 * pulse));
+    g.addColorStop(0.6, rgba(a, 0.28 + 0.2 * bass));
+    g.addColorStop(1, 'rgba(0,0,0,0.92)');
+    vctx.fillStyle = g;
+    vctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  }
+  vctx.restore();
+  vctx.strokeStyle = `rgba(255,255,255,${0.1 + 0.25 * pulse})`;
+  vctx.lineWidth = 1.5;
+  vctx.beginPath();
+  vctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
+  vctx.stroke();
+}
+
+/* ---------- aura ----------
+   Five soft fields of colour, each listening to its own part of the
+   spectrum, drift over black; three ribbons ride the low and middle notes.
+   It is drawn at half the screen's css size and scaled up — soft gradients
+   lose nothing to it, and on a retina display that is a sixteenth of the
+   pixels. */
+const BLOBS = [
+  { t: 0.04, band: 0, r: 0.62, speed: 0.11, ox: 0.0, oy: 1.3 },
+  { t: 0.30, band: 1, r: 0.52, speed: 0.15, ox: 2.1, oy: 0.4 },
+  { t: 0.55, band: 2, r: 0.46, speed: 0.19, ox: 4.2, oy: 2.6 },
+  { t: 0.78, band: 3, r: 0.40, speed: 0.24, ox: 1.1, oy: 3.9 },
+  { t: 0.97, band: 4, r: 0.32, speed: 0.30, ox: 5.3, oy: 5.0 }
+];
+const RIBBONS = [
+  { band: 1, y: 0.56, f: 1.1, dir: 1, t: 0.2 },
+  { band: 2, y: 0.61, f: 1.7, dir: -1, t: 0.55 },
+  { band: 3, y: 0.66, f: 2.4, dir: 1, t: 0.85 }
+];
+const EDGES = [0, 90, 300, 1200, 4500, 1e9];     // Hz: sub, bass, low mid, mid, high
+const blobPhase = BLOBS.map((b, i) => i * 1.7);
+const ribbonPhase = RIBBONS.map((r, i) => i * 2.1);
+
+function energies() {
+  const sum = [0, 0, 0, 0, 0], n = [0, 0, 0, 0, 0];
+  for (let i = 0; i < N; i++) {
+    const f = bands[i].fc;
+    let k = 0;
+    while (k < 4 && f >= EDGES[k + 1]) k++;
+    sum[k] += level[i]; n[k]++;
+  }
+  return sum.map((v, k) => (n[k] ? v / n[k] : 0));
+}
+
+function drawAura(dt) {
+  const a = actxA, w = aura.width, h = aura.height, m = Math.min(w, h);
+  const e = energies();
+  /* louder music moves faster; silence nearly stops it */
+  const drive = 0.2 + 1.8 * (e[0] * 0.3 + e[1] * 0.3 + e[2] * 0.2 + e[3] * 0.12 + e[4] * 0.08);
+
+  a.globalCompositeOperation = 'source-over';
+  a.fillStyle = '#000';
+  a.fillRect(0, 0, w, h);
+  a.globalCompositeOperation = 'lighter';
+
+  BLOBS.forEach((b, k) => {
+    blobPhase[k] += dt * b.speed * drive * (reduceMotion ? 0.3 : 1);
+    const p = blobPhase[k];
+    const x = w * (0.5 + 0.33 * Math.sin(p + b.ox) + 0.08 * Math.sin(p * 2.3 + b.oy));
+    const y = h * (0.48 + 0.24 * Math.cos(p * 0.8 + b.oy) + 0.06 * Math.sin(p * 1.7 + b.ox));
+    const en = e[b.band];
+    const r = m * b.r * (0.72 + 0.75 * en + 0.1 * pulse);
+    const alpha = Math.min(0.85, 0.08 + 0.6 * en + 0.12 * pulse);
+    const col = paletteAt(b.t);
+    const g = a.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, rgba(col, alpha));
+    g.addColorStop(0.45, rgba(col, alpha * 0.42));
+    g.addColorStop(1, rgba(col, 0));
+    a.fillStyle = g;
+    a.fillRect(x - r, y - r, 2 * r, 2 * r);
+  });
+
+  const across = a.createLinearGradient(0, 0, w, 0);
+  PALETTES[paletteId].stops.forEach((s, i, arr) => across.addColorStop(i / (arr.length - 1), s));
+  const STEP = Math.max(2, w / 64);
+  RIBBONS.forEach((rb, k) => {
+    const en = e[rb.band];
+    ribbonPhase[k] += dt * (0.3 + 1.6 * en) * rb.dir * (reduceMotion ? 0.3 : 1);
+    const ph = ribbonPhase[k];
+    const amp = h * (0.025 + 0.15 * en);
+    const thick = h * (0.01 + 0.045 * en);
+    const y0 = h * rb.y;
+    const edge = (x, off) => y0 + amp * (0.7 * Math.sin((x / w) * 6.283 * rb.f + ph + off) +
+      0.3 * Math.sin((x / w) * 6.283 * rb.f * 2.3 - ph * 1.3));
+    a.beginPath();
+    a.moveTo(0, edge(0, 0));
+    for (let x = STEP; x <= w + STEP; x += STEP) a.lineTo(x, edge(x, 0));
+    for (let x = w + STEP; x >= -STEP; x -= STEP) a.lineTo(x, edge(x, 0.6) + thick);
+    a.closePath();
+    a.globalAlpha = Math.min(0.9, 0.18 + 0.6 * en + 0.15 * pulse);
+    a.fillStyle = across;
+    a.fill();
+    a.globalAlpha = 1;
+  });
+
+  /* back to black at the edges, so the colour floats instead of filling */
+  a.globalCompositeOperation = 'source-over';
+  const v = a.createRadialGradient(w / 2, h / 2, m * 0.25, w / 2, h / 2, Math.max(w, h) * 0.72);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,1)');
+  a.fillStyle = v;
+  a.fillRect(0, 0, w, h);
+
+  vctx.setTransform(1, 0, 0, 1, 0, 0);
+  vctx.imageSmoothingEnabled = true;
+  vctx.imageSmoothingQuality = 'high';
+  vctx.drawImage(aura, 0, 0, viz.width, viz.height);
+}
+
+/* black, then glow, then the sharp layer on top — shared by both styles.
+   Nothing lights the background itself: the beat shows in the glow. */
+function paintScene() {
+  vctx.setTransform(1, 0, 0, 1, 0, 0);
+  vctx.fillStyle = '#000';
+  vctx.fillRect(0, 0, viz.width, viz.height);
+
+  /* glow: a quarter-size copy, blurred and added back — cheap light */
+  gctx.clearRect(0, 0, glow.width, glow.height);
+  gctx.filter = 'blur(4px)';
+  gctx.drawImage(layer, 0, 0, glow.width, glow.height);
+  gctx.filter = 'none';
+  vctx.save();
+  vctx.globalCompositeOperation = 'lighter';
+  vctx.globalAlpha = reduceMotion ? 0.5 : 0.55 + 0.35 * pulse;
+  vctx.imageSmoothingQuality = 'high';
+  /* stretched over the whole canvas in device pixels, not css pixels */
+  vctx.drawImage(glow, 0, 0, viz.width, viz.height);
+  vctx.restore();
+
+  vctx.setTransform(1, 0, 0, 1, 0, 0);
+  vctx.drawImage(layer, 0, 0);
+}
+
+/* ---------- pacing ----------
+   Sound moves at 60 frames a second: a 120 Hz display would only double
+   the work for nothing the eye can use. The empty stage breathes at 20,
+   and once a paused spectrum has fallen still nothing is drawn at all —
+   the canvas keeps its last picture for free. */
+let lastT = performance.now();
+let waveTick = 0;
+let frameFailed = false;
+
+function settled() {
+  for (let i = 0; i < N; i++) if (level[i] > 0.001 || peak[i] > 0.001) return false;
+  return pulse < 0.01;
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const playing = analyser && ((source === 'file' && !audio.paused) || live);
+  const fps = playing ? 60 : source === 'none' ? 20 : 60;
+  /* a little slack, so a 60 Hz display never skips alternate frames */
+  if (now - lastT < 1000 / fps - 3) return;
+  if (!playing && source !== 'none' && !dirty && settled()) { lastT = now; return; }
+  dirty = false;
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  const t = now / 1000;
+  if (barCount() !== N || (actx && bands.binHz !== actx.sampleRate / 2 / analyser.frequencyBinCount)) buildBands();
+  /* one bad frame must not end the animation for good */
+  try {
+    if (W && H) {
+      const bass = step(dt, t);
+      if (style === 'radial') drawRadial(bass, t);
+      else if (style === 'aura') drawAura(dt);
+      else drawBars(bass);
+    }
+    if (source === 'file' && !audio.paused) {
+      $('tCur').textContent = fmtTime(audio.currentTime);
+      /* the seek bar only needs a few repaints a second */
+      if ((waveTick += dt) > 0.12) { waveTick = 0; drawWave(); }
+    }
+  } catch (e) {
+    if (!frameFailed) { frameFailed = true; console.error(e); }
+  }
+}
+
+/* while paused the loop is quiet, so the clock and bar follow a seek here */
+audio.addEventListener('seeked', () => { $('tCur').textContent = fmtTime(audio.currentTime); drawWave(); });
+
+/* ==========================================================================
+   Start
+   ========================================================================== */
+setSource('none');
+setVolume(+$('vol').value);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

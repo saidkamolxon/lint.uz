@@ -189,6 +189,7 @@ button:hover .kb, button:focus-visible .kb { opacity: 0.85; }
 .dot-csv  { background: #9333EA; }
 .dot-pdf  { background: #BE123C; }
 .dot-log  { background: #0369A1; }
+.dot-audio { background: #C026D3; }
 .fmt-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 
 /* ==========================================================================

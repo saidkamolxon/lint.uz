@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(fileURLToPath(import.meta.url));
 const SHARED = join(root, 'shared');
 const DIST = join(root, 'site', 'dist');
-const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log'];
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio'];
 
 await rm(DIST, { recursive: true, force: true });
 await mkdir(DIST, { recursive: true });

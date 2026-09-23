@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lint.one — format viewers that never send your data anywhere</title>
-<meta name="description" content="Client-side JSON, XML, YAML, CSV, PDF and log viewers, formatters and validators. Everything runs in your browser — open DevTools and watch: zero outbound requests.">
+<meta name="description" content="Client-side JSON, XML, YAML, CSV, PDF and log viewers, formatters and validators, and an audio player with a live spectrum. Everything runs in your browser — open DevTools and watch: zero outbound requests.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/shared/theme.css">
@@ -178,9 +178,9 @@ body {
 }
 
 /* ---------- the tools, one row ----------
-   Six formats is a set, and a set reads best all at once. The tiles are
+   Seven tools is a set, and a set reads best all at once. The tiles are
    trimmed to what identifies a tool — its mark, its name, its address — so
-   all six sit on one line on a desktop. Below that the row scrolls, and only
+   all seven sit on one line on a desktop. Below that the row scrolls, and only
    then does it drift, as a hint that it continues past the edge. */
 .tools-rail { margin: 48px 0 68px; position: relative; }
 
@@ -249,6 +249,7 @@ body {
 .t-csv  { --tool-hue: #9333EA; }
 .t-pdf  { --tool-hue: #BE123C; }
 .t-log  { --tool-hue: #0369A1; }
+.t-audio { --tool-hue: #C026D3; }
 
 /* Controls appear only when the row actually scrolls — on a wide screen
    every tool is visible and there is nothing to page through. */
@@ -444,6 +445,14 @@ footer .sp { flex: 1; }
       <p>Read pages, pull out text, see what the file contains.</p>
       <ul><li>Read</li><li>Extract text</li><li>Fonts</li><li>Dark page</li></ul>
     </a>
+
+    <a class="tool t-audio" href="https://audio.lint.one">
+      <span class="tool-mark">&#9834;</span>
+      <h2>Audio Player</h2>
+      <span class="host">audio.lint.one</span>
+      <p>Play a file, or any tab's sound, with a live spectrum.</p>
+      <ul><li>Spectrum</li><li>Tab audio</li><li>Waveform</li><li>Tags</li></ul>
+    </a>
   </nav>
   <div class="rail-foot">
     <div class="rail-dots" id="railDots"></div>
@@ -488,6 +497,7 @@ footer .sp { flex: 1; }
     <a href="https://csv.lint.one">CSV</a>
     <a href="https://pdf.lint.one">PDF</a>
     <a href="https://log.lint.one">Log</a>
+    <a href="https://audio.lint.one">Audio</a>
   </footer>
 
 </div>
@@ -548,7 +558,7 @@ THEMES.forEach(function (t) {
 
 
 /* ---------- the tools rail ----------
-   On a wide screen all six tools are visible and nothing moves: motion with
+   On a wide screen all seven tools are visible and nothing moves: motion with
    nowhere to go is just noise. When the row does overflow it drifts one tile
    at a time, and stops the instant anyone reaches for it. */
 (function () {

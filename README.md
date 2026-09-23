@@ -12,8 +12,9 @@
 | `⌸` | **[csv.lint.one](https://csv.lint.one)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
 | `P` | **[pdf.lint.one](https://pdf.lint.one)** | Page reader, text extraction, fonts, metadata, and what the file contains |
 | `≡` | **[log.lint.one](https://log.lint.one)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
+| `♪` | **[audio.lint.one](https://audio.lint.one)** | Plays a file or another tab's sound with a live spectrum; waveform seek, tags, levels |
 
-The landing page at **[lint.one](https://lint.one)** links all six.
+The landing page at **[lint.one](https://lint.one)** links all seven.
 
 The original domain, `lint.uz`, redirects here: every path and subdomain is
 preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
