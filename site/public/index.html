@@ -13,6 +13,20 @@
 <style>
 * { box-sizing: border-box; }
 
+/* The page's whole type scale. Every size below is one of these, so the
+   page reads as a few deliberate steps rather than a spread of near-misses.
+   13 is for code and the smallest print; 40 exists only so the headline
+   fits a phone without dropping to the section size. */
+:root {
+  --size-xs: 13px;
+  --size-s: 15px;
+  --size-m: 17px;
+  --size-l: 20px;
+  --size-xl: 28px;
+  --size-2xl: 40px;
+  --size-3xl: 56px;
+}
+
 /* IBM Plex Sans carries every word on the page: an engineering face, drawn
    for documentation and tools, sober enough to be believed about privacy.
    JetBrains Mono appears only where the page shows actual code, the same
@@ -20,13 +34,14 @@
 body {
   margin: 0;
   font-family: var(--display);
-  font-size: 17px;
+  font-size: var(--size-m);
   line-height: 1.6;
   background: var(--surface);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
+
+h1, h2 { text-wrap: balance; }
 
 .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
@@ -37,7 +52,7 @@ body {
 }
 .logo {
   display: flex; align-items: center; gap: 10px;
-  font-size: 19px; font-weight: 600; letter-spacing: -0.01em; line-height: 1;
+  font-size: var(--size-l); font-weight: 600; letter-spacing: -0.01em; line-height: 1;
   text-decoration: none; color: inherit;
 }
 .logo-mark {
@@ -49,59 +64,67 @@ body {
   background: var(--surface);
   mask: url("/shared/glyph.svg") center / 100% no-repeat;
 }
-.top-right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .ghost {
-  font: inherit; font-size: 15px;
+  font: inherit; font-size: var(--size-s); line-height: 1;
   color: var(--muted); text-decoration: none;
-  padding: 7px 12px; border-radius: 8px;
+  padding: 10px 12px; border-radius: 8px;
   background: none; border: none; cursor: pointer;
 }
 .ghost:hover { background: var(--row-hover); color: var(--ink); }
+.icon-btn { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
+.icon-btn svg { width: 18px; height: 18px; }
 
 /* ---------- the first screen ----------
-   Wide: the promise on the left, its proof on the right, every tool below —
-   short enough that the ribbon is in view without scrolling. Narrow: the
-   ribbon comes straight after the promise and the demo follows it. */
+   Wide: the promise on the left, its proof on the right. Narrow: the demo
+   follows the promise. */
 .first {
   display: grid;
-  grid-template-columns: minmax(24px, 1fr) minmax(0, 440px) 48px minmax(0, 584px) minmax(24px, 1fr);
+  grid-template-columns: minmax(0, 440fr) minmax(0, 584fr);
+  column-gap: 48px;
   align-items: center;
+  padding-top: 64px;
 }
-.first .top  { grid-column: 2 / 5; grid-row: 1; }
-.first .hero { grid-column: 2; grid-row: 2; }
-.first .demo { grid-column: 4; grid-row: 2; }
-.first .rail { grid-column: 1 / -1; grid-row: 3; }
 @media (max-width: 1000px) {
-  .first { grid-template-columns: 24px minmax(0, 1fr) 24px; }
-  .first .top, .first .hero { grid-column: 2; }
-  .first .rail { grid-row: 3; }
-  .first .demo { grid-column: 2; grid-row: 4; margin-top: 40px; }
+  .first { grid-template-columns: minmax(0, 1fr); row-gap: 48px; padding-top: 48px; }
 }
 
 /* ---------- hero ---------- */
-.hero { padding: 32px 0; }
 .hero h1 {
   margin: 0 0 20px;
-  font-size: clamp(36px, 4.4vw, 56px);
+  font-size: var(--size-3xl);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: -0.025em;
   max-width: 13em;
-  text-wrap: balance;
 }
 .hero p {
   margin: 0;
-  font-size: clamp(17px, 1.8vw, 20px);
+  font-size: var(--size-l);
   line-height: 1.5;
   color: var(--muted);
-  max-width: 44ch;
+  max-width: 40ch;
   text-wrap: pretty;
 }
+.act {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px;
+  margin-top: 32px;
+}
+/* The brand is monochrome: the one filled button is ink, and the tool hues
+   stay with the tools. */
+.open {
+  font: inherit; font-size: var(--size-m); font-weight: 600; line-height: 1;
+  padding: 14px 22px; border: none; border-radius: 10px;
+  background: var(--ink); color: var(--surface);
+  cursor: pointer;
+}
+.open:hover { background: color-mix(in srgb, var(--ink) 86%, var(--surface)); }
+.act-note { font-size: var(--size-s); color: var(--muted); }
 
 /* ---------- live demo ----------
    The viewer and the browser's Network panel in one frame: the file is
    parsed on the left, and the strip underneath counts, live, every request
-   this page has made. The promise is shown, not claimed. */
+   this page has sent elsewhere. The promise is shown, not claimed. */
 .demo {
   border: var(--hairline) solid var(--line);
   border-radius: 12px;
@@ -114,16 +137,16 @@ body {
   padding: 10px 16px;
   border-bottom: var(--hairline) solid var(--line);
   background: var(--sunken);
-  font-size: 14px;
+  font-size: var(--size-xs);
 }
 .demo-mark {
-  width: 20px; height: 20px; border-radius: 5px; flex: none;
+  width: 20px; height: 20px; border-radius: 4.7px; flex: none;
   background: #4F46E5;
 }
 .demo-mark::before {
   content: ""; display: block; width: 100%; height: 100%;
   background: #fff;
-  mask: url("/shared/glyph.svg") center / 100% no-repeat;
+  mask: url("/shared/glyphs/json.svg") center / 100% no-repeat;
 }
 .demo-host { color: var(--muted); }
 .demo-state {
@@ -135,7 +158,8 @@ body {
   content: ""; width: 7px; height: 7px; border-radius: 50%;
   background: currentColor;
 }
-.demo-state.bad { color: var(--warn); }
+/* half-typed text is not an error, so it is not coloured like one */
+.demo-state.typing { color: var(--faint); }
 
 .demo-body {
   display: grid;
@@ -143,7 +167,7 @@ body {
 }
 .demo-src {
   margin: 0; padding: 14px 12px 14px 0;
-  font-family: var(--mono); font-size: 14px; line-height: 1.6;
+  font-family: var(--mono); font-size: var(--size-xs); line-height: 1.7;
   overflow: hidden; white-space: pre;
   border-right: var(--hairline) solid var(--line);
   counter-reset: ln;
@@ -152,15 +176,16 @@ body {
 .demo-src .l::before {
   counter-increment: ln; content: counter(ln);
   position: absolute; left: 0; width: 32px;
-  text-align: right; font-size: 11.5px;
+  text-align: right;
   color: color-mix(in srgb, #4F46E5 70%, var(--muted));
 }
 .demo-src .l.cur::before { color: #fff; background: #4F46E5; border-radius: 3px; }
 .demo-tree {
   padding: 14px 16px; overflow: hidden;
-  font-family: var(--mono); font-size: 14px; line-height: 1.6;
+  font-family: var(--mono); font-size: var(--size-xs); line-height: 1.7;
 }
 .demo-tree .r { display: block; white-space: nowrap; }
+/* the type badges are pictograms, not text, so they sit outside the scale */
 .demo-tree .i {
   display: inline-block; width: 16px; height: 14px; border-radius: 3px;
   font-size: 8.5px; font-weight: 700; text-align: center; line-height: 14px;
@@ -184,15 +209,15 @@ body {
 .i-str { color: var(--t-str); background: color-mix(in srgb, var(--t-str) 15%, transparent); }
 .i-num { color: var(--t-num); background: color-mix(in srgb, var(--t-num) 15%, transparent); }
 .i-bool { color: var(--t-bool); background: color-mix(in srgb, var(--t-bool) 15%, transparent); }
-.cnt-s { color: var(--faint); font-family: var(--display); font-size: 11.5px; margin-left: 6px; }
+.cnt-s { color: var(--faint); font-family: var(--display); margin-left: 6px; }
 
 /* the Network strip, drawn after the browser's own panel */
 .net {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px;
+  display: flex; align-items: center; gap: 16px;
   padding: 0 16px;
   border-top: var(--hairline) solid var(--line);
   background: var(--sunken);
-  font-size: 14px; color: var(--muted);
+  font-size: var(--size-xs); color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 .net-tab {
@@ -203,33 +228,19 @@ body {
   color: var(--ink); font-weight: 600;
 }
 .net-out b { color: var(--ok); font-weight: 600; }
-.net-own { margin-left: auto; }
-.net-own b { color: var(--ink); font-weight: 600; }
 
-/* ---------- the tools ribbon ----------
-   One slow, endless drift, driven from the script below. Without JavaScript
-   or with reduced motion it is a plain row you scroll yourself. */
-.rail {
-  margin: 8px 0 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding: 4px 0;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
-          mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+/* ---------- tools ----------
+   Four across on a wide screen: seven tools make a full row and a row of
+   three that starts at the left edge like the text above it, so the grid
+   reads as a list rather than a centred picture. */
+.tools {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 80px 0 0; padding: 0; list-style: none;
 }
-.rail::-webkit-scrollbar { display: none; }
-.rail-track { display: flex; width: max-content; }
-.rail-set {
-  display: flex; gap: 14px;
-  margin: 0; padding: 0 14px 0 0; list-style: none;
-}
-/* the script turns sideways swipes into its own physics; up and down stay the page's */
-.rail.moving { cursor: grab; touch-action: pan-y; overflow: hidden; }
-/* Moved by transform, not scrolling: a scroll offset snaps to whole pixels,
-   and at a slow drift that snapping reads as a stutter. No will-change on
-   purpose — a promoted layer slides a picture of the text and smears it;
-   left in place, the text is drawn afresh, sharp, at every position. */
-.rail.dragging { cursor: grabbing; user-select: none; }
+@media (max-width: 1000px) { .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 64px; } }
+@media (max-width: 560px)  { .tools { grid-template-columns: minmax(0, 1fr); } }
 
 .tool {
   display: grid;
@@ -237,8 +248,8 @@ body {
   grid-template-rows: auto 1fr;
   column-gap: 12px; row-gap: 12px;
   align-items: center;
-  width: 300px; height: 100%;
-  padding: 18px 20px 20px 18px;
+  height: 100%;
+  padding: 20px;
   background: var(--raised);
   border: var(--hairline) solid var(--line);
   border-radius: 12px;
@@ -246,63 +257,53 @@ body {
   transition: border-color var(--t-fast);
 }
 .tool:hover { border-color: var(--tool-hue); }
-.tool:focus-visible { outline: 2px solid var(--tool-hue); outline-offset: 2px; }
+.tool:focus-visible { outline: 2px solid var(--tool-hue); outline-offset: 2px; border-radius: 12px; }
 .tool-mark {
-  width: 32px; height: 32px; border-radius: 7px;
+  width: 40px; height: 40px; border-radius: 9.375px; /* 15/64 of the tile, as everywhere */
   background: var(--tool-hue);
-  flex: none;
 }
 .tool-mark::before {
   content: ""; display: block; width: 100%; height: 100%;
   background: #fff;
-  mask: url("/shared/glyph.svg") center / 100% no-repeat;
+  mask: var(--glyph) center / 100% no-repeat;
 }
-.tool h2 { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
-.feat { grid-column: 1 / -1; align-self: start; margin: 0; padding: 0; list-style: none; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
-.feat li { position: relative; padding-left: 14px; }
-.feat li::before {
-  content: ""; position: absolute; left: 0; top: 0.62em;
-  width: 5px; height: 5px; border-radius: 50%; background: var(--tool-hue);
+.tool h2 { margin: 0; font-size: var(--size-l); font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+.tool p {
+  grid-column: 1 / -1; align-self: start;
+  margin: 0; font-size: var(--size-s); line-height: 1.5; color: var(--muted);
 }
 
-.t-json  { --tool-hue: #4F46E5; }
-.t-xml   { --tool-hue: #0F766E; }
-.t-yaml  { --tool-hue: #B45309; }
-.t-csv   { --tool-hue: #9333EA; }
-.t-pdf   { --tool-hue: #BE123C; }
-.t-log   { --tool-hue: #0369A1; }
-.t-audio { --tool-hue: #C026D3; }
+.t-json  { --tool-hue: #4F46E5; --glyph: url("/shared/glyphs/json.svg"); }
+.t-xml   { --tool-hue: #0F766E; --glyph: url("/shared/glyphs/xml.svg"); }
+.t-yaml  { --tool-hue: #B45309; --glyph: url("/shared/glyphs/yaml.svg"); }
+.t-csv   { --tool-hue: #4D7C0F; --glyph: url("/shared/glyphs/csv.svg"); }
+.t-pdf   { --tool-hue: #BE123C; --glyph: url("/shared/glyphs/pdf.svg"); }
+.t-log   { --tool-hue: #0369A1; --glyph: url("/shared/glyphs/log.svg"); }
+.t-audio { --tool-hue: #C026D3; --glyph: url("/shared/glyphs/audio.svg"); }
 
-/* ---------- why ---------- */
-.why { padding: 96px 0 72px; }
-.why h2 {
-  margin: 0 0 36px;
-  font-size: clamp(28px, 3.4vw, 40px); font-weight: 600;
-  line-height: 1.1; letter-spacing: -0.02em;
-  max-width: 16em;
-  text-wrap: balance;
-}
-.why dl { margin: 0; }
-.why .row {
+/* ---------- facts ----------
+   What the hero cannot fit: how to check the promise, and what it costs
+   nothing to rely on. One quiet row, no heading. */
+.facts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
-  gap: 32px;
-  padding: 24px 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px 48px;
+  margin-top: 96px; padding-top: 32px;
   border-top: var(--hairline) solid var(--line);
 }
-.why dt { font-size: 18px; font-weight: 600; line-height: 1.4; }
-.why dd { margin: 0; color: var(--muted); max-width: 60ch; }
+.facts p { margin: 0; font-size: var(--size-s); line-height: 1.55; color: var(--muted); max-width: 36ch; }
+.facts b { display: block; color: var(--ink); font-weight: 600; }
 
 /* ---------- footer ---------- */
 footer {
-  padding: 28px 0 44px;
+  margin-top: 96px;
+  padding: 24px 0 44px;
   border-top: var(--hairline) solid var(--line);
   display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
-  font-size: 14px; color: var(--faint);
+  font-size: var(--size-s); color: var(--faint);
 }
-footer a { color: var(--muted); text-decoration: none; }
+footer a { color: var(--muted); text-decoration: none; margin-left: auto; }
 footer a:hover { color: var(--ink); text-decoration: underline; }
-footer .sp { flex: 1; }
 
 /* ---------- theme menu ---------- */
 .menu-wrap { position: relative; }
@@ -319,7 +320,7 @@ footer .sp { flex: 1; }
   display: flex; align-items: center; gap: 9px;
   width: 100%; padding: 7px 9px; border: none; background: none;
   border-radius: var(--radius);
-  font: inherit; font-size: 14px; color: var(--ink);
+  font: inherit; font-size: var(--size-s); color: var(--ink);
   text-align: left; cursor: pointer;
 }
 .menu-item:hover { background: var(--row-hover); }
@@ -332,32 +333,50 @@ footer .sp { flex: 1; }
   background: linear-gradient(135deg, var(--sw-bg) 0 50%, var(--sw-fg) 50% 100%);
 }
 
+/* ---------- drop veil ----------
+   The whole window takes a file. While one is dragged over it the page
+   dims behind a still frame; nothing bounces, because the only news is
+   "you can let go". It never takes the pointer, so the drag events keep
+   arriving from the page underneath. */
+.drop {
+  position: fixed; inset: 0; z-index: 60;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  pointer-events: none;
+}
+.drop[hidden] { display: none; }
+.drop-frame {
+  height: 100%;
+  display: grid; place-items: center;
+  border: 2px dashed var(--line-strong);
+  border-radius: 20px;
+  font-size: var(--size-xl); font-weight: 600; letter-spacing: -0.01em;
+}
+
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
 
 @media (max-width: 720px) {
   .wrap { padding: 0 16px; }
-  .first { grid-template-columns: 16px minmax(0, 1fr) 16px; }
-  .hero { padding: 20px 0 8px; }
+  .top { padding: 14px 0; }
+  .hero h1 { font-size: var(--size-2xl); }
+  .hero p { font-size: var(--size-m); }
   .demo-body { grid-template-columns: minmax(0, 1fr); }
   .demo-src { border-right: none; border-bottom: var(--hairline) solid var(--line); }
-  .demo-src, .demo-tree { font-size: 12px; }
-  .net-own { display: none; }
-  .net { gap: 6px 14px; }
-
-  .tool { width: 260px; }
-  .why { padding: 64px 0 48px; }
-  .why .row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 22px 0; }
+  /* a narrower number column keeps the longest line whole on a 320px phone */
+  .demo-src .l { padding-left: 36px; }
+  .demo-src .l::before { width: 26px; }
+  .facts { grid-template-columns: minmax(0, 1fr); margin-top: 64px; }
+  footer { margin-top: 64px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cursor { animation: none; }
+  .tool { transition: none; }
 }
 </style>
 </head>
 <body>
 
-<!-- The first screen: the promise, its proof, and every tool — the ribbon
-     sits inside the first view without scrolling, on a phone too. -->
-<div class="first">
+<div class="wrap">
   <header class="top">
     <a class="logo" href="/">
       <span class="logo-mark" aria-hidden="true"></span>
@@ -366,170 +385,121 @@ footer .sp { flex: 1; }
     <div class="top-right">
       <a class="ghost" href="https://github.com/saidkamolxon/lint.uz">Source</a>
       <div class="menu-wrap">
-        <button class="ghost" id="themeBtn" aria-haspopup="true" aria-expanded="false">Theme</button>
+        <button class="ghost icon-btn" id="themeBtn" aria-label="Theme" title="Theme" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/></svg>
+        </button>
         <div class="menu" id="themeMenu" role="menu"></div>
       </div>
     </div>
   </header>
 
-  <section class="hero">
-    <h1>Read your files. Send&nbsp;nothing.</h1>
-    <p>
-      JSON, XML, YAML, CSV, logs, PDF and audio open right in your browser —
-      even offline. Nothing leaves your device.
-    </p>
-  </section>
+  <main>
+    <div class="first">
+      <section class="hero">
+        <h1>Read your files. Send&nbsp;nothing.</h1>
+        <p>
+          JSON, XML, YAML, CSV, logs, PDF and audio open right in your browser —
+          even offline. Nothing leaves your device.
+        </p>
+        <div class="act">
+          <button class="open" id="openBtn" type="button">Open a file</button>
+          <span class="act-note">or drop one anywhere on this page</span>
+          <input type="file" id="fileIn" hidden>
+        </div>
+      </section>
 
-    <!-- The demo is the real thing: this page parses the text below with the
-         same JSON.parse the tool uses, and draws the tree from the result.
-         The Network strip reads the browser's own record of requests. -->
-    <div class="demo">
-      <div class="demo-chrome" aria-hidden="true">
-        <span class="demo-mark"></span>
-        <span class="demo-host">lint.one/json</span>
-        <span class="demo-state" id="demoState">valid</span>
-      </div>
-      <div class="demo-body" aria-hidden="true">
-        <pre class="demo-src" id="demoSrc"></pre>
-        <div class="demo-tree" id="demoTree"></div>
-      </div>
-      <div class="net">
-        <span class="net-tab">Network</span>
-        <span class="net-out"><b id="netOut">0</b> requests to other servers</span>
-        <span class="net-own"><b id="netOwn">0</b> files loaded from lint.one</span>
+      <!-- The demo is the real thing: this page parses the text below with the
+           same JSON.parse the tool uses, and draws the tree from the result.
+           The Network strip reads the browser's own record of requests. -->
+      <div class="demo">
+        <div class="demo-chrome" aria-hidden="true">
+          <span class="demo-mark"></span>
+          <span class="demo-host">lint.one/json</span>
+          <span class="demo-state" id="demoState">valid</span>
+        </div>
+        <div class="demo-body" aria-hidden="true">
+          <pre class="demo-src" id="demoSrc"></pre>
+          <div class="demo-tree" id="demoTree"></div>
+        </div>
+        <div class="net">
+          <span class="net-tab">Network</span>
+          <span class="net-out"><b id="netOut">0</b> <span id="netWord">requests have</span> left this page</span>
+        </div>
       </div>
     </div>
 
-<nav class="rail" id="rail" aria-label="Tools">
-  <div class="rail-track">
-    <ul class="rail-set">
-      <li><a class="tool t-json" href="/json/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>JSON</h2>
-        <ul class="feat">
-          <li>Tree with copyable paths</li>
-          <li>Compare two versions</li>
-          <li>Format, minify, unescape</li>
-          <li>Convert to YAML</li>
-        </ul>
-      </a></li>
-      <li><a class="tool t-xml" href="/xml/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>XML</h2>
-        <ul class="feat">
-          <li>Elements and attributes as a tree</li>
-          <li>XPath of any node</li>
-          <li>Format and minify</li>
-          <li>Convert to JSON</li>
-        </ul>
-      </a></li>
-      <li><a class="tool t-yaml" href="/yaml/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>YAML</h2>
-        <ul class="feat">
-          <li>Indentation checked as you type</li>
-          <li>Several documents in one file</li>
-          <li>YAML ↔ JSON</li>
-        </ul>
-      </a></li>
-      <li><a class="tool t-csv" href="/csv/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>CSV</h2>
-        <ul class="feat">
-          <li>Sortable table</li>
-          <li>Delimiter found for you</li>
-          <li>Broken rows flagged</li>
-          <li>Convert to JSON</li>
-        </ul>
-      </a></li>
-      <li><a class="tool t-log" href="/log/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>Logs</h2>
-        <ul class="feat">
-          <li>Gigabyte files open fast</li>
-          <li>Filter by severity</li>
-          <li>Stack traces folded</li>
-          <li>Map of errors to jump to</li>
-        </ul>
-      </a></li>
-      <li><a class="tool t-pdf" href="/pdf/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>PDF</h2>
-        <ul class="feat">
-          <li>Read and zoom the pages</li>
-          <li>Find in the text</li>
-          <li>Contents, fonts, metadata</li>
-        </ul>
-      </a></li>
-      <li><a class="tool t-audio" href="/audio/">
-        <span class="tool-mark" aria-hidden="true"></span>
-        <h2>Audio</h2>
-        <ul class="feat">
-          <li>A file, a tab or a microphone</li>
-          <li>Live spectrum in five styles</li>
-          <li>Seek on the waveform</li>
-          <li>Sample rate, loudness, tags</li>
-        </ul>
-      </a></li>
-    </ul>
-  </div>
-</nav>
-</div>
+    <nav aria-label="Tools">
+      <ul class="tools">
+        <li><a class="tool t-json" href="/json/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>JSON</h2>
+          <p>A tree you can search, with the path to any value.</p>
+        </a></li>
+        <li><a class="tool t-xml" href="/xml/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>XML</h2>
+          <p>Elements as a tree, with the XPath of any node.</p>
+        </a></li>
+        <li><a class="tool t-yaml" href="/yaml/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>YAML</h2>
+          <p>Indentation checked as you type, and JSON both ways.</p>
+        </a></li>
+        <li><a class="tool t-csv" href="/csv/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>CSV</h2>
+          <p>A sortable table that finds the delimiter and flags broken rows.</p>
+        </a></li>
+        <li><a class="tool t-pdf" href="/pdf/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>PDF</h2>
+          <p>Read, zoom and search the pages, and see what the file contains.</p>
+        </a></li>
+        <li><a class="tool t-log" href="/log/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>Logs</h2>
+          <p>Huge files open fast, filtered by severity, stack traces folded.</p>
+        </a></li>
+        <li><a class="tool t-audio" href="/audio/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>Audio</h2>
+          <p>A file, a tab or a microphone, with a live spectrum.</p>
+        </a></li>
+      </ul>
+    </nav>
 
-<div class="wrap">
-  <section class="why">
-    <h2>No server, so nothing to leak.</h2>
-    <dl>
-      <div class="row">
-        <dt>Check it yourself</dt>
-        <dd>
-          Open the Network tab and paste something secret. No request goes
-          out.
-        </dd>
-      </div>
-      <div class="row">
-        <dt>Works offline</dt>
-        <dd>After one visit every tool opens with no connection at all.</dd>
-      </div>
-      <div class="row">
-        <dt>Large files</dt>
-        <dd>A 40&nbsp;MB file opens without freezing the tab.</dd>
-      </div>
-    </dl>
-  </section>
+    <section class="facts" aria-label="Details">
+      <p><b>Check it yourself.</b> Open the Network panel in DevTools and paste something secret.</p>
+      <p><b>Works offline.</b> After one visit every tool opens with no connection at all.</p>
+      <p><b>Built for big files.</b> A 40&nbsp;MB file opens without freezing the tab.</p>
+    </section>
+  </main>
 
   <footer>
     <span>MIT licensed. No accounts, no analytics.</span>
-    <span class="sp"></span>
     <a href="https://github.com/saidkamolxon/lint.uz">GitHub</a>
-    <a href="/json/">JSON</a>
-    <a href="/xml/">XML</a>
-    <a href="/yaml/">YAML</a>
-    <a href="/csv/">CSV</a>
-    <a href="/pdf/">PDF</a>
-    <a href="/log/">Logs</a>
-    <a href="/audio/">Audio</a>
   </footer>
+</div>
+
+<div class="drop" id="drop" hidden aria-hidden="true">
+  <div class="drop-frame">Drop to open</div>
 </div>
 
 <script>
 (function () {
 'use strict';
 
+/* Contrast is not a choice here: it follows the system's prefers-contrast
+   inside whichever of these three is active. */
 var THEMES = [
-  { id: '',         name: 'System',   bg: 'var(--surface)', fg: 'var(--ink)' },
-  { id: 'daylight', name: 'Daylight', bg: '#FBFBFC', fg: '#1A1D23' },
-  { id: 'slate',    name: 'Slate',    bg: '#1B1E25', fg: '#82B5F0' },
-  { id: 'paper',    name: 'Paper',    bg: '#F5F1E8', fg: '#8A6114' },
-  { id: 'midnight', name: 'Midnight', bg: '#08090B', fg: '#4FD68F' },
-  { id: 'contrast', name: 'Contrast', bg: '#FFFFFF', fg: '#000000' }
+  { id: '',         name: 'System', bg: 'var(--surface)', fg: 'var(--ink)' },
+  { id: 'daylight', name: 'Light',  bg: '#FBFBFC', fg: '#1A1D23' },
+  { id: 'slate',    name: 'Dark',   bg: '#15171C', fg: '#E6E9F0' }
 ];
-
-var readTheme = LintTheme.read, writeTheme = LintTheme.write;
 
 var menu = document.getElementById('themeMenu');
 var btn = document.getElementById('themeBtn');
-var current = readTheme();
+var current = LintTheme.read();
 
 THEMES.forEach(function (t) {
   var item = document.createElement('button');
@@ -540,7 +510,7 @@ THEMES.forEach(function (t) {
     '"></span><span>' + t.name + '</span><span class="tick">✓</span>';
   item.addEventListener('click', function () {
     LintTheme.apply(t.id);
-    writeTheme(t.id);
+    LintTheme.write(t.id);
     var all = menu.querySelectorAll('.menu-item');
     for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-checked', 'false');
     item.setAttribute('aria-checked', 'true');
@@ -550,121 +520,119 @@ THEMES.forEach(function (t) {
   menu.appendChild(item);
 });
 
-/* ---------- the tools ribbon ----------
-   A second copy of the set makes the loop seamless: the rail scrolls itself,
-   and whenever it passes one set's width it steps back by exactly that much,
-   so the same cards are under the pointer and nothing jumps. The copy works
-   under the pointer like the original, but the keyboard and screen readers
-   meet each tool once. */
+/* ---------- opening a file ----------
+   The page is a drop target, and the button a picker. Either way the file
+   goes to the tool that reads it, through IndexedDB on this device: a File
+   survives structured cloning, so the tool gets the real thing, and nothing
+   about it is ever put in a URL. */
 (function () {
-  var rail = document.getElementById('rail');
-  if (!rail || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var set = rail.querySelector('.rail-set');
-  /* enough copies that one set's width of scrolling never runs out of cards,
-     even on a screen wider than the set */
-  var copy;
-  for (var n = Math.max(1, Math.ceil(rail.clientWidth / set.offsetWidth)); n > 0; n--) {
-    var c = set.cloneNode(true);
-    c.setAttribute('aria-hidden', 'true');
-    c.querySelectorAll('a').forEach(function (a) { a.tabIndex = -1; });
-    set.parentNode.appendChild(c);
-    copy = copy || c;
-  }
-  rail.classList.add('moving');
+  var BY_EXT = {
+    json: 'json', geojson: 'json',
+    /* one record per line is a log to read, not one document to parse */
+    jsonl: 'log', ndjson: 'log',
+    xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
+    rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
+    yaml: 'yaml', yml: 'yaml',
+    csv: 'csv', tsv: 'csv', psv: 'csv',
+    pdf: 'pdf',
+    log: 'log', txt: 'log', out: 'log', err: 'log',
+    mp3: 'audio', wav: 'audio', flac: 'audio', ogg: 'audio', oga: 'audio',
+    opus: 'audio', m4a: 'audio', aac: 'audio', weba: 'audio', webm: 'audio',
+    aiff: 'audio'
+  };
 
-  /* One velocity drives it all. Left alone it eases back to the drift; a
-     pointer resting on the rail, or the keyboard in it, eases it to a stop.
-     A drag moves the rail with the hand, and letting go throws it at the
-     speed the hand was moving — a flick spins it, a slow release barely
-     nudges it — and friction brings it back to the drift. */
-  var DRIFT = 28;          // px per second, the resting speed
-  var EASE = 0.8;          // seconds for the gap to the target speed to shrink ~63%
-  var MAX_SPEED = 6000;    // px per second, however hard the flick
-  var SETTLE = 0.35;       // seconds: how gently the target speed itself turns
-  var pos = 0, vel = DRIFT, goal = DRIFT, last = 0;
-  var hovered = false, drag = null, dragged = false;
-  var track = set.parentNode;
-
-  function period() { return copy.offsetLeft - set.offsetLeft; }
-  function wrap(x) {
-    var w = period();
-    return w > 0 ? ((x % w) + w) % w : x;
+  function byName(name) {
+    var m = /\.([^.]+)$/.exec(name);
+    return m ? BY_EXT[m[1].toLowerCase()] : undefined;
   }
-  function step(now) {
-    var dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
-    last = now;
-    if (!drag) {
-      /* :focus-visible — a card the keyboard reached, not one a mouse press
-         left focused behind it */
-      var target = hovered || rail.querySelector(':focus-visible') ? 0 : DRIFT;
-      /* the aim eases too, so stopping under the pointer and setting off
-         again start and end without a jolt; a throw still meets friction
-         at once */
-      goal += (target - goal) * (1 - Math.exp(-dt / SETTLE));
-      vel += (goal - vel) * (1 - Math.exp(-dt / EASE));
-      pos += vel * dt;
+
+  function byType(t) {
+    if (t === 'application/pdf') return 'pdf';
+    if (/^audio\//.test(t)) return 'audio';
+    if (t === 'application/json') return 'json';
+    if (t === 'text/csv') return 'csv';
+    if (/[\/+]xml$/.test(t)) return 'xml';
+  }
+
+  /* the last resort: what the text starts with */
+  function sniff(file, done) {
+    file.slice(0, 4096).text().then(function (s) {
+      var c = s.replace(/^﻿/, '').trim().charAt(0);
+      done(c === '{' || c === '[' ? 'json' : c === '<' ? 'xml' : 'log');
+    }, function () { done('log'); });
+  }
+
+  /* If IndexedDB is missing, blocked or full, the tool still opens and the
+     file can be dropped again there. */
+  function handOff(tool, file) {
+    var gone = false;
+    function go() {
+      if (gone) return;
+      gone = true;
+      location.href = '/' + tool + '/';
     }
-    pos = wrap(pos);
-    track.style.transform = 'translateX(' + (-pos) + 'px)';
-    requestAnimationFrame(step);
+    try {
+      var req = indexedDB.open('lintone', 1);
+      req.onupgradeneeded = function () {
+        if (!req.result.objectStoreNames.contains('handoff')) req.result.createObjectStore('handoff');
+      };
+      req.onsuccess = function () {
+        var db = req.result;
+        try {
+          var tx = db.transaction('handoff', 'readwrite');
+          tx.objectStore('handoff').put({ tool: tool, file: file, at: Date.now() }, 'file');
+          tx.oncomplete = function () { db.close(); go(); };
+          tx.onerror = tx.onabort = go;
+        } catch (e) { go(); }
+      };
+      req.onerror = req.onblocked = go;
+    } catch (e) { go(); }
   }
-  requestAnimationFrame(step);
 
-  /* a sideways wheel or trackpad swipe moves it too */
-  rail.addEventListener('wheel', function (e) {
-    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+  function open(file) {
+    if (!file) return;
+    var tool = byName(file.name) || byType(file.type);
+    if (tool) handOff(tool, file);
+    else sniff(file, function (t) { handOff(t, file); });
+  }
+
+  var input = document.getElementById('fileIn');
+  document.getElementById('openBtn').addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    open(input.files[0]);
+    input.value = '';
+  });
+
+  /* Enter and leave fire for every element the drag crosses, so the veil
+     counts them and lifts only when the drag has left the window. Text or a
+     link dragged around the page is not a file and is left alone. */
+  var veil = document.getElementById('drop');
+  var depth = 0;
+  function hasFiles(e) {
+    var types = e.dataTransfer && e.dataTransfer.types;
+    return !!types && Array.prototype.indexOf.call(types, 'Files') !== -1;
+  }
+  addEventListener('dragenter', function (e) {
+    if (!hasFiles(e)) return;
+    depth++;
+    veil.hidden = false;
+  });
+  addEventListener('dragleave', function (e) {
+    if (!hasFiles(e)) return;
+    if (--depth <= 0) { depth = 0; veil.hidden = true; }
+  });
+  addEventListener('dragover', function (e) {
+    if (!hasFiles(e)) return;
     e.preventDefault();
-    pos += e.deltaX;
-  }, { passive: false });
-  /* tabbing to a card out of view makes the browser scroll the rail to it;
-     that scroll is folded into the position, so the two never add up */
-  rail.addEventListener('scroll', function () {
-    pos += rail.scrollLeft;
-    rail.scrollLeft = 0;
+    e.dataTransfer.dropEffect = 'copy';
   });
-
-  rail.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') hovered = true; });
-  rail.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hovered = false; });
-
-  /* mouse and finger alike; the page still scrolls up and down over it */
-  rail.addEventListener('pointerdown', function (e) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    drag = { x: e.clientX, pos: pos, samples: [{ x: e.clientX, t: e.timeStamp }] };
-    dragged = false;
-    vel = 0;
+  addEventListener('drop', function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth = 0;
+    veil.hidden = true;
+    open(e.dataTransfer.files[0]);
   });
-  window.addEventListener('pointermove', function (e) {
-    if (!drag) return;
-    var dx = e.clientX - drag.x;
-    if (!dragged && Math.abs(dx) > 5) { dragged = true; rail.classList.add('dragging'); }
-    if (!dragged) return;
-    var p = drag.pos - dx, w = wrap(p);
-    /* stepping back a set mid-drag moves where the drag is measured from */
-    drag.pos += w - p;
-    pos = w;
-    drag.samples.push({ x: e.clientX, t: e.timeStamp });
-    while (drag.samples.length > 2 && e.timeStamp - drag.samples[0].t > 100) drag.samples.shift();
-  });
-  function release(e) {
-    if (!drag) return;
-    /* the hand's speed over its last tenth of a second; a hand that had
-       stopped before letting go throws nothing */
-    var s = drag.samples, a = s[0], b = s[s.length - 1];
-    var span = (e.timeStamp - a.t) / 1000;
-    var fresh = e.timeStamp - b.t < 80;
-    if (dragged && e.type === 'pointerup' && fresh && span > 0.01) {
-      vel = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, -(b.x - a.x) / span));
-    }
-    drag = null;
-    rail.classList.remove('dragging');
-  }
-  window.addEventListener('pointerup', release);
-  window.addEventListener('pointercancel', release);
-  /* a drag that ends on a card is not a click on it */
-  rail.addEventListener('click', function (e) {
-    if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; }
-  }, true);
-  rail.addEventListener('dragstart', function (e) { e.preventDefault(); });
 })();
 
 /* ---------- the hero demo ----------
@@ -719,21 +687,22 @@ THEMES.forEach(function (t) {
     }
     srcEl.innerHTML = html;
 
-    /* the real parse — the same call the tool makes */
+    /* the real parse — the same call the tool makes. Until the text is
+       whole it cannot parse, and that is typing, not a fault. */
     try {
       var value = JSON.parse(text);
       stateEl.textContent = 'valid';
-      stateEl.classList.remove('bad');
+      stateEl.classList.remove('typing');
       drawTree(value);
     } catch (e) {
-      stateEl.textContent = 'parsing…';
-      stateEl.classList.add('bad');
+      stateEl.textContent = 'typing…';
+      stateEl.classList.add('typing');
     }
   }
 
   var ICON = {
     object: ['i-obj', '{}'], array: ['i-arr', '[]'], string: ['i-str', 'ab'],
-    number: ['i-num', '#'], boolean: ['i-bool', '\u2713']
+    number: ['i-num', '#'], boolean: ['i-bool', '✓']
   };
 
   function drawTree(v) {
@@ -744,13 +713,13 @@ THEMES.forEach(function (t) {
       var spec = ICON[t] || ICON.object;
       var pad = '<span style="display:inline-block;width:' + (depth * 13) + 'px"></span>';
       var caret = (t === 'object' || t === 'array')
-        ? '<span class="caret-s">\u25be</span>' : '<span class="caret-s"> </span>';
+        ? '<span class="caret-s">▾</span>' : '<span class="caret-s"> </span>';
       var label = key === undefined ? '' :
         '<span class="j-key">' + esc(key) + '</span><span class="j-punct">:</span> ';
       var tail;
       if (t === 'object' || t === 'array') {
         var n = t === 'array' ? val.length : Object.keys(val).length;
-        tail = '<span class="j-punct">' + (t === 'array' ? '[ \u2026 ]' : '{ \u2026 }') +
+        tail = '<span class="j-punct">' + (t === 'array' ? '[ … ]' : '{ … }') +
           '</span><span class="cnt-s">' + n +
           (t === 'array' ? (n === 1 ? ' item' : ' items') : (n === 1 ? ' key' : ' keys')) +
           '</span>';
@@ -792,20 +761,19 @@ THEMES.forEach(function (t) {
 
 /* ---------- the Network strip ----------
    Read from the browser's own record of what this page has fetched, and kept
-   live: a request made at any moment, to anywhere, would show up here. The
-   page itself counts as the first file from lint.one. */
+   live: a request to any other server, made at any moment, would show up
+   here. Loading the page's own files from lint.one is not leaving it. */
 (function () {
   var out = document.getElementById('netOut');
-  var own = document.getElementById('netOwn');
+  var word = document.getElementById('netWord');
   if (!out || !window.PerformanceObserver) return;
-  var n = { out: 0, own: 1 };
+  var n = 0;
   new PerformanceObserver(function (list) {
     list.getEntries().forEach(function (r) {
-      if (new URL(r.name, location.href).origin === location.origin) n.own++;
-      else n.out++;
+      if (new URL(r.name, location.href).origin !== location.origin) n++;
     });
-    out.textContent = n.out;
-    own.textContent = n.own;
+    out.textContent = n;
+    word.textContent = n === 1 ? 'request has' : 'requests have';
   }).observe({ type: 'resource', buffered: true });
 })();
 
