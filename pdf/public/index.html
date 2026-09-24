@@ -190,6 +190,19 @@ body.show-links .lnk {
 /* ---------- reading position ----------
    A label by default; it becomes an input only when you mean to jump. */
 .pagebox { display: flex; align-items: center; gap: 2px; }
+/* Between two spacers the position would sit in the middle of whatever the
+   left and right groups leave over, and drift with the file name's length.
+   It belongs over the page instead: centred on the page column, which the
+   script keeps in --page-center as side panels open and the window resizes.
+   Narrow windows keep it in the flow, where it cannot collide with the chip. */
+@media (min-width: 1100px) {
+  .pdf-toolbar { position: relative; }
+  .pdf-toolbar .pagebox {
+    position: absolute; top: 50%;
+    left: var(--page-center, 50%);
+    transform: translate(-50%, -50%);
+  }
+}
 .pagebox[hidden] { display: none; }
 .page-pos {
   font-family: var(--mono); font-size: var(--fs-base);
@@ -439,7 +452,7 @@ document.documentElement.style.setProperty('--hue-ink', c.hueInk);
 document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/pdf.svg")');
 
 $('app').innerHTML = `
-  <header class="toolbar">
+  <header class="toolbar pdf-toolbar">
     <a class="brand" href="/" title="All tools">
       <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
@@ -1779,6 +1792,15 @@ window.addEventListener('resize', () => {
     rerender();
   }, 220);
 });
+
+/* the page position sits over the page column (see .pdf-toolbar .pagebox);
+   clientWidth leaves out the scrollbar, as the centred pages do */
+new ResizeObserver(() => {
+  const pages = $('pages');
+  const left = pages.getBoundingClientRect().left;
+  document.querySelector('.pdf-toolbar').style
+    .setProperty('--page-center', (left + pages.clientWidth / 2) + 'px');
+}).observe($('pages'));
 
 resetView();
 if (LintApp.takeHandoff) LintApp.takeHandoff('pdf', openFile);
