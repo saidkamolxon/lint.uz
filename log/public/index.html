@@ -318,8 +318,15 @@ body.dragover #viewport::after {
 :root[data-contrast="more"] .g-time,
 :root[data-contrast="more"] .fold-note { color: var(--muted); }
 
+/* A phone cannot fit the filter and the severity chips beside Open: they
+   take a second row of the toolbar, which the break starts. */
+.row-break { display: none; }
 @media (max-width: 760px) {
-  .brand-text { display: none; }
+  .log-toolbar { flex-wrap: wrap; row-gap: var(--s2); }
+  .log-toolbar .row-break:not([hidden]) { display: block; order: 1; flex-basis: 100%; height: 0; }
+  .log-toolbar .filter-wrap, .log-toolbar #filterCount, .log-toolbar .sev-filters { order: 1; }
+  .log-toolbar .filter-wrap { flex: 1 1 0; min-width: 0; max-width: none; }
+  .log-toolbar #filterCount { min-width: 0; }
   .sev-chip .n { display: none; }
   #density { width: 10px; }
 }
@@ -349,7 +356,6 @@ const c = window.LINT_CONFIG;
 
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
-document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/log.svg")');
 
 const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
 const ALT = LintApp.isMac ? '⌥' : 'Alt+';
@@ -358,9 +364,8 @@ const ALT = LintApp.isMac ? '⌥' : 'Alt+';
    Chrome
    ========================================================================== */
 $('app').innerHTML = `
-  <header class="toolbar">
+  <header class="toolbar log-toolbar">
     <a class="brand" href="/" title="All tools">
-      <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>
       </span>
@@ -368,6 +373,7 @@ $('app').innerHTML = `
     <button id="btnOpen" class="primary" title="Open a log, or drop one anywhere">Open</button>
     <span class="sep hide-sm needs-file"></span>
 
+    <span class="row-break needs-file" aria-hidden="true"></span>
     <label class="filter-wrap needs-file">
       <input id="filter" type="text" spellcheck="false" autocomplete="off"
              placeholder="Filter lines (use -word to hide)" aria-label="Filter lines">
