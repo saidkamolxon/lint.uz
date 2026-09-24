@@ -1633,6 +1633,17 @@ function init(config) {
 var HANDOFF_TTL = 60000;
 
 function takeHandoff(toolId, cb) {
+  /* The other way a file arrives: from the OS. Once lint.one is installed,
+     "Open with lint.one" (or a double-click, if the user made it the
+     default) launches the page its manifest file_handler names, and the
+     browser queues the file here. Every tool calls takeHandoff once at
+     boot, so each takes its own files without further wiring. */
+  if ('launchQueue' in window) {
+    window.launchQueue.setConsumer(function (params) {
+      var handle = params.files && params.files[0];
+      if (handle) handle.getFile().then(cb, function () {});
+    });
+  }
   try {
     var req = indexedDB.open('lintone', 1);
     req.onupgradeneeded = function () {

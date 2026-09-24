@@ -28,6 +28,17 @@ and they work as subdomains too, so `yml.lint.one` lands on `lint.one/yaml/`.
 
 ---
 
+## Install it
+
+lint.one is one installable app (Chrome and Edge: the install icon in the
+address bar; Safari: Share → Add to Dock / Home Screen). Installed, it shows
+up in the OS **Open with** menu for every format above — a `.pdf` opens in
+the PDF viewer, a `.log` in Logs — and can be made the default app for
+any of them. The manifest's `file_handlers` send each type to its page;
+the file is handed to the page by the browser, never uploaded.
+
+---
+
 ## Privacy
 
 **Your data never leaves your browser.**

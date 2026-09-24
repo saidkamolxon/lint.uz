@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://lint.one/</loc></url>
+  <url><loc>https://lint.one/json/</loc></url>
+  <url><loc>https://lint.one/xml/</loc></url>
+  <url><loc>https://lint.one/yaml/</loc></url>
+  <url><loc>https://lint.one/csv/</loc></url>
+  <url><loc>https://lint.one/pdf/</loc></url>
+  <url><loc>https://lint.one/log/</loc></url>
+  <url><loc>https://lint.one/audio/</loc></url>
+  <url><loc>https://lint.one/sqlite/</loc></url>
+</urlset>
