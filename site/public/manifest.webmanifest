@@ -15,19 +15,23 @@
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "JSON", "url": "/json/", "icons": [{ "src": "/json/favicon.svg", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "PDF", "url": "/pdf/", "icons": [{ "src": "/pdf/favicon.svg", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "Logs", "url": "/log/", "icons": [{ "src": "/log/favicon.svg", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "CSV", "url": "/csv/", "icons": [{ "src": "/csv/favicon.svg", "sizes": "any", "type": "image/svg+xml" }] }
+    { "name": "JSON", "url": "/json/", "icons": [{ "src": "/icons/file-json.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "XML", "url": "/xml/", "icons": [{ "src": "/icons/file-xml.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "YAML", "url": "/yaml/", "icons": [{ "src": "/icons/file-yaml.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "CSV", "url": "/csv/", "icons": [{ "src": "/icons/file-csv.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "PDF", "url": "/pdf/", "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "Logs", "url": "/log/", "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "Audio", "url": "/audio/", "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "SQLite", "url": "/sqlite/", "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] }
   ],
   "file_handlers": [
-    { "action": "/json/", "accept": { "application/json": [".json", ".jsonc", ".geojson"] } },
-    { "action": "/xml/", "accept": { "application/xml": [".xml", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".kml", ".gpx", ".plist"] } },
-    { "action": "/yaml/", "accept": { "application/yaml": [".yaml", ".yml"] } },
-    { "action": "/csv/", "accept": { "text/csv": [".csv", ".tsv", ".psv"] } },
-    { "action": "/pdf/", "accept": { "application/pdf": [".pdf"] } },
-    { "action": "/log/", "accept": { "text/plain": [".log", ".txt", ".out", ".err", ".jsonl", ".ndjson"] } },
-    { "action": "/audio/", "accept": { "audio/*": [".mp3", ".wav", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".aif", ".aiff"] } },
-    { "action": "/sqlite/", "accept": { "application/vnd.sqlite3": [".db", ".sqlite", ".sqlite3", ".db3", ".s3db", ".sl3", ".gpkg", ".mbtiles"] } }
+    { "action": "/json/", "accept": { "application/json": [".json", ".jsonc", ".geojson"] }, "icons": [{ "src": "/icons/file-json.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/xml/", "accept": { "application/xml": [".xml", ".xsd", ".xsl", ".xslt", ".rss", ".atom", ".kml", ".gpx", ".plist"] }, "icons": [{ "src": "/icons/file-xml.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/yaml/", "accept": { "application/yaml": [".yaml", ".yml"] }, "icons": [{ "src": "/icons/file-yaml.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/csv/", "accept": { "text/csv": [".csv", ".tsv", ".psv"] }, "icons": [{ "src": "/icons/file-csv.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/pdf/", "accept": { "application/pdf": [".pdf"] }, "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/log/", "accept": { "text/plain": [".log", ".txt", ".out", ".err", ".jsonl", ".ndjson"] }, "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/audio/", "accept": { "audio/*": [".mp3", ".wav", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".aif", ".aiff"] }, "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/sqlite/", "accept": { "application/vnd.sqlite3": [".db", ".sqlite", ".sqlite3", ".db3", ".s3db", ".sl3", ".gpkg", ".mbtiles"] }, "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] }
   ]
 }
