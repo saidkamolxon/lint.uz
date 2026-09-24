@@ -905,6 +905,10 @@ function draw() {
     /* no file yet: every redraw (a resize, a filter keystroke) keeps the
        opening prompt rather than blanking the screen */
     if (!lines.length) { showEmpty(); return; }
+    /* the rows are shifted to wherever the reader had scrolled; a message
+       in their place starts at the top instead */
+    rows.style.transform = '';
+    vp.scrollTop = 0;
     rows.innerHTML = LintApp.emptyState({
       title: 'Nothing matches',
       body: 'No line passes the current filter. Clear the box or turn a severity back on.'
@@ -1389,6 +1393,10 @@ function setStatus(kind, msg) {
 }
 
 function showEmpty() {
+  /* closing a file goes straight here, not through draw(): undo the
+     scroll shift the rows carried, so the prompt starts at the top */
+  $('rows').style.transform = '';
+  $('viewport').scrollTop = 0;
   /* a file with nothing in it is open, not missing: say so, keep the chip */
   if (fileName) {
     $('rows').innerHTML = LintApp.emptyState({
