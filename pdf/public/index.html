@@ -669,6 +669,10 @@ async function openFile(file) {
     const task = pdfjsLib.getDocument({
       data: new Uint8Array(buf),
       standardFontDataUrl: './vendor/standard_fonts/',
+      /* the image decoders scanned documents need — JBIG2 (fax-style
+         black and white), JPEG 2000 and ICC colour — ship as WebAssembly;
+         without them those pages render blank */
+      wasmUrl: './vendor/wasm/',
       /* a password-protected file should ask, not fail silently */
       password: undefined
     });

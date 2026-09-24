@@ -100,7 +100,9 @@ rather than `shell.js`. It also cannot be *themed* the way text can — a page i
 an image the author fixed. The chrome is themed like everything else, and the
 sheet gets an explicit **Normal / Dim / Invert** control, defaulting to Dim on
 dark themes until the reader chooses otherwise. It bundles PDF.js (Apache-2.0,
-`pdf/public/vendor/`); the worker and fonts load only once a file is opened,
+`pdf/public/vendor/`) and its WebAssembly image decoders (`vendor/wasm/`: JBIG2,
+JPEG 2000 and ICC colour, which scanned documents need; BSD, Apache-2.0 and
+MIT); the worker, decoders and fonts load only once a file needs them,
 so the initial page weight stays close to the other tools.
 
 **SQLite builds its own frame too**, for the same reason: a database is a set
