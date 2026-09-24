@@ -800,71 +800,99 @@ function parseQuery(raw) {
   return { inc, exc };
 }
 
+/* The filter works on events, not lines: an event is its header line and
+   the stack trace or continuation under it. An event is kept when every
+   search word appears somewhere in it and no excluded word does, and then
+   it is kept whole — a matching stack frame is shown with the error it
+   belongs to, and "-word" drops the entire event, not just the lines that
+   say it. So a search and its exclusion always add up to the whole file. */
 function applyFilters() {
   if (!lines.length) return;
   const { inc, exc } = parseQuery($('filter').value);
   query = inc.length === 1 ? inc[0] : '';
 
-  const out = [];
   const n = lines.length;
-  const allOn = on.error && on.warn && on.info && on.debug;
+  const text = inc.length > 0 || exc.length > 0;
 
-  for (let i = 0; i < n; i++) {
-    /* a folded event hides its children but keeps itself */
-    const p = parent[i];
-    if (p >= 0 && folded.has(p)) continue;
-
-    /* Once the reader has narrowed to particular severities, lines carrying
-       no level at all are noise too — a banner or a config dump is not an
-       error. They stay visible only while every severity is on. */
-    const code = sev[i];
-    if (!allOn) {
-      if (!code) continue;
-      if (!on[SEVERITIES[code - 1]]) continue;
-    }
-
-    if (inc.length || exc.length) {
+  /* pass 1, only when searching: which events match, and which match only
+     below their header — those are shown open even if folded, or the
+     reader would see an event with no visible reason for being there */
+  let keepEvent = null, openEvent = null;
+  if (text) {
+    keepEvent = new Uint8Array(n);
+    openEvent = new Uint8Array(n);
+    let head = -1, found = 0, excluded = false, below = false;
+    const all = (1 << inc.length) - 1;
+    const close = () => {
+      if (head < 0 || excluded || found !== all) return;
+      keepEvent[head] = 1;
+      if (below) openEvent[head] = 1;
+    };
+    for (let i = 0; i < n; i++) {
+      const p = parent[i];
+      if (p < 0) { close(); head = i; found = 0; excluded = false; below = false; }
+      if (excluded) continue;
       const low = lines[i].toLowerCase();
-      let keep = true;
-      for (let k = 0; k < inc.length && keep; k++) if (low.indexOf(inc[k]) === -1) keep = false;
-      for (let k = 0; k < exc.length && keep; k++) if (low.indexOf(exc[k]) !== -1) keep = false;
-      /* a continuation line rides along with its parent when it matched */
-      if (!keep && p >= 0 && matchedParents.has(p)) keep = true;
-      if (!keep) continue;
-      if (p < 0) matchedParents.add(i);
+      for (let k = 0; k < exc.length; k++) {
+        if (low.indexOf(exc[k]) !== -1) { excluded = true; break; }
+      }
+      for (let k = 0; k < inc.length; k++) {
+        if (low.indexOf(inc[k]) !== -1) { found |= 1 << k; if (p >= 0) below = true; }
+      }
     }
+    close();
+  }
+
+  /* Once the reader has narrowed to particular severities, events carrying
+     no level at all are noise too — a banner or a config dump is not an
+     error. They stay visible only while every severity is on. */
+  const allOn = on.error && on.warn && on.info && on.debug;
+  const out = [];
+  let shown = 0, total = 0;
+  for (let i = 0; i < n; i++) {
+    const p = parent[i];
+    const head = p < 0 ? i : p;
+    if (p < 0) total++;
+    const code = sev[head];
+    if (!allOn && (!code || !on[SEVERITIES[code - 1]])) continue;
+    if (text && !keepEvent[head]) continue;
+    /* a folded event hides its children but keeps itself */
+    if (p >= 0 && folded.has(p) && !(text && openEvent[p])) continue;
+    if (p < 0) shown++;
     out.push(i);
   }
 
   visible = out;
+  openBySearch = text ? openEvent : null;
   $('spacer').style.height = (visible.length * ROW_H) + 'px';
-  /* the count reflects any narrowing, whether by text or by severity —
-     hiding INFO is a filter too, and the reader wants to know what is left */
-  const narrowed = inc.length || exc.length || visible.length !== lines.length;
-  paintCount(narrowed);
+  /* the count is for narrowing — by text or by severity, since hiding INFO
+     is a filter too — never for folding, which only tucks lines away */
+  paintCount(text || !allOn, shown, total);
   draw();
 }
 
-let matchedParents = new Set();
-function applyFiltersFresh() {
-  matchedParents = new Set();
-  applyFilters();
-}
+/* kept as a name for the callers that reset before filtering; the filter
+   holds no state between runs now, so there is nothing left to reset */
+const applyFiltersFresh = applyFilters;
 
-function paintCount(filtering) {
+/* events the current search opened despite a fold; draw() marks them open */
+let openBySearch = null;
+
+function paintCount(filtering, shown, total) {
   const el = $('filterCount');
   if (!filtering) {
     el.textContent = '';
     el.classList.remove('none');
     return;
   }
-  if (!visible.length) {
+  if (!shown) {
     el.textContent = 'no matches';
     el.classList.add('none');
     return;
   }
   el.classList.remove('none');
-  el.textContent = LintApp.fmtNum(visible.length) + ' of ' + LintApp.fmtNum(lines.length);
+  el.textContent = LintApp.fmtNum(shown) + ' of ' + LintApp.fmtNum(total) +
+    (total === 1 ? ' entry' : ' entries');
 }
 
 /* ==========================================================================
@@ -898,7 +926,8 @@ function draw() {
     const code = sev[i];
     const name = code ? SEVERITIES[code - 1] : '';
     const kids = childCount[i];
-    const isFolded = folded.has(i);
+    /* folded, unless a search opened it to show where it matched */
+    const isFolded = folded.has(i) && !(openBySearch && openBySearch[i]);
     const cont = parent[i] >= 0;
 
     html += '<div class="row' + (r % 2 ? ' odd' : '') +
