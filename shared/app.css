@@ -58,10 +58,10 @@ body {
   flex: none;
 }
 
-/* The lint.one mark, like the Apple menu: the suite's glyph in the ink, a
-   size smaller than the tool's own tile and without its colour, so the eye
-   reads "the system, then the app". It opens the suite menu (app.js). */
-.suite-wrap { margin-right: 10px; }
+/* The lint.one mark, like the Apple menu: the suite's glyph in the ink,
+   the one icon at the start of every toolbar. It opens the suite menu
+   (app.js). */
+.suite-wrap { margin-right: 0; }
 .suite-btn {
   width: 28px; height: 28px; padding: 0;
   display: grid; place-items: center;
@@ -84,29 +84,15 @@ body {
 /* it is the first thing in the toolbar, so its menu opens rightwards */
 .suite-menu { left: 0; right: auto; min-width: 220px; }
 
-/* Brand: the tool's own tile and name. The hue lives here and nowhere else
-   in the chrome. Not a link — the lint.one menu before it goes home. */
+/* Brand: the tool's name, bold, after the lint.one mark — the way a Mac
+   menu bar shows the  menu and then the app, with no icon between them;
+   the format's tile is the favicon's job. Not a link: the mark goes home. */
 .brand {
   display: flex; align-items: center; gap: var(--s2);
   margin-right: var(--s3); padding-right: var(--s3);
   border-right: var(--hairline) solid var(--line);
   text-decoration: none; color: inherit; user-select: none;
   flex: none;
-}
-/* The tool's glyph on its hue, same tile proportions as the favicon (rx 15
-   of 64). Each tool sets --glyph (shell.js does it for the editor tools);
-   a page that does not gets the suite mark. */
-.mark {
-  width: 26px; height: 26px;
-  border-radius: var(--radius);
-  background: var(--hue);
-  flex: none;
-}
-.mark::before {
-  content: ""; display: block; width: 100%; height: 100%;
-  background: var(--hue-ink);
-  -webkit-mask: var(--glyph, url("glyph.svg")) center / 100% no-repeat;
-  mask: var(--glyph, url("glyph.svg")) center / 100% no-repeat;
 }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-name {
@@ -750,10 +736,8 @@ body.dragover .empty-prompt h2 { color: var(--hue); }
   body[data-view="tree"] #editorPane { display: none; }
   body[data-view="text"] #treePane { display: none; }
   .hide-sm { display: none; }
-  .brand-text { display: none; }
-  /* A phone has no room for two separators: the mark and the tile sit
-     together as one group, set apart from the rest by a little space. */
-  .suite-wrap { margin-right: 2px; }
+  /* a phone has no room for the separator: mark and name sit together */
+  .suite-wrap { margin-right: 0; }
   .suite-btn { width: 24px; }
   .brand { border-right: 0; padding-right: 0; margin-right: 2px; }
   /* the name gives way first; the × stays so a phone can still close */

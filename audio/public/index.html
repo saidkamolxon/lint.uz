@@ -229,7 +229,6 @@ body.dragover #stage::after {
 :root[data-contrast="more"] .au-empty .empty-actions .bordered { backdrop-filter: none; -webkit-backdrop-filter: none; }
 
 @media (max-width: 760px) {
-  .brand-text { display: none; }
   .vol { display: none; }
   .src-btn span { display: none; }
   .now { left: var(--s4); top: var(--s4); right: var(--s4); }
@@ -261,7 +260,6 @@ const c = window.LINT_CONFIG;
 
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
-document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/audio.svg")');
 
 const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
@@ -285,7 +283,6 @@ const TITLE = document.title;
 $('app').innerHTML = `
   <header class="toolbar">
     <a class="brand" href="/" title="All tools">
-      <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>
       </span>

@@ -10,9 +10,6 @@ var c = window.LINT_CONFIG;
 
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk || '#FFFFFF');
-/* the format's own glyph in the logo tile; app.css falls back to the suite
-   mark for a page that never sets it */
-document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/' + c.id + '.svg")');
 
 /* A declared `key` becomes data-key. app.js binds it, names it in the
    button's tooltip and lists it in the shortcuts panel, all from that one
@@ -37,7 +34,6 @@ document.getElementById('app').innerHTML =
   /* app.js puts the lint.one menu in front of the brand; the brand itself
      names the tool and goes nowhere */
   '<span class="brand">' +
-    '<span class="mark" aria-hidden="true"></span>' +
     '<span class="brand-text">' +
       '<span class="brand-name">' + c.name + '</span>' +
     '</span>' +

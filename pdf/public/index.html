@@ -287,7 +287,6 @@ body.show-links .lnk {
   #contents { position: absolute; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow); }
 }
 @media (max-width: 620px) {
-  .brand-text { display: none; }
   .find-pop { left: var(--s2); right: var(--s2); top: var(--s2); }
   #findInput { width: auto; flex: 1; min-width: 0; }
   .zoom-pop { bottom: var(--s2); right: var(--s2); }
@@ -466,12 +465,10 @@ const c = window.LINT_CONFIG;
 const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
-document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/pdf.svg")');
 
 $('app').innerHTML = `
   <header class="toolbar pdf-toolbar">
     <a class="brand" href="/" title="All tools">
-      <span class="mark" aria-hidden="true"></span>
       <span class="brand-text">
         <span class="brand-name">${c.name}</span>
       </span>

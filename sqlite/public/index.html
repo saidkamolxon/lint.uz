@@ -324,7 +324,6 @@ body.dragover .db-main::after {
 :root[data-contrast="more"] .grid-table td.null { color: var(--muted); }
 
 @media (max-width: 620px) {
-  .brand-text { display: none; }
   .viewbar { padding: var(--s2); }
   .filter-wrap { order: 5; max-width: none; flex-basis: 100%; }
 }
@@ -361,12 +360,10 @@ const c = window.LINT_CONFIG;
 const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
 document.documentElement.style.setProperty('--hue', c.hue);
 document.documentElement.style.setProperty('--hue-ink', c.hueInk);
-document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/sqlite.svg")');
 
 $('app').innerHTML = `
   <header class="toolbar">
     <span class="brand">
-      <span class="mark" aria-hidden="true"></span>
       <span class="brand-text"><span class="brand-name">${c.name}</span></span>
     </span>
     <button id="btnOpen" class="primary" title="Open a database, or drop one anywhere">Open</button>
