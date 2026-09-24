@@ -1,0 +1,1512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQLite Viewer &amp; Query Tool · lint.one</title>
+<meta name="description" content="A fast, private SQLite viewer. Browse tables, read the schema and run SQL on a .db or .sqlite file — all in your browser. Nothing is uploaded.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<style>
+/* ==========================================================================
+   SQLite builds its own frame, as PDF and Logs do: a database is a set of
+   tables rather than one text, so there is no source to sit beside it.
+   Everything below is scoped to this tool and uses the shared tokens.
+   ========================================================================== */
+.app { overflow: hidden; }
+[hidden] { display: none !important; }
+
+.db-main { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; }
+
+#progress {
+  position: absolute; left: 0; top: 0; height: 2px;
+  background: var(--hue); width: 0;
+  transition: width var(--t-mid); z-index: 40;
+}
+
+/* ---------- the rail: every table and view ---------- */
+#rail {
+  width: 248px; flex: none; overflow: auto;
+  border-right: var(--hairline) solid var(--line);
+  background: var(--raised);
+  padding: var(--s2) var(--s2) var(--s4);
+}
+@media (max-width: 860px) {
+  #rail { position: absolute; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow); display: none; }
+  #rail.open { display: block; }
+}
+@media (min-width: 861px) { #btnRail { display: none; } }
+
+.rail-group { margin-top: var(--s3); }
+.rail-group:first-child { margin-top: 0; }
+.rail-head, .rail-group > summary {
+  display: flex; align-items: baseline; gap: var(--s2);
+  padding: var(--s1) var(--s2);
+  font-size: var(--fs-small); font-weight: 600; color: var(--muted);
+  list-style: none;
+}
+.rail-group > summary { cursor: pointer; user-select: none; border-radius: var(--radius); }
+.rail-group > summary::-webkit-details-marker { display: none; }
+.rail-group > summary::before {
+  content: "›"; display: inline-block; width: 8px; color: var(--faint);
+  transition: transform var(--t-fast);
+}
+.rail-group[open] > summary::before { transform: rotate(90deg); }
+.rail-group > summary:hover { color: var(--ink); }
+.rail-head .n, .rail-group > summary .n { font-weight: 400; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.rail-item {
+  display: flex; align-items: baseline; gap: var(--s2);
+  width: 100%; text-align: left;
+  padding: 5px var(--s2); border: none; border-radius: var(--radius);
+  font-size: var(--fs-base); color: var(--ink);
+}
+.rail-item:hover { background: var(--row-hover); }
+.rail-item[aria-current="true"] { background: var(--hue-wash); color: var(--hue); font-weight: 600; }
+.rail-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-item .ct {
+  flex: none; font-family: var(--mono); font-size: var(--fs-small);
+  color: var(--faint); font-variant-numeric: tabular-nums; font-weight: 400;
+}
+.rail-item .tag {
+  flex: none; font-size: var(--fs-micro); color: var(--faint);
+  text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500;
+}
+.rail-item.query { color: var(--hue); font-weight: 550; margin-bottom: var(--s1); }
+.rail-item.query svg { width: 14px; height: 14px; align-self: center; flex: none; }
+
+/* ---------- the view: one table, its schema, or a query ---------- */
+#view { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); position: relative; }
+
+.viewbar {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s2) var(--s3);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+  min-height: 41px;
+}
+.view-title {
+  display: flex; align-items: baseline; gap: var(--s2); min-width: 0;
+  font-weight: 600; font-size: var(--fs-mid);
+}
+.view-title .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.view-title .kind { font-weight: 400; font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+
+.filter-wrap { display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 320px; }
+#filter {
+  width: 100%;
+  font-family: var(--mono); font-size: var(--fs-base);
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px var(--s3);
+}
+#filter::placeholder { color: var(--faint); font-family: var(--ui); }
+#filter:focus { background: var(--raised); border-color: color-mix(in srgb, var(--hue) 45%, var(--line)); outline: none; }
+
+.pager { display: flex; align-items: center; gap: 2px; }
+.pager-pos {
+  font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0 var(--s2);
+}
+
+/* ---------- the grid ---------- */
+#grid { flex: 1; min-height: 0; overflow: auto; position: relative; }
+#grid.stale { opacity: 0.55; transition: opacity var(--t-mid) 150ms; }
+
+.grid-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+/* cells are the document, so they follow the text zoom (--code-size) */
+.grid-table th, .grid-table td {
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base));
+  padding: var(--s1) var(--s3);
+  border-bottom: var(--hairline) solid var(--line);
+  border-right: var(--hairline) solid var(--line);
+  text-align: left; white-space: nowrap;
+  max-width: 360px; overflow: hidden; text-overflow: ellipsis;
+}
+.grid-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--raised);
+  color: var(--t-key); font-weight: 600;
+  border-bottom: var(--hairline) solid var(--line-strong);
+  font-family: var(--ui);
+  user-select: none;
+}
+.grid-table thead th.sortable { cursor: pointer; }
+.grid-table thead th.sortable:hover { background: var(--row-hover); }
+.grid-table thead th .sort { color: var(--hue); margin-left: var(--s1); font-size: calc(var(--code-size, var(--fs-base)) * 0.75); }
+.grid-table thead th .coltype {
+  display: block; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.78);
+  font-weight: 400; color: var(--faint);
+}
+.grid-table thead th .key { color: var(--hue); font-weight: 600; }
+
+.grid-table .rn {
+  position: sticky; left: 0; z-index: 1;
+  background: color-mix(in srgb, var(--hue) var(--gutter-tint), var(--raised));
+  color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted));
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-size: calc(var(--code-size, var(--fs-base)) * 0.85); padding: var(--s1) var(--s2);
+  /* a narrow table spreads its spare width over the data, not the numbers */
+  width: 1px;
+}
+.grid-table thead .rn { z-index: 3; }
+.grid-table tbody tr:hover td { background: var(--row-hover); }
+.grid-table tbody tr:hover .rn { background: color-mix(in srgb, var(--hue) 26%, var(--raised)); }
+.grid-table td { cursor: default; }
+.grid-table td.num { color: var(--t-num); text-align: right; font-variant-numeric: tabular-nums; }
+.grid-table td.null { color: var(--faint); font-style: italic; font-family: var(--ui); }
+.grid-table td.blob { color: var(--t-cont); font-family: var(--ui); }
+.grid-table td.empty-cell { color: var(--faint); }
+.grid-table tbody td.sel,
+.grid-table tbody tr:hover td.sel {
+  background: var(--hue-wash);
+  box-shadow: inset 0 0 0 1.5px var(--hue);
+}
+
+/* ---------- the SQL editor ---------- */
+#queryBox {
+  flex: none; display: flex; flex-direction: column;
+  border-bottom: var(--hairline) solid var(--line);
+  background: var(--raised);
+}
+#sql {
+  display: block; width: 100%; box-sizing: border-box;
+  min-height: 96px; height: 132px; max-height: 60vh; resize: vertical;
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.55;
+  color: var(--ink); background: var(--sunken);
+  border: none; border-bottom: var(--hairline) solid var(--line);
+  padding: var(--s3); outline: none; tab-size: 2;
+}
+#sql:focus { background: var(--surface); }
+.query-bar { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); }
+#queryMsg { font-size: var(--fs-small); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#queryMsg.err { color: var(--bad); font-weight: 500; white-space: normal; }
+
+/* ---------- schema ---------- */
+#schemaView { flex: 1; min-height: 0; overflow: auto; padding: var(--s4); }
+.schema-sec { max-width: 980px; margin: 0 0 var(--s5); }
+.schema-sec h3 {
+  margin: 0 0 var(--s2); font-size: var(--fs-small); font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.schema-sec pre {
+  margin: 0; padding: var(--s3);
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.6;
+  background: var(--raised); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+}
+.schema-sec .none { color: var(--faint); font-size: var(--fs-small); margin: 0; }
+.cols { border-collapse: collapse; width: 100%; font-size: var(--fs-base); }
+.cols th, .cols td {
+  text-align: left; padding: 5px var(--s3) 5px 0;
+  border-bottom: var(--hairline) solid var(--line); vertical-align: baseline;
+}
+.cols th { font-size: var(--fs-small); color: var(--muted); font-weight: 500; }
+.cols td { font-family: var(--mono); font-size: var(--fs-small); }
+.cols td.nm { color: var(--t-key); font-weight: 600; }
+.cols td .flag {
+  display: inline-block; margin-right: 4px; padding: 0 5px;
+  border-radius: var(--radius-sm); font-family: var(--ui); font-size: var(--fs-micro);
+  background: var(--sunken); color: var(--muted); border: var(--hairline) solid var(--line);
+}
+.cols td .flag.pk { background: var(--hue-wash); color: var(--hue); border-color: transparent; font-weight: 600; }
+.sql-kw { color: var(--hue); font-weight: 600; }
+.sql-str { color: var(--t-str); }
+.sql-num { color: var(--t-num); }
+.sql-cmt { color: var(--faint); font-style: italic; }
+
+/* ---------- the drawer: a value, or the file ---------- */
+#drawer {
+  width: 360px; flex: none;
+  border-left: var(--hairline) solid var(--line);
+  background: var(--raised);
+  display: none; flex-direction: column; min-height: 0;
+}
+#drawer.open { display: flex; }
+@media (max-width: 760px) {
+  #drawer { position: absolute; inset: 0 0 0 auto; width: min(360px, 90vw); z-index: 30; box-shadow: var(--shadow); }
+}
+.drawer-tabs { display: flex; gap: 2px; flex: none; padding: var(--s2); border-bottom: var(--hairline) solid var(--line); }
+.drawer-tabs button { flex: 1; padding: 5px var(--s2); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-small); }
+.drawer-tabs button[aria-selected="true"] { background: var(--hue-wash); color: var(--hue); font-weight: 600; }
+.drawer-body { flex: 1; overflow: auto; padding: var(--s3); }
+.drawer-panel { display: none; }
+.drawer-panel.active { display: block; }
+.hint { color: var(--muted); font-size: var(--fs-small); line-height: 1.55; margin: 0 0 var(--s3); }
+
+.value-head { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s2); }
+.value-head .col { font-family: var(--mono); font-weight: 600; color: var(--t-key); overflow-wrap: anywhere; }
+.value-head .kind {
+  font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm); padding: 0 5px;
+}
+.value-head .where { font-size: var(--fs-small); color: var(--faint); margin-left: auto; }
+.value-text {
+  margin: 0; padding: var(--s2);
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-small)); line-height: 1.6;
+  background: var(--sunken); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+  max-height: 60vh; overflow: auto;
+}
+.value-text.null { color: var(--faint); font-style: italic; font-family: var(--ui); }
+.value-note { font-size: var(--fs-small); color: var(--muted); margin: var(--s2) 0 0; line-height: 1.5; }
+.value-note b { color: var(--ink); font-weight: 500; font-family: var(--mono); }
+.hexdump { font-size: var(--fs-small); white-space: pre; overflow-x: auto; overflow-wrap: normal; }
+.hexdump .off { color: var(--faint); }
+.hexdump .asc { color: var(--muted); }
+.blob-img {
+  display: block; max-width: 100%; max-height: 240px; margin: 0 0 var(--s3);
+  image-rendering: pixelated; border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  background: repeating-conic-gradient(var(--sunken) 0 25%, var(--raised) 0 50%) 0 0 / 12px 12px;
+}
+.drawer-actions { display: flex; gap: var(--s1); margin-top: var(--s2); flex-wrap: wrap; }
+
+/* metadata rows — a definition list, because that is what this is */
+.meta { margin: 0 0 var(--s3); font-size: var(--fs-base); }
+.meta div {
+  display: grid; grid-template-columns: 112px 1fr; gap: var(--s3);
+  padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
+  align-items: baseline;
+}
+.meta div:last-child { border-bottom: none; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: var(--fs-small); overflow-wrap: anywhere; color: var(--ink); }
+.meta dd small { display: block; font-family: var(--ui); color: var(--muted); margin-top: 2px; }
+.check { font-size: var(--fs-small); margin-top: var(--s2); line-height: 1.5; }
+.check.ok { color: var(--ok); }
+.check.bad { color: var(--bad); }
+.warn-note {
+  font-size: var(--fs-small); line-height: 1.5; color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--warn) 40%, transparent);
+  border-radius: var(--radius); padding: var(--s2) var(--s3); margin: 0 0 var(--s3);
+}
+
+/* the empty state sits where every other tool's does */
+#view > .empty-state { margin-top: calc(40vh - 37px - var(--s5)); }
+
+/* the shared dragover cue targets #editorPane, which this tool has none of */
+body.dragover .db-main::after {
+  content: "";
+  position: absolute; inset: var(--s2);
+  border: 2px dashed var(--hue);
+  border-radius: var(--radius-lg);
+  background: var(--hue-wash);
+  pointer-events: none; z-index: 50;
+}
+
+:root[data-contrast="more"] .grid-table tbody td.sel { box-shadow: inset 0 0 0 2px var(--hue); }
+:root[data-contrast="more"] .rail-item .ct,
+:root[data-contrast="more"] .grid-table td.null { color: var(--muted); }
+
+@media (max-width: 620px) {
+  .brand-text { display: none; }
+  .viewbar { padding: var(--s2); }
+  .filter-wrap { order: 5; max-width: none; flex-basis: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'sqlite',
+  name: 'SQLite',
+  host: 'lint.one/sqlite',
+  label: 'SQLite',
+  hue: '#7C3AED',
+  hueInk: '#FFFFFF',
+  accept: '.db,.sqlite,.sqlite3,.db3,.s3db,.sl3,.gpkg,.mbtiles,application/vnd.sqlite3,application/x-sqlite3'
+};
+</script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/app.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = LintApp.esc;
+const fmtNum = (n) => LintApp.fmtNum(Number(n));
+
+/* ==========================================================================
+   Chrome — built here rather than by shared/shell.js, which draws an
+   editor and a tree this tool has no use for. Themes, the suite menu, the
+   toast and the document chip still come from the shared runtime.
+   ========================================================================== */
+const c = window.LINT_CONFIG;
+const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
+document.documentElement.style.setProperty('--hue', c.hue);
+document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+document.documentElement.style.setProperty('--glyph', 'url("/shared/glyphs/sqlite.svg")');
+
+$('app').innerHTML = `
+  <header class="toolbar">
+    <span class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="brand-text"><span class="brand-name">${c.name}</span></span>
+    </span>
+    <button id="btnOpen" class="primary" title="Open a database, or drop one anywhere">Open</button>
+    <button id="btnRail" class="icon-btn needs-db" title="Tables" aria-label="Tables" aria-pressed="false"></button>
+    <span class="spacer"></span>
+    <button id="btnQuery" class="bordered needs-db" title="Run SQL on this database (${MOD}E)">SQL</button>
+    <button id="btnInfo" class="icon-btn needs-db" title="About this file (${MOD}I)"
+            aria-label="About this file" aria-pressed="false"></button>
+    <div class="menu-wrap needs-db">
+      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
+      <div class="menu" id="moreMenu" role="menu">
+        <button class="menu-item" id="btnCsv" role="menuitem">Copy rows as CSV</button>
+        <button class="menu-item" id="btnJson" role="menuitem">Copy rows as JSON</button>
+        <button class="menu-item" id="btnCreate" role="menuitem">Copy the CREATE statement</button>
+      </div>
+    </div>
+    <div class="group" id="chromeSlot"></div>
+    <input type="file" id="fileInput" accept="${c.accept}" hidden>
+  </header>
+
+  <main class="db-main">
+    <div id="progress"></div>
+    <nav id="rail" aria-label="Tables and views" hidden></nav>
+
+    <section id="view" aria-label="Contents">
+      <div class="viewbar" id="viewbar" hidden>
+        <span class="view-title"><span class="nm" id="viewName"></span><span class="kind" id="viewKind"></span></span>
+        <div class="seg" id="modeSeg" role="radiogroup" aria-label="Show">
+          <button data-mode="data" role="radio" aria-checked="true">Data</button>
+          <button data-mode="schema" role="radio" aria-checked="false">Schema</button>
+        </div>
+        <label class="filter-wrap" id="filterWrap">
+          <input id="filter" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="Filter rows" aria-label="Filter rows">
+        </label>
+        <span class="spacer"></span>
+        <span class="pager" id="pager">
+          <button id="btnPrev" class="icon-btn" title="Previous rows (Page Up)" aria-label="Previous rows"></button>
+          <span class="pager-pos" id="pagerPos"></span>
+          <button id="btnNext" class="icon-btn" title="Next rows (Page Down)" aria-label="Next rows"></button>
+        </span>
+      </div>
+
+      <div id="queryBox" hidden>
+        <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off"
+                  autocorrect="off" aria-label="SQL"></textarea>
+        <div class="query-bar">
+          <button id="btnRun" class="primary" title="Run (${MOD}Enter)">Run</button>
+          <button id="btnStop" class="bordered" title="Stop the running query (Esc)" hidden>Stop</button>
+          <span id="queryMsg"></span>
+        </div>
+      </div>
+
+      <div id="grid" hidden></div>
+      <div id="schemaView" hidden></div>
+    </section>
+
+    <aside id="drawer" aria-label="Details">
+      <div class="drawer-tabs" role="tablist">
+        <button id="tabValue" role="tab" aria-selected="true">Value</button>
+        <button id="tabFile" role="tab" aria-selected="false">File</button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-panel active" id="panelValue"></div>
+        <div class="drawer-panel" id="panelFile"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="status" id="statusBar" hidden>
+    <span class="dot"></span>
+    <span id="statusMsg"></span>
+    <span id="pathBox"></span>
+  </footer>
+`;
+
+LintApp.mountChrome($('chromeSlot'), 'sqlite');
+LintApp.wireMenu($('btnMore'), $('moreMenu'));
+
+const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const ICON = {
+  rail: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
+  more: '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
+        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
+        '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
+  prev: '<path d="M15 6l-6 6 6 6"/>',
+  next: '<path d="M9 6l6 6-6 6"/>',
+  query: '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>'
+};
+$('btnRail').innerHTML = I(ICON.rail);
+$('btnInfo').innerHTML = I(ICON.info);
+$('btnMore').innerHTML = I(ICON.more);
+$('btnPrev').innerHTML = I(ICON.prev);
+$('btnNext').innerHTML = I(ICON.next);
+
+/* ==========================================================================
+   The worker — every call is a promise; Stop ends the worker and whatever
+   it was doing, then opens the same database again in a fresh one
+   ========================================================================== */
+let worker = null;
+let calls = new Map();
+let nextId = 1;
+
+function startWorker() {
+  worker = new Worker('./worker.js', { type: 'module' });
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === 'progress') { setBusy(8 + 80 * m.done / m.total); return; }
+    const call = calls.get(m.id);
+    if (!call) return;
+    calls.delete(m.id);
+    if (m.ok) call.resolve(m); else call.reject(new Error(m.error));
+  };
+  worker.onerror = (e) => {
+    /* the module itself failed to load: nothing will ever answer */
+    e.preventDefault();
+    calls.forEach((call) => call.reject(new Error('The SQLite engine could not start in this browser.')));
+    calls.clear();
+  };
+}
+
+function rpc(type, data) {
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    calls.set(id, { resolve, reject });
+    worker.postMessage({ id, type, ...data });
+  });
+}
+
+const STOPPED = 'stopped';
+
+/* end whatever the worker is doing, and everything queued behind it */
+function halt() {
+  worker.terminate();
+  calls.forEach((call) => call.reject(new Error(STOPPED)));
+  calls.clear();
+  startWorker();
+  setBusy(null);
+}
+
+/* Stop, as the person asked for it: the fresh worker has no database, so
+   the same one is opened again and the table put back */
+async function stop() {
+  if (!calls.size) return;
+  halt();
+  LintApp.toast('Stopped');
+  if (!source) return;
+  try {
+    await rpc(source.file ? 'open' : 'sample', source.file ? { file: source.file } : { sql: SAMPLE_SQL });
+    setBusy(null);
+    if (state.mode === 'data' && state.name) loadRows();
+  } catch (err) {
+    if (err.message !== STOPPED) { reset(); LintApp.toast(err.message); }
+  }
+}
+
+startWorker();
+
+/* ==========================================================================
+   State
+   ========================================================================== */
+const PAGE = 200;
+let source = null;        // {file} or {sample: true} — what to reopen after a Stop
+let info = null;          // what the worker said about the database
+let state = { name: null, kind: null, mode: 'data', offset: 0, order: null, filter: '' };
+let grid = null;          // what the grid shows: {view, columns, rows, offset, total}
+let sel = null;           // {r, c} of the selected cell, within the shown rows
+let query = { sql: '', total: 0, offset: 0, columns: null, ran: false };
+let viewSeq = 0;          // a newer request makes an older answer irrelevant
+
+function setBusy(pct) {
+  $('progress').style.width = pct === null ? '0' : pct + '%';
+}
+
+function setStatus(kind, msg) {
+  $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusBar').hidden = false;
+  $('statusMsg').textContent = msg;
+}
+
+/* ==========================================================================
+   Opening
+   ========================================================================== */
+async function openFile(file) {
+  if (!file) return;
+  /* whatever the last database was doing no longer matters */
+  if (calls.size) halt();
+  setStatus('', 'Reading ' + file.name + '…');
+  setBusy(6);
+  try {
+    const d = await rpc('open', { file });
+    source = { file };
+    show(d, file.name, file.size);
+  } catch (err) {
+    setBusy(null);
+    if (err.message === STOPPED) return;
+    if (!info) reset();
+    setStatus('err', err.message);
+    LintApp.toast(err.message);
+  }
+}
+
+async function openSample() {
+  if (calls.size) halt();
+  try {
+    const d = await rpc('sample', { sql: SAMPLE_SQL });
+    source = { sample: true };
+    show(d, 'sample.db', null);
+  } catch (err) {
+    LintApp.toast(err.message);
+  }
+}
+
+function show(d, name, size) {
+  info = d;
+  info.name = name;
+  info.size = size;
+  setBusy(100);
+  setTimeout(() => setBusy(null), 300);
+
+  document.querySelectorAll('.needs-db').forEach((el) => { el.hidden = false; });
+  LintApp.setDocument(name, reset);
+  $('pathBox').textContent = name;
+
+  const tables = d.tables.filter((t) => t.kind === 'table' || t.kind === 'virtual');
+  const views = d.tables.filter((t) => t.kind === 'view');
+  const facts = [
+    fmtNum(tables.length) + (tables.length === 1 ? ' table' : ' tables'),
+    views.length ? fmtNum(views.length) + (views.length === 1 ? ' view' : ' views') : null,
+    size !== null ? LintApp.fmtBytes(size) : null,
+    d.header ? d.header.encoding : null
+  ].filter(Boolean);
+  setStatus('ok', facts.join(', '));
+
+  counts = new Map();
+  buildRail();
+  buildFilePanel();
+  if (d.wal) LintApp.toast('This database was in WAL mode — anything still in its -wal file is not shown');
+
+  /* start where there is something to see: the first table, else the editor */
+  const first = tables[0] || views[0];
+  query = { sql: first ? 'SELECT *\nFROM ' + ident(first.name) + '\nLIMIT 100;' : 'SELECT sqlite_version();',
+            total: 0, offset: 0, columns: null, ran: false };
+  $('sql').value = query.sql;
+  $('queryMsg').textContent = '';
+  if (first) select(first.name); else openQuery();
+  countTables(tables.map((t) => t.name));
+}
+
+function reset() {
+  if (calls.size) halt();
+  rpc('close', {}).catch(() => {});
+  source = null;
+  info = null;
+  grid = null;
+  sel = null;
+  state = { name: null, kind: null, mode: 'data', offset: 0, order: null, filter: '' };
+  LintApp.setDocument(null);
+  document.querySelectorAll('.needs-db').forEach((el) => { el.hidden = true; });
+  $('rail').hidden = true;
+  $('rail').innerHTML = '';
+  $('viewbar').hidden = true;
+  $('queryBox').hidden = true;
+  $('grid').hidden = true;
+  $('schemaView').hidden = true;
+  $('drawer').classList.remove('open');
+  $('btnInfo').setAttribute('aria-pressed', 'false');
+  $('statusBar').hidden = true;
+  $('pathBox').textContent = '';
+  showEmpty();
+}
+
+const EMPTY = LintApp.emptyState({
+  title: 'Open a SQLite database or drop it here',
+  body: 'Tables, schema and your queries all run in this tab. The file never leaves it.',
+  extra: '<div class="empty-actions">' +
+    '<button class="primary" data-empty="open">Open a file</button>' +
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+});
+
+function showEmpty() {
+  const view = $('view');
+  view.querySelectorAll(':scope > .empty-state').forEach((el) => el.remove());
+  view.insertAdjacentHTML('beforeend', EMPTY);
+}
+
+$('view').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-empty]');
+  if (!b) return;
+  if (b.dataset.empty === 'open') $('fileInput').click();
+  else openSample();
+});
+
+/* ==========================================================================
+   The rail
+   ========================================================================== */
+let counts = new Map();
+
+function buildRail() {
+  const t = info.tables;
+  const groups = [
+    ['Tables', t.filter((x) => x.kind === 'table' || x.kind === 'virtual'), true],
+    ['Views', t.filter((x) => x.kind === 'view'), true],
+    /* the catalogue and the insides of full-text indexes: rarely wanted,
+       so folded until asked for */
+    ['Internal', t.filter((x) => x.kind === 'internal' || x.kind === 'shadow'), false]
+  ];
+  let html = `<button class="rail-item query" data-query>${I(ICON.query)}<span class="nm">SQL query</span></button>`;
+  groups.forEach(([title, items, open]) => {
+    if (!items.length && title !== 'Tables') return;
+    const list = items.map((x) =>
+      `<button class="rail-item" data-name="${esc(x.name)}" title="${esc(x.name)}">` +
+      `<span class="nm">${esc(x.name)}</span>` +
+      (x.kind === 'virtual' ? '<span class="tag">virtual</span>' : '') +
+      `<span class="ct" data-count="${esc(x.name)}">${counts.has(x.name) ? fmtNum(counts.get(x.name)) : ''}</span>` +
+      `</button>`).join('') || '<p class="hint" style="padding:0 var(--s2)">This database has no tables yet.</p>';
+    html += open
+      ? `<div class="rail-group"><div class="rail-head">${title}<span class="n">${items.length}</span></div>${list}</div>`
+      : `<details class="rail-group"><summary>${title}<span class="n">${items.length}</span></summary>${list}</details>`;
+  });
+  $('rail').innerHTML = html;
+  $('rail').hidden = false;
+  markRail();
+}
+
+function markRail() {
+  $('rail').querySelectorAll('.rail-item').forEach((b) => {
+    const here = b.hasAttribute('data-query') ? state.mode === 'query' : state.mode !== 'query' && b.dataset.name === state.name;
+    b.setAttribute('aria-current', String(here));
+  });
+}
+
+$('rail').addEventListener('click', (e) => {
+  const b = e.target.closest('.rail-item');
+  if (!b) return;
+  if (b.hasAttribute('data-query')) openQuery();
+  else select(b.dataset.name);
+  if (window.matchMedia('(max-width: 860px)').matches) toggleRail(false);
+});
+
+/* row counts arrive one table at a time, after the first view is up, so a
+   database with a huge table still opens at once */
+async function countTables(names) {
+  const run = info;
+  for (const name of names) {
+    if (info !== run) return;
+    if (counts.has(name)) continue;
+    try {
+      const { n } = await rpc('count', { name });
+      counts.set(name, n);
+      const el = $('rail').querySelector(`[data-count="${CSS.escape(name)}"]`);
+      if (el) el.textContent = fmtNum(n);
+    } catch (err) {
+      if (err.message === STOPPED) return;
+    }
+  }
+}
+
+function toggleRail(force) {
+  const open = $('rail').classList.toggle('open', force);
+  $('btnRail').setAttribute('aria-pressed', String(open));
+}
+$('btnRail').addEventListener('click', () => toggleRail());
+
+/* ==========================================================================
+   A table or view
+   ========================================================================== */
+function kindOf(name) {
+  const t = info.tables.find((x) => x.name === name);
+  return t ? t.kind : 'table';
+}
+
+function select(name) {
+  state = { name, kind: kindOf(name), mode: state.mode === 'schema' ? 'schema' : 'data',
+            offset: 0, order: null, filter: '' };
+  $('filter').value = '';
+  sel = null;
+  if ($('tabValue').getAttribute('aria-selected') === 'true') valueHint();
+  showMode();
+}
+
+function showMode() {
+  const q = state.mode === 'query';
+  $('view').querySelectorAll(':scope > .empty-state').forEach((el) => el.remove());
+  $('viewbar').hidden = false;
+  $('queryBox').hidden = !q;
+  $('modeSeg').hidden = q;
+  $('filterWrap').hidden = q || state.mode === 'schema';
+  $('pager').hidden = state.mode === 'schema';
+  $('grid').hidden = state.mode === 'schema';
+  $('schemaView').hidden = state.mode !== 'schema';
+  $('btnCreate').hidden = q;
+  $('modeSeg').querySelectorAll('button').forEach((b) =>
+    b.setAttribute('aria-checked', String(b.dataset.mode === state.mode)));
+
+  if (q) {
+    $('viewName').textContent = 'SQL query';
+    $('viewKind').textContent = '';
+  } else {
+    $('viewName').textContent = state.name;
+    const t = info.tables.find((x) => x.name === state.name) || {};
+    $('viewKind').textContent = [t.kind === 'shadow' ? 'full-text index data' : t.kind === 'internal' ? 'internal' : t.kind,
+      t.withoutRowid ? 'without rowid' : '', t.strict ? 'strict' : ''].filter(Boolean).join(', ');
+  }
+  markRail();
+
+  if (q) { showQueryResult(); $('sql').focus(); }
+  else if (state.mode === 'schema') loadSchema();
+  else loadRows();
+}
+
+$('modeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-mode]');
+  if (!b || state.mode === b.dataset.mode) return;
+  state.mode = b.dataset.mode;
+  showMode();
+});
+
+async function loadRows() {
+  const seq = ++viewSeq;
+  $('grid').classList.add('stale');
+  try {
+    const d = await rpc('rows', { name: state.name, offset: state.offset, limit: PAGE,
+                                  order: state.order, filter: state.filter });
+    if (seq !== viewSeq) return;
+    grid = { view: 'grid', columns: d.columns, rows: d.rows, offset: state.offset, total: d.total, more: false };
+    if (!state.filter && !counts.has(state.name) && kindOf(state.name) !== 'view') {
+      counts.set(state.name, d.total);
+      const ct = $('rail').querySelector(`[data-count="${CSS.escape(state.name)}"]`);
+      if (ct) ct.textContent = fmtNum(d.total);
+    }
+    renderGrid();
+  } catch (err) {
+    if (seq !== viewSeq || err.message === STOPPED) return;
+    grid = null;
+    $('grid').classList.remove('stale');
+    $('grid').innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    $('pagerPos').textContent = '';
+  }
+}
+
+/* ---------- the grid, for a table and for a query alike ---------- */
+function renderGrid() {
+  const el = $('grid');
+  el.classList.remove('stale');
+  el.hidden = false;
+  if (!grid) { el.innerHTML = ''; return; }
+
+  const sortable = grid.view === 'grid';
+  const numeric = grid.columns.map((_, i) => grid.rows.length > 0 &&
+    grid.rows.every((r) => r[i] === null || typeof r[i] === 'number' || typeof r[i] === 'bigint'));
+
+  let html = '<table class="grid-table"><thead><tr><th class="rn"></th>';
+  grid.columns.forEach((col, i) => {
+    const arrow = sortable && state.order && state.order.col === col.name
+      ? `<span class="sort">${state.order.dir < 0 ? '▼' : '▲'}</span>` : '';
+    const sub = col.type !== undefined
+      ? (col.pk ? '<span class="key">key</span> ' : '') + esc((col.type || 'any').toLowerCase())
+      : '';
+    html += `<th data-col="${i}"${sortable ? ' class="sortable" title="Sort by this column"' : ''}>` +
+      esc(col.name) + arrow + (sub ? `<span class="coltype">${sub}</span>` : '') + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  grid.rows.forEach((row, r) => {
+    html += `<tr><td class="rn">${fmtNum(grid.offset + r + 1)}</td>`;
+    row.forEach((v, ci) => {
+      const selected = sel && sel.r === r && sel.c === ci ? ' sel' : '';
+      html += `<td data-r="${r}" data-c="${ci}" class="${cellClass(v, numeric[ci])}${selected}">${cellText(v)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  if (!grid.rows.length) {
+    html += `<div class="empty">${state.filter && grid.view === 'grid'
+      ? 'No rows match “' + esc(state.filter) + '”.' : 'No rows.'}</div>`;
+  }
+  el.innerHTML = html;
+  syncPager();
+}
+
+function cellClass(v, numericCol) {
+  if (v === null) return 'null';
+  if (typeof v === 'number' || typeof v === 'bigint') return numericCol ? 'num' : '';
+  if (typeof v === 'object' && 'b' in v) return 'blob';
+  if (v === '') return 'empty-cell';
+  return '';
+}
+
+function cellText(v) {
+  if (v === null) return 'NULL';
+  if (typeof v === 'object' && 'b' in v) return 'BLOB · ' + LintApp.fmtBytes(v.b);
+  if (typeof v === 'object' && 't' in v) return esc(v.t.slice(0, 200)) + '…';
+  const s = String(v);
+  /* one line per cell; the full value is a click away */
+  return esc(s.length > 200 ? s.slice(0, 200) + '…' : s).replace(/\n/g, '<span class="empty-cell">↵</span>');
+}
+
+function syncPager() {
+  if (!grid) { $('pagerPos').textContent = ''; return; }
+  const from = grid.total ? grid.offset + 1 : 0;
+  const to = grid.offset + grid.rows.length;
+  $('pagerPos').textContent = grid.total
+    ? `${fmtNum(from)}–${fmtNum(to)} of ${fmtNum(grid.total)}${grid.more ? '+' : ''}`
+    : '0 rows';
+  $('btnPrev').disabled = grid.offset === 0;
+  $('btnNext').disabled = to >= grid.total;
+}
+
+function turn(dir) {
+  if (!grid || $('grid').hidden) return;
+  const next = grid.offset + dir * PAGE;
+  if (next < 0 || next >= grid.total) return;
+  sel = null;
+  if (grid.view === 'query') loadQueryPage(next);
+  else { state.offset = next; loadRows(); }
+  $('grid').scrollTop = 0;
+}
+$('btnPrev').addEventListener('click', () => turn(-1));
+$('btnNext').addEventListener('click', () => turn(1));
+
+/* sorting and selecting */
+$('grid').addEventListener('click', (e) => {
+  const th = e.target.closest('th.sortable[data-col]');
+  if (th) {
+    const col = grid.columns[+th.dataset.col].name;
+    /* ascending, descending, then back to the table's own order */
+    if (!state.order || state.order.col !== col) state.order = { col, dir: 1 };
+    else if (state.order.dir === 1) state.order.dir = -1;
+    else state.order = null;
+    state.offset = 0;
+    sel = null;
+    loadRows();
+    return;
+  }
+  const td = e.target.closest('td[data-c]');
+  if (td) selectCell(+td.dataset.r, +td.dataset.c);
+});
+
+let filterTimer;
+$('filter').addEventListener('input', () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => {
+    state.filter = $('filter').value.trim();
+    state.offset = 0;
+    sel = null;
+    loadRows();
+  }, 250);
+});
+$('filter').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('filter').value) {
+    e.preventDefault();
+    $('filter').value = '';
+    $('filter').dispatchEvent(new Event('input'));
+  }
+});
+
+/* ==========================================================================
+   A cell's whole value
+   ========================================================================== */
+let cellSeq = 0;
+let blobUrl = null;
+
+async function selectCell(r, ci, keepDrawer) {
+  if (!grid || !grid.rows[r]) return;
+  sel = { r, c: ci };
+  $('grid').querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
+  const td = $('grid').querySelector(`td[data-r="${r}"][data-c="${ci}"]`);
+  if (td) {
+    td.classList.add('sel');
+    td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  if (!keepDrawer) openDrawer('value');
+
+  const seq = ++cellSeq;
+  const v = grid.rows[r][ci];
+  const col = grid.columns[ci].name;
+  const where = 'row ' + fmtNum(grid.offset + r + 1);
+  /* short values are already here; only long text and blobs are fetched */
+  if (v === null || typeof v !== 'object') { paintValue(col, where, v); return; }
+  try {
+    const d = await rpc('cell', { view: grid.view, r: grid.view === 'query' ? grid.offset + r : r, c: ci });
+    if (seq !== cellSeq) return;
+    paintValue(col, where, d.blob ? { blob: d.blob } : d.value);
+  } catch (err) {
+    if (seq === cellSeq && err.message !== STOPPED) $('panelValue').innerHTML = `<p class="hint">${esc(err.message)}</p>`;
+  }
+}
+
+let shownValue = null;     // what Copy copies
+
+function paintValue(col, where, v) {
+  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  const head = (kind) => `<div class="value-head"><span class="col">${esc(col)}</span>` +
+    `<span class="kind">${kind}</span><span class="where">${where}</span></div>`;
+  const p = $('panelValue');
+
+  if (v === null) {
+    shownValue = null;
+    p.innerHTML = head('null') + '<pre class="value-text null">NULL</pre>';
+    return;
+  }
+
+  if (typeof v === 'object' && v.blob) {
+    const b = v.blob;
+    shownValue = { hex: b.hex };
+    let html = head('blob');
+    if (b.bytes) {
+      blobUrl = URL.createObjectURL(new Blob([b.bytes], { type: b.image }));
+      html += `<img class="blob-img" src="${blobUrl}" alt="The stored image">`;
+    }
+    html += `<pre class="value-text hexdump">${hexdump(b.hex)}</pre>` +
+      `<p class="value-note"><b>${LintApp.fmtBytes(b.size)}</b>` +
+      (b.image ? ', an image (' + b.image.slice(6).toUpperCase() + ')' : '') +
+      (b.size > b.hex.length ? '. The first ' + LintApp.fmtBytes(b.hex.length) + ' are shown.' : '.') + '</p>' +
+      '<div class="drawer-actions"><button class="bordered" id="btnCopyValue">Copy as hex</button></div>';
+    p.innerHTML = html;
+    /* an icon-sized image is scaled up by whole steps, so it stays crisp */
+    const img = p.querySelector('.blob-img');
+    if (img) img.onload = () => {
+      const k = Math.floor(96 / Math.max(img.naturalWidth, img.naturalHeight));
+      if (k > 1) img.style.width = img.naturalWidth * k + 'px';
+    };
+    return;
+  }
+
+  if (typeof v === 'number' || typeof v === 'bigint') {
+    shownValue = String(v);
+    const when = asTime(v);
+    p.innerHTML = head(Number.isInteger(Number(v)) ? 'integer' : 'real') +
+      `<pre class="value-text">${esc(String(v))}</pre>` +
+      (when ? `<p class="value-note">As a Unix time: <b>${esc(when)}</b></p>` : '') +
+      '<div class="drawer-actions"><button class="bordered" id="btnCopyValue">Copy</button></div>';
+    return;
+  }
+
+  const text = String(v);
+  shownValue = text;
+  const json = asJSON(text);
+  p.innerHTML = head('text') +
+    `<pre class="value-text">${esc(json !== null ? json : text)}</pre>` +
+    `<p class="value-note">${fmtNum(text.length)} character${text.length === 1 ? '' : 's'}` +
+    (json !== null ? ', valid JSON — shown formatted' : '') + '</p>' +
+    '<div class="drawer-actions"><button class="bordered" id="btnCopyValue">Copy</button>' +
+    (json !== null ? '<button class="bordered" id="btnToJson">Open in JSON viewer</button>' : '') + '</div>';
+}
+
+$('panelValue').addEventListener('click', (e) => {
+  if (e.target.id === 'btnCopyValue') copyValue();
+  else if (e.target.id === 'btnToJson') LintApp.copyAndOffer(shownValue, 'JSON', 'sqlite', 'json');
+});
+
+function copyValue() {
+  if (shownValue === null) { LintApp.copy('NULL', 'NULL'); return; }
+  if (typeof shownValue === 'object') {
+    LintApp.copy(Array.from(shownValue.hex, (x) => x.toString(16).padStart(2, '0')).join(''), 'Hex');
+  } else LintApp.copy(shownValue, 'Value');
+}
+
+/* JSON stored in a text column is the most common thing to squint at */
+function asJSON(s) {
+  const t = s.trim();
+  if (!/^[[{]/.test(t)) return null;
+  try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) { return null; }
+}
+
+/* seconds or milliseconds since 1970, within a plausible span (2001–2100) */
+function asTime(v) {
+  const n = Number(v);
+  if (!Number.isInteger(n)) return null;
+  let ms = null;
+  if (n >= 978307200 && n < 4102444800) ms = n * 1000;
+  else if (n >= 978307200000 && n < 4102444800000) ms = n;
+  if (ms === null) return null;
+  return new Date(ms).toISOString().replace('T', ' ').replace(/\.000Z$|Z$/, ' UTC');
+}
+
+function hexdump(bytes) {
+  const lines = [];
+  /* eight bytes a line: sixteen does not fit the drawer's width */
+  for (let o = 0; o < bytes.length; o += 8) {
+    const row = bytes.subarray(o, o + 8);
+    const hx = Array.from(row, (x) => x.toString(16).padStart(2, '0')).join(' ').padEnd(23, ' ');
+    const as = Array.from(row, (x) => x >= 32 && x < 127 ? String.fromCharCode(x) : '·').join('');
+    lines.push(`<span class="off">${o.toString(16).padStart(6, '0')}</span>  ${hx}  <span class="asc">${esc(as)}</span>`);
+  }
+  return lines.join('\n');
+}
+
+/* ==========================================================================
+   Schema
+   ========================================================================== */
+async function loadSchema() {
+  const seq = ++viewSeq;
+  const el = $('schemaView');
+  try {
+    const d = await rpc('schema', { name: state.name });
+    if (seq !== viewSeq) return;
+    schemaSql = d.sql;
+    let html = '';
+    html += `<section class="schema-sec"><h3>Columns</h3><table class="cols"><thead><tr>
+      <th>Name</th><th>Type</th><th>Default</th><th></th></tr></thead><tbody>` +
+      d.columns.map((col) => `<tr><td class="nm">${esc(col.name)}</td>` +
+        `<td>${esc(col.type || '')}</td><td>${col.dflt === null ? '' : esc(col.dflt)}</td><td>` +
+        (col.pk ? '<span class="flag pk">primary key</span>' : '') +
+        (col.nn ? '<span class="flag">not null</span>' : '') +
+        (col.hidden === 2 || col.hidden === 3 ? '<span class="flag">generated</span>' : '') +
+        (col.hidden === 1 ? '<span class="flag">hidden</span>' : '') +
+        '</td></tr>').join('') + '</tbody></table></section>';
+
+    if (d.type !== 'view') {
+      html += '<section class="schema-sec"><h3>Indexes</h3>' + (d.indexes.length
+        ? '<table class="cols"><tbody>' + d.indexes.map((ix) =>
+            `<tr><td class="nm">${esc(ix.name)}</td><td>${ix.columns.map(esc).join(', ')}</td><td>` +
+            (ix.uniq ? '<span class="flag">unique</span>' : '') +
+            (ix.origin === 'pk' ? '<span class="flag pk">primary key</span>' : '') +
+            (ix.origin === 'u' ? '<span class="flag">from a UNIQUE constraint</span>' : '') +
+            (ix.partial ? '<span class="flag">partial</span>' : '') + '</td></tr>').join('') + '</tbody></table>'
+        : '<p class="none">No indexes.</p>') + '</section>';
+
+      html += '<section class="schema-sec"><h3>Foreign keys</h3>' + (d.foreign.length
+        ? '<table class="cols"><tbody>' + d.foreign.map((f) =>
+            `<tr><td class="nm">${esc(f.col)}</td><td>→ ${esc(f.target)}(${esc(f.ref || 'primary key')})</td><td>` +
+            (f.on_delete !== 'NO ACTION' ? `<span class="flag">on delete ${esc(f.on_delete.toLowerCase())}</span>` : '') +
+            (f.on_update !== 'NO ACTION' ? `<span class="flag">on update ${esc(f.on_update.toLowerCase())}</span>` : '') +
+            '</td></tr>').join('') + '</tbody></table>'
+        : '<p class="none">No foreign keys.</p>') + '</section>';
+    }
+
+    if (d.triggers.length) {
+      html += '<section class="schema-sec"><h3>Triggers</h3>' +
+        d.triggers.map((t) => `<pre>${sqlHighlight(t.sql || '')}</pre>`).join('<br>') + '</section>';
+    }
+
+    html += `<section class="schema-sec"><h3>Definition</h3>` +
+      (d.sql ? `<pre>${sqlHighlight(d.sql)}</pre>` : '<p class="none">SQLite built this one in; it has no CREATE statement.</p>') +
+      d.indexes.filter((ix) => ix.sql).map((ix) => `<pre style="margin-top:var(--s2)">${sqlHighlight(ix.sql)}</pre>`).join('') +
+      '</section>';
+    el.innerHTML = html;
+  } catch (err) {
+    if (seq === viewSeq && err.message !== STOPPED) el.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+  }
+}
+let schemaSql = null;
+
+const KEYWORDS = new Set(('select from where and or not null create table view index unique trigger on ' +
+  'primary key foreign references default check constraint insert into values update set delete ' +
+  'begin end after before instead of for each row when then else case as join left inner outer cross ' +
+  'group by order having limit offset asc desc distinct union all exists in is like glob between ' +
+  'collate nocase rowid without strict virtual using autoincrement if cascade restrict action no ' +
+  'integer text real blob numeric int varchar boolean datetime generated always stored with recursive').split(' '));
+
+/* just enough colour to read a CREATE statement by: keywords, strings,
+   numbers, comments; identifiers stay ink */
+function sqlHighlight(sql) {
+  return sql.replace(/(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:[^']|'')*')|("(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\])|\b(\d+(?:\.\d+)?)\b|([A-Za-z_]+)|([^'"`[\-/A-Za-z_\d]+|.)/g,
+    (m, cmt, str, id, num, word) => {
+      if (cmt) return `<span class="sql-cmt">${esc(cmt)}</span>`;
+      if (str) return `<span class="sql-str">${esc(str)}</span>`;
+      if (id) return esc(id);
+      if (num) return `<span class="sql-num">${num}</span>`;
+      if (word && KEYWORDS.has(word.toLowerCase())) return `<span class="sql-kw">${esc(word)}</span>`;
+      return esc(m);
+    });
+}
+
+/* ==========================================================================
+   SQL
+   ========================================================================== */
+function openQuery() {
+  state.mode = 'query';
+  sel = null;
+  valueHint();
+  showMode();
+}
+
+function showQueryResult() {
+  if (query.columns) {
+    grid = { view: 'query', columns: query.columns, rows: query.rows, offset: query.offset,
+             total: query.total, more: query.more };
+    renderGrid();
+  } else {
+    grid = null;
+    $('grid').hidden = false;
+    $('grid').innerHTML = query.ran
+      ? '<div class="empty">The statement ran and returned no columns.</div>'
+      : `<div class="empty">Write a query and press ${LintApp.kbd('mod+enter')}. ` +
+        'The database is open read-only.</div>';
+    $('pagerPos').textContent = '';
+    $('btnPrev').disabled = $('btnNext').disabled = true;
+  }
+}
+
+let runStart = 0, stopTimer, running = false;
+
+async function runQuery() {
+  if (!info) return;
+  const sql = $('sql').value;
+  if (!sql.trim() || running) return;
+  running = true;
+  query.sql = sql;
+  const msg = $('queryMsg');
+  msg.className = '';
+  msg.textContent = 'Running…';
+  $('grid').classList.add('stale');
+  runStart = performance.now();
+  /* a quick query never flashes a Stop button */
+  stopTimer = setTimeout(() => { $('btnStop').hidden = false; $('btnRun').hidden = true; }, 400);
+  sel = null;
+  try {
+    const d = await rpc('query', { sql });
+    query.ran = true;
+    if (d.columns) {
+      Object.assign(query, { columns: d.columns, rows: d.rows.slice(0, PAGE), offset: 0,
+                             total: d.total, more: d.more });
+      msg.textContent = (d.statement ? 'Statement ' + d.statement + ': ' : '') +
+        fmtNum(d.total) + (d.more ? '+' : '') + (d.total === 1 ? ' row' : ' rows') +
+        (d.more ? ' (the first ' + fmtNum(d.total) + ' are kept)' : '') + ' in ' + ms(d.ms);
+    } else {
+      Object.assign(query, { columns: null, rows: [], total: 0, offset: 0, more: false });
+      msg.textContent = (d.ran === 1 ? 'Ran' : 'Ran ' + d.ran + ' statements') + ' in ' + ms(d.ms);
+    }
+    if (state.mode === 'query') showQueryResult();
+  } catch (err) {
+    $('grid').classList.remove('stale');
+    if (err.message === STOPPED) { msg.textContent = 'Stopped after ' + ms(performance.now() - runStart); return; }
+    msg.className = 'err';
+    msg.textContent = err.message;
+  } finally {
+    running = false;
+    clearTimeout(stopTimer);
+    $('btnStop').hidden = true;
+    $('btnRun').hidden = false;
+  }
+}
+
+function ms(t) {
+  return t < 1 ? '<1 ms' : t < 1000 ? Math.round(t) + ' ms' : (t / 1000).toFixed(1) + ' s';
+}
+
+async function loadQueryPage(from) {
+  const seq = ++viewSeq;
+  try {
+    const d = await rpc('page', { from, limit: PAGE });
+    if (seq !== viewSeq) return;
+    query.rows = d.rows;
+    query.offset = from;
+    showQueryResult();
+  } catch (err) {
+    if (err.message !== STOPPED) LintApp.toast(err.message);
+  }
+}
+
+$('btnRun').addEventListener('click', runQuery);
+$('btnStop').addEventListener('click', stop);
+$('btnQuery').addEventListener('click', () => state.mode === 'query' && state.name ? select(state.name) : openQuery());
+
+$('sql').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); return; }
+  /* Tab indents, as in every SQL editor; Esc then Tab still leaves */
+  if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !tabEscaped) {
+    e.preventDefault();
+    document.execCommand('insertText', false, '  ');
+  }
+  tabEscaped = e.key === 'Escape';
+});
+let tabEscaped = false;
+
+/* ==========================================================================
+   Copying out
+   ========================================================================== */
+async function copyRows(format) {
+  if (!info) return;
+  const req = state.mode === 'query'
+    ? { view: 'query', format }
+    : { view: 'grid', name: state.name, order: state.order, filter: state.filter, format };
+  if (state.mode === 'query' && !query.columns) { LintApp.toast('Run a query that returns rows first'); return; }
+  setBusy(40);
+  try {
+    const d = await rpc('export', req);
+    setBusy(null);
+    const label = format === 'json' ? 'JSON' : 'CSV';
+    LintApp.copyAndOffer(d.text, label, 'sqlite', format === 'json' ? 'json' : 'csv');
+    if (d.clipped) setTimeout(() => LintApp.toast('Copied the first ' + fmtNum(d.rows) + ' rows'), 1800);
+  } catch (err) {
+    setBusy(null);
+    if (err.message !== STOPPED) LintApp.toast(err.message);
+  }
+}
+
+$('btnCsv').addEventListener('click', () => { LintApp.closeMenus(); copyRows('csv'); });
+$('btnJson').addEventListener('click', () => { LintApp.closeMenus(); copyRows('json'); });
+$('btnCreate').addEventListener('click', async () => {
+  LintApp.closeMenus();
+  if (!state.name) return;
+  try {
+    const d = await rpc('schema', { name: state.name });
+    if (d.sql) LintApp.copy(d.sql + ';', 'CREATE statement');
+    else LintApp.toast('This one is built into SQLite and has no CREATE statement');
+  } catch (err) { LintApp.toast(err.message); }
+});
+
+/* ==========================================================================
+   The drawer
+   ========================================================================== */
+function openDrawer(tab) {
+  $('drawer').classList.add('open');
+  $('btnInfo').setAttribute('aria-pressed', String(tab === 'file'));
+  [['tabValue', 'panelValue', 'value'], ['tabFile', 'panelFile', 'file']].forEach(([t, p, id]) => {
+    $(t).setAttribute('aria-selected', String(id === tab));
+    $(p).classList.toggle('active', id === tab);
+  });
+  if (tab === 'value' && !sel) valueHint();
+}
+
+function valueHint() {
+  shownValue = null;
+  $('panelValue').innerHTML = '<p class="hint">Click a cell to see its whole value here: long text, formatted JSON, or a blob as hex.</p>';
+}
+
+function closeDrawer() {
+  $('drawer').classList.remove('open');
+  $('btnInfo').setAttribute('aria-pressed', 'false');
+}
+
+$('tabValue').addEventListener('click', () => openDrawer('value'));
+$('tabFile').addEventListener('click', () => openDrawer('file'));
+$('btnInfo').addEventListener('click', () => {
+  const on = $('drawer').classList.contains('open') && $('tabFile').getAttribute('aria-selected') === 'true';
+  if (on) closeDrawer(); else openDrawer('file');
+});
+
+/* application_id values that name the format a file really is */
+const APPS = {
+  0x47504B47: 'GeoPackage', 0x47503130: 'GeoPackage 1.0', 0x47503131: 'GeoPackage 1.1',
+  0x4D504258: 'MBTiles', 0x0F055112: 'Fossil repository', 0x0F055113: 'Fossil checkout'
+};
+
+function versionText(n) {
+  if (!n) return null;
+  return Math.floor(n / 1000000) + '.' + Math.floor(n / 1000) % 1000 + '.' + n % 1000;
+}
+
+function buildFilePanel() {
+  const h = info.header;
+  const row = (k, v, note) => `<div><dt>${k}</dt><dd>${v}${note ? '<small>' + note + '</small>' : ''}</dd></div>`;
+  const tables = info.tables.filter((t) => t.kind === 'table' || t.kind === 'virtual').length;
+  const views = info.tables.filter((t) => t.kind === 'view').length;
+  let html = '';
+  if (info.wal) {
+    html += '<p class="warn-note">This file was in WAL mode. Changes still waiting in its ' +
+      '<code>-wal</code> file are not part of it, so the newest rows may be missing.</p>';
+  }
+  html += '<dl class="meta">' + row('File', esc(info.name)) +
+    (info.size !== null ? row('Size', LintApp.fmtBytes(info.size)) : '') +
+    row('Contents', `${fmtNum(tables)} tables, ${fmtNum(views)} views, ${fmtNum(info.indexes)} indexes, ${fmtNum(info.triggers)} triggers`);
+
+  if (h) {
+    const app = h.applicationId ? (APPS[h.applicationId] || fourcc(h.applicationId)) : null;
+    html += row('Pages', `${fmtNum(h.pageCount)} × ${fmtNum(h.pageSize)} bytes`,
+        h.freelist ? fmtNum(h.freelist) + ' free (' + LintApp.fmtBytes(h.freelist * h.pageSize) + ' a VACUUM would reclaim)' : null) +
+      row('Encoding', h.encoding) +
+      row('Journal', info.wal ? 'WAL' : 'rollback') +
+      row('Auto-vacuum', h.autoVacuum) +
+      row('User version', String(h.userVersion), h.userVersion ? 'Apps often keep their schema version here' : null) +
+      (app ? row('Application', esc(app)) : '') +
+      (h.writtenBy ? row('Written by', 'SQLite ' + versionText(h.writtenBy)) : '');
+  }
+  html += row('Read with', 'SQLite ' + esc(info.engine), 'Running in this tab, read-only') + '</dl>' +
+    '<button class="bordered" id="btnCheck">Check integrity</button><div class="check" id="checkOut"></div>';
+  $('panelFile').innerHTML = html;
+}
+
+function fourcc(n) {
+  const s = String.fromCharCode(n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255);
+  return /^[\x20-\x7e]{4}$/.test(s) ? `'${s}' (0x${n.toString(16)})` : '0x' + n.toString(16).padStart(8, '0');
+}
+
+$('panelFile').addEventListener('click', async (e) => {
+  if (e.target.id !== 'btnCheck') return;
+  const out = $('checkOut');
+  out.className = 'check';
+  out.textContent = 'Checking…';
+  try {
+    const d = await rpc('check', {});
+    out.className = 'check ' + (d.ok ? 'ok' : 'bad');
+    out.textContent = d.ok ? 'No problems found.' : d.problems.slice(0, 20).join('\n');
+  } catch (err) {
+    out.className = 'check bad';
+    out.textContent = err.message === STOPPED ? 'Stopped.' : err.message;
+  }
+});
+
+/* ==========================================================================
+   Files, keys
+   ========================================================================== */
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => {
+  if (e.target.files[0]) openFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+['dragover', 'dragenter'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dragover');
+  }));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+  if (mod && k === 'o') { e.preventDefault(); $('fileInput').click(); return; }
+  if (!info) return;
+  if (e.key === 'Escape' && running && !$('btnStop').hidden) { e.preventDefault(); stop(); return; }
+  if (mod && k === 'e') { e.preventDefault(); $('btnQuery').click(); return; }
+  if (mod && k === 'i') { e.preventDefault(); $('btnInfo').click(); return; }
+  if (mod && k === 'f' && state.mode === 'data') { e.preventDefault(); $('filter').focus(); $('filter').select(); return; }
+  if (typing()) return;
+  if (e.key === 'PageDown') { e.preventDefault(); turn(1); return; }
+  if (e.key === 'PageUp') { e.preventDefault(); turn(-1); return; }
+  if (!sel || !grid || $('grid').hidden) return;
+
+  /* the arrows walk the grid once a cell is chosen */
+  const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  if (moves[e.key] && !mod && !e.altKey) {
+    e.preventDefault();
+    const r = Math.min(grid.rows.length - 1, Math.max(0, sel.r + moves[e.key][0]));
+    const ci = Math.min(grid.columns.length - 1, Math.max(0, sel.c + moves[e.key][1]));
+    selectCell(r, ci, !$('drawer').classList.contains('open'));
+  } else if (mod && k === 'c' && !String(window.getSelection())) {
+    e.preventDefault();
+    const v = grid.rows[sel.r][sel.c];
+    if (v !== null && typeof v === 'object') {
+      /* long text and blobs are copied whole, from the worker */
+      rpc('cell', { view: grid.view, r: grid.view === 'query' ? grid.offset + sel.r : sel.r, c: sel.c })
+        .then((d) => {
+          if (d.blob) LintApp.copy(Array.from(d.blob.hex, (x) => x.toString(16).padStart(2, '0')).join(''), 'Hex');
+          else LintApp.copy(String(d.value), 'Value');
+        }, (err) => LintApp.toast(err.message));
+    } else LintApp.copy(v === null ? 'NULL' : String(v), 'Value');
+  } else if (e.key === 'Escape') {
+    sel = null;
+    $('grid').querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
+    closeDrawer();
+  }
+});
+
+LintApp.textZoom();
+LintApp.shortcuts([{ title: 'SQLite', items: [
+  { keys: ['mod+e'], label: 'SQL query, or back to the table' },
+  { keys: ['mod+enter'], label: 'Run the query' },
+  { keys: ['esc'], label: 'Stop a running query' },
+  { keys: ['pagedown'], label: 'Next rows' },
+  { keys: ['pageup'], label: 'Previous rows' },
+  { keys: ['up', 'down', 'left', 'right'], label: 'Move between cells' },
+  { keys: ['mod+c'], label: 'Copy the chosen cell' },
+  { keys: ['mod+i'], label: 'About this file' }
+] }]);
+
+function ident(name) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !KEYWORDS.has(name.toLowerCase())
+    ? name : '"' + name.replace(/"/g, '""') + '"';
+}
+
+/* ==========================================================================
+   The sample: a small shop, built by SQL in memory — a key, a view, an
+   index, a trigger, JSON in a text column, times as Unix seconds and a
+   stored image, so every part of the viewer has something to show
+   ========================================================================== */
+const SAMPLE_SQL = `
+CREATE TABLE customers (
+  id         INTEGER PRIMARY KEY,
+  email      TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  country    TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  avatar     BLOB
+);
+CREATE TABLE products (
+  id          INTEGER PRIMARY KEY,
+  sku         TEXT NOT NULL UNIQUE,
+  title       TEXT NOT NULL,
+  price_cents INTEGER NOT NULL CHECK (price_cents >= 0)
+);
+CREATE TABLE orders (
+  id          INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  total_cents INTEGER NOT NULL,
+  placed_at   INTEGER NOT NULL,
+  meta        TEXT
+);
+CREATE TABLE order_items (
+  order_id   INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  qty        INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (order_id, product_id)
+) WITHOUT ROWID;
+CREATE INDEX orders_by_customer ON orders (customer_id, placed_at DESC);
+CREATE VIEW revenue_by_country AS
+  SELECT c.country, count(o.id) AS orders, round(sum(o.total_cents) / 100.0, 2) AS revenue
+  FROM orders o JOIN customers c ON c.id = o.customer_id
+  WHERE o.status = 'paid'
+  GROUP BY c.country
+  ORDER BY revenue DESC;
+CREATE TRIGGER orders_status_changed AFTER UPDATE OF status ON orders
+BEGIN
+  UPDATE orders SET meta = json_set(coalesce(meta, '{}'), '$.status_changed_at', unixepoch())
+  WHERE id = NEW.id;
+END;
+
+INSERT INTO customers (id, email, name, country, created_at, avatar) VALUES
+  (1, 'dilnoza@example.uz', 'Dilnoza Karimova', 'UZ', 1704103200, x'89504e470d0a1a0a0000000d494844520000000c0000000c0802000000d917cbb00000002b4944415478da6378fbf21f41c40067d558bd4543e88a305520ab63c0a302ae6e482b222a08880d4cfc080024b62e7880cbcf5b0000000049454e44ae426082'),
+  (2, 'jonas@example.de', 'Jonas Becker', 'DE', 1706781600, NULL),
+  (3, 'amara@example.ke', 'Amara Njoroge', 'KE', 1709287200, NULL),
+  (4, 'haruto@example.jp', 'Haruto Sato', 'JP', 1711965600, NULL),
+  (5, 'lucia@example.br', 'Lúcia Ferreira', 'BR', 1714557600, NULL),
+  (6, 'priya@example.in', 'Priya Raman', 'IN', 1717236000, NULL),
+  (7, 'sam@example.com', 'Sam O''Neill', 'US', 1719828000, NULL),
+  (8, 'timur@example.uz', 'Timur Aliev', 'UZ', 1722506400, NULL);
+
+INSERT INTO products (id, sku, title, price_cents) VALUES
+  (1, 'KB-75', 'Mechanical keyboard, 75%', 11900),
+  (2, 'MS-02', 'Vertical mouse', 4900),
+  (3, 'HB-7', 'USB-C hub, 7 ports', 3900),
+  (4, 'MN-27', '27" monitor, 4K', 32900),
+  (5, 'DS-L', 'Desk mat, large', 2400),
+  (6, 'CB-2M', 'USB-C cable, 2 m', 1200);
+
+WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 64)
+INSERT INTO order_items (order_id, product_id, qty)
+SELECT x, (x * 7) % 6 + 1, (x % 3) + 1 FROM n
+UNION ALL
+SELECT x, (x * 7 + 3) % 6 + 1, 1 FROM n WHERE x % 2 = 0;
+
+WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 64)
+INSERT INTO orders (id, customer_id, status, total_cents, placed_at, meta)
+SELECT x,
+       (x * 5) % 8 + 1,
+       CASE WHEN x % 11 = 0 THEN 'refunded' WHEN x % 5 = 0 THEN 'pending' ELSE 'paid' END,
+       (SELECT sum(i.qty * p.price_cents) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = x),
+       1725148800 + x * 41117,
+       json_object('channel', CASE x % 3 WHEN 0 THEN 'web' WHEN 1 THEN 'ios' ELSE 'android' END,
+                   'coupon', CASE WHEN x % 6 = 0 THEN 'AUTUMN10' END,
+                   'client', json_object('ip', '10.0.' || (x % 7) || '.' || x, 'ua_major', 120 + x % 9))
+FROM n;
+`;
+
+reset();
+LintApp.takeHandoff('sqlite', openFile);
+</script>
+</body>
+</html>

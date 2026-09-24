@@ -20,7 +20,8 @@
     "viewer",
     "formatter",
     "pdf",
-    "log"
+    "log",
+    "sqlite"
   ],
   "author": "saidkamolxon",
   "license": "MIT"

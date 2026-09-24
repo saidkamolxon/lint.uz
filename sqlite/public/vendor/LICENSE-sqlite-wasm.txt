@@ -1,0 +1,9 @@
+sqlite3.mjs and sqlite3.wasm are the official SQLite WebAssembly build,
+@sqlite.org/sqlite-wasm 3.53.4-build1 (https://github.com/sqlite/sqlite-wasm),
+with sqlite3.mjs minified from the package's dist/index.mjs by esbuild.
+Nothing else was changed.
+
+SQLite itself is in the public domain: https://sqlite.org/copyright.html
+
+The npm wrapper is distributed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0

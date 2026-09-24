@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lint.one — file viewers that never send your data anywhere</title>
-<meta name="description" content="JSON, XML, YAML, CSV, PDF and log viewers, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
+<meta name="description" content="JSON, XML, YAML, CSV, PDF, log and SQLite viewers, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/shared/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
@@ -231,9 +231,9 @@ h1, h2 { text-wrap: balance; }
 .net-out b { color: var(--ok); font-weight: 600; }
 
 /* ---------- tools ----------
-   Four across on a wide screen: seven tools make a full row and a row of
-   three that starts at the left edge like the text above it, so the grid
-   reads as a list rather than a centred picture. */
+   Four across on a wide screen: eight tools make two full rows, and the
+   grid starts at the left edge like the text above it, so it reads as a
+   list rather than a centred picture. */
 .tools {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -281,6 +281,7 @@ h1, h2 { text-wrap: balance; }
 .t-pdf   { --tool-hue: #BE123C; --glyph: url("/shared/glyphs/pdf.svg"); }
 .t-log   { --tool-hue: #0369A1; --glyph: url("/shared/glyphs/log.svg"); }
 .t-audio { --tool-hue: #C026D3; --glyph: url("/shared/glyphs/audio.svg"); }
+.t-sqlite { --tool-hue: #7C3AED; --glyph: url("/shared/glyphs/sqlite.svg"); }
 
 /* ---------- footer ---------- */
 footer {
@@ -356,7 +357,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <section class="hero">
         <h1>Read your files. Send&nbsp;nothing.</h1>
         <p>
-          JSON, XML, YAML, CSV, logs, PDF and audio open right in your browser —
+          JSON, XML, YAML, CSV, logs, PDF, SQLite and audio open right in your browser —
           even offline. Nothing leaves your device.
         </p>
         <div class="act">
@@ -423,6 +424,11 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
           <h2>Audio</h2>
           <p>A file, a tab or a microphone, with a live spectrum.</p>
         </a></li>
+        <li><a class="tool t-sqlite" href="/sqlite/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>SQLite</h2>
+          <p>Tables, schema and your own SQL, on a .db file that stays put.</p>
+        </a></li>
       </ul>
     </nav>
 
@@ -469,7 +475,9 @@ LintTheme.buildMenu(menu, closeMenu);
     log: 'log', txt: 'log', out: 'log', err: 'log',
     mp3: 'audio', wav: 'audio', flac: 'audio', ogg: 'audio', oga: 'audio',
     opus: 'audio', m4a: 'audio', aac: 'audio', weba: 'audio', webm: 'audio',
-    aiff: 'audio'
+    aiff: 'audio',
+    db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
+    sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite'
   };
 
   function byName(name) {
@@ -480,14 +488,18 @@ LintTheme.buildMenu(menu, closeMenu);
   function byType(t) {
     if (t === 'application/pdf') return 'pdf';
     if (/^audio\//.test(t)) return 'audio';
+    if (/sqlite/.test(t)) return 'sqlite';
     if (t === 'application/json') return 'json';
     if (t === 'text/csv') return 'csv';
     if (/[\/+]xml$/.test(t)) return 'xml';
   }
 
-  /* the last resort: what the text starts with */
+  /* the last resort: what the file starts with. A database announces
+     itself in its first sixteen bytes, which matters because browsers keep
+     theirs (History, Cookies) with no extension at all. */
   function sniff(file, done) {
     file.slice(0, 4096).text().then(function (s) {
+      if (s.slice(0, 16) === 'SQLite format 3\u0000') { done('sqlite'); return; }
       var c = s.replace(/^﻿/, '').trim().charAt(0);
       done(c === '{' || c === '[' ? 'json' : c === '<' ? 'xml' : 'log');
     }, function () { done('log'); });

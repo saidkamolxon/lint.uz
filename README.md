@@ -13,8 +13,9 @@
 | `P` | **[pdf.lint.one](https://pdf.lint.one)** | Page reader, text extraction, fonts, metadata, and what the file contains |
 | `≡` | **[log.lint.one](https://log.lint.one)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
 | `♪` | **[audio.lint.one](https://audio.lint.one)** | Plays a file or another tab's sound with a live spectrum; waveform seek, tags, levels |
+| `⛁` | **[lint.one/sqlite](https://lint.one/sqlite)** | Tables, schema and read-only SQL on a `.db` file; JSON cells formatted, blobs as hex or images |
 
-The landing page at **[lint.one](https://lint.one)** links all seven, and opens
+The landing page at **[lint.one](https://lint.one)** links all eight, and opens
 any file dropped on it in the tool that reads it.
 
 The original domain, `lint.uz`, redirects here: every path and subdomain is
@@ -71,9 +72,9 @@ Every page shares one system in [`shared/`](shared/):
 gutter, the logo mark, the suite menu and the favicon — so a tab is identifiable at a glance while the suite
 still reads as one product:
 
-| JSON | XML | YAML | CSV | PDF | Logs | Audio |
-| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#4D7C0F` green | `#BE123C` crimson | `#0369A1` blue | `#C026D3` magenta |
+| JSON | XML | YAML | CSV | PDF | Logs | Audio | SQLite |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#4D7C0F` green | `#BE123C` crimson | `#0369A1` blue | `#C026D3` magenta | `#7C3AED` violet |
 
 **Themes:** System, Light and Dark, each with an **Increase contrast** switch
 (WCAG AAA palettes) that starts from the OS setting. To add a theme, copy a
@@ -96,6 +97,17 @@ sheet gets an explicit **Normal / Dim / Invert** control, defaulting to Dim on
 dark themes until the reader chooses otherwise. It bundles PDF.js (Apache-2.0,
 `pdf/public/vendor/`); the worker and fonts load only once a file is opened,
 so the initial page weight stays close to the other tools.
+
+**SQLite builds its own frame too**, for the same reason: a database is a set
+of tables, not one text. It bundles the official SQLite WebAssembly build
+(`sqlite/public/vendor/`, SQLite is public domain) and runs it in a worker, so
+a slow query never freezes the page and Stop can end it. The file is never
+loaded whole: a small read-only VFS fetches the pages a query touches straight
+from the file on disk, keeping at most 64 MB of them, so a database of any size
+opens at once and costs a tab about the same memory. Queries that jump all over
+a very large table (an index lookup per row) are slower than in native SQLite
+for the same reason. A database saved in WAL mode opens without whatever its
+`-wal` file still held, and the page says so.
 
 ---
 

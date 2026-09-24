@@ -36,6 +36,7 @@ jobs:
               - 'pdf/**'
               - 'log/**'
               - 'audio/**'
+              - 'sqlite/**'
             redirect:
               - 'redirect/**'
               - '.github/workflows/deploy.yml'

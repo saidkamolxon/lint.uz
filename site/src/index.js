@@ -9,7 +9,7 @@
    not exist yet into something useful — a page that says so and counts how
    many people wanted it. */
 
-const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio'];
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite'];
 
 /* What might plausibly be a file format someone hoped for: short, letters and
    digits, containing at least one letter. Digits may lead — 3js, 7z and mp4
