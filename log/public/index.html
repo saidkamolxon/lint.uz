@@ -470,6 +470,14 @@ const DOTNET_RE = /^(trce|dbug|info|warn|fail|crit)\s*:/i;
 const DOTNET_MAP = { trce: 'debug', dbug: 'debug', info: 'info',
                      warn: 'warn', fail: 'error', crit: 'error' };
 
+/* Serilog's default templates write the level as a bracketed three-letter
+   code after the timestamp: "10:46:12 [ERR] …", "2024-05-01 10:46:12.123
+   +05:00 [WRN] …". Only the bracketed form near the start counts, so a bare
+   "INF" inside a message is never read as a level. */
+const SERILOG_RE = /^[^[]{0,40}\[(VRB|DBG|INF|WRN|ERR|FTL)\]/;
+const SERILOG_MAP = { VRB: 'debug', DBG: 'debug', INF: 'info',
+                      WRN: 'warn', ERR: 'error', FTL: 'error' };
+
 /* timestamp <tab|space> level <tab|space> message — Istio, zap, and most Go
    services. Where a line states its level, that wins: a config value like
    --logLevel="misc:error" must not make an info line look like a failure. */
@@ -482,8 +490,22 @@ const LEVEL_MAP = {
 };
 
 /* A continuation line belongs to the event above it: stack frames, "Caused
-   by", and anything indented under a parent. */
-const CONT_RE = /^(?:\s+at\s|\s+\.\.\.|\s*Caused by:|\s*Suppressed:|\s+File "|\s{2,}\S|\t)/;
+   by", and anything indented under a parent. Some parts of a trace are
+   written at column 0 and would otherwise each start an event of their own:
+   .NET's "--- End of stack trace from previous location ---" and inner-
+   exception "--->" lines, an exception's header line
+   ("System.InvalidOperationException: …", "java.lang.IllegalStateException"),
+   and Python's "Traceback (most recent call last):" with its closing
+   "ValueError: …". An exception name needs a namespace, or a word before its
+   Error/Exception suffix, so a plain "Error: …" line still starts an event. */
+const CONT_RE = new RegExp('^(?:' + [
+  /\s+at\s/, /\s+\.\.\./, /\s*Caused by:/, /\s*Suppressed:/, /\s+File "/,
+  /\s{2,}\S/, /\t/,
+  /\s*--- End of /, /\s*---> /,
+  /(?:[A-Za-z_$][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error|Throwable)\b/,
+  /[A-Z]\w+(?:Exception|Error)(?::|$)/,
+  /Traceback \(most recent call last\):/
+].map((re) => re.source).join('|') + ')');
 
 const JSON_LEVEL_KEYS = ['level', 'severity', 'lvl', 'levelname', 'log.level'];
 
@@ -492,6 +514,9 @@ function classify(line) {
 
   const dn = DOTNET_RE.exec(line);
   if (dn) return DOTNET_MAP[dn[1].toLowerCase()];
+
+  const sl = SERILOG_RE.exec(line);
+  if (sl) return SERILOG_MAP[sl[1]];
 
   const ll = LEADING_LEVEL_RE.exec(line);
   if (ll) return LEVEL_MAP[ll[1].toLowerCase()];
@@ -552,7 +577,7 @@ function accessStatus(line) {
    thorough where classification cannot.
    ========================================================================== */
 const TIME_RE = /^(\[?)((?:\d{4}-\d{2}-\d{2}[T ])?\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?)(\]?)/;
-const SEV_WORD_RE = /\b(FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|PANIC|FAILED|FAIL|WARNING|WARN|INFO|NOTICE|DEBUG|TRACE|TRCE|DBUG|VERBOSE)\b/;
+const SEV_WORD_RE = /\b(FATAL|CRITICAL|CRIT|SEVERE|ERROR|ERR|FTL|PANIC|FAILED|FAIL|WARNING|WARN|WRN|INFO|INF|NOTICE|DEBUG|DBG|TRACE|TRCE|DBUG|VERBOSE|VRB)\b/;
 
 function render(line, query, limit = 4000) {
   if (line.length > limit) line = line.slice(0, limit) + ' …';
