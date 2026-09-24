@@ -21,6 +21,11 @@ any file dropped on it in the tool that reads it.
 The original domain, `lint.uz`, redirects here: every path and subdomain is
 preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
 
+Other names for a format lead to its tool: `/yml` opens YAML, `/db` and
+`/sql` open SQLite, `/tsv` opens CSV, `/mp3` opens Audio, and so on. The
+aliases are the same extensions the landing page routes a dropped file by,
+and they work as subdomains too, so `yml.lint.one` lands on `lint.one/yaml/`.
+
 ---
 
 ## Privacy

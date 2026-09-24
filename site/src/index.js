@@ -11,6 +11,24 @@
 
 const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite'];
 
+/* Other names people type for a format we read, each sent to the tool that
+   reads it: /yml is /yaml, /db is /sqlite. The same names the landing page
+   routes a dropped file by, so a path and a file never disagree. Subdomains
+   arrive here as paths (the redirect worker makes yml.lint.one /yml), so
+   they follow too. */
+const ALIASES = {
+  yml: 'yaml',
+  geojson: 'json', jsonc: 'json',
+  svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
+  rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
+  tsv: 'csv', psv: 'csv',
+  logs: 'log', txt: 'log', out: 'log', err: 'log', jsonl: 'log', ndjson: 'log',
+  mp3: 'audio', wav: 'audio', flac: 'audio', ogg: 'audio', oga: 'audio', opus: 'audio',
+  m4a: 'audio', aac: 'audio', weba: 'audio', aiff: 'audio',
+  db: 'sqlite', sql: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
+  sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite'
+};
+
 /* What might plausibly be a file format someone hoped for: short, letters and
    digits, containing at least one letter. Digits may lead — 3js, 7z and mp4
    are all real. Keeps /about and crawler noise out of the table while still
@@ -38,6 +56,14 @@ export default {
        crawler never files the same page several times */
     if (bare && TOOLS.includes(name) && path !== '/' + name + '/') {
       return Response.redirect(url.origin + '/' + name + '/' + url.search, 301);
+    }
+
+    /* an alias keeps whatever follows it: /yml/js-yaml.min.js is the YAML
+       tool's file, which a page on yml.lint.uz once asked for */
+    const [first, ...rest] = path.replace(/^\/+/, '').split('/');
+    const tool = Object.hasOwn(ALIASES, first.toLowerCase()) ? ALIASES[first.toLowerCase()] : null;
+    if (tool) {
+      return Response.redirect(url.origin + '/' + tool + '/' + rest.join('/') + url.search, 301);
     }
 
     const res = await env.ASSETS.fetch(request);
