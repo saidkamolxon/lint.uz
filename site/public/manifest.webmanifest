@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "lint.one",
-  "short_name": "lint.one",
+  "name": "lint one",
+  "short_name": "lint",
   "description": "Read JSON, XML, YAML, CSV, PDF, logs, SQLite and audio files in your browser. Nothing you open leaves your device.",
   "start_url": "/",
   "scope": "/",
