@@ -51,8 +51,11 @@ const files = (await readdir(DIST, { recursive: true, withFileTypes: true }))
   .filter((d) => d.isFile())
   .map((d) => relative(DIST, join(d.parentPath, d.name)).split(sep).join('/'))
   /* link-preview cards and crawler files are for other machines, not for
-     reading offline; caching them would only cost every visitor a download */
-  .filter((f) => !/^og\/|^(robots\.txt|sitemap\.xml)$/.test(f))
+     reading offline; caching them would only cost every visitor a download.
+     The manifest and app icons stay out too: the browser reads them when the
+     app is installed, and a cached copy would install the previous version's
+     name and icons. Left out of the copy, they always come from the network. */
+  .filter((f) => !/^(og|icons)\/|^(robots\.txt|sitemap\.xml|manifest\.webmanifest|apple-touch-icon\.png)$/.test(f))
   .sort();
 const hash = createHash('sha256');
 for (const f of files) hash.update(f).update(await readFile(join(DIST, f)));
