@@ -119,6 +119,9 @@ function shell(title, body, status) {
 <title>${title} · lint.one</title>
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light dark">
+<!-- the pages carry their own light and dark themes; Dark Reader would
+     repaint them on top and lose the format colours and glyphs -->
+<meta name="darkreader-lock">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/shared/theme.css">
 <style>
