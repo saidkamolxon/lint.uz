@@ -221,7 +221,8 @@ function captureError(err) {
   var m = String(err && err.message || '');
   if (/active stream/i.test(m)) return 'That tab is already being listened to.';
   if (/not been invoked/i.test(m)) {
-    return 'Chrome needs the click on the tab itself: right-click the page that is playing and choose Listen to this tab.';
+    return 'Reload the page that is playing, then right-click it and choose Listen to this tab. ' +
+      '(Chrome ignores a click on that page from before lint.one could listen until it reloads.)';
   }
   return 'Chrome would not let lint.one listen to that tab' + (m ? ' (\u201c' + m + '\u201d)' : '') + '.';
 }
@@ -229,8 +230,9 @@ function captureError(err) {
 /* tabCapture is optional, so installing does not say "all your data on
    all websites"; Chrome asks the first time someone listens. Listening
    cannot simply follow the grant: Chrome only counts a click made on the
-   tab while the permission is already held, so the person chooses Listen
-   once more after allowing it (grant.html says so). */
+   tab while the permission is already held — and only the first click on
+   a page counts at all until it reloads, so a page clicked before the
+   permission existed has to reload once (grant.html offers to). */
 var CAPTURE = { permissions: ['tabCapture'] };
 
 function listenOrAsk(tab, fromMenu) {
@@ -240,7 +242,7 @@ function listenOrAsk(tab, fromMenu) {
        so the menu opens a small window whose button it does accept */
     if (fromMenu) {
       return chrome.windows.create({
-        url: 'grant.html', type: 'popup', width: 420, height: 290, focused: true
+        url: 'grant.html?tab=' + tab.id, type: 'popup', width: 420, height: 290, focused: true
       });
     }
   });

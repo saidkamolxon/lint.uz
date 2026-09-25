@@ -49,12 +49,14 @@
       tint($('listen'), 'audio');
       $('listenBtn').onclick = function () {
         /* the first time, Chrome asks for tab capture here; listening then
-           needs one more click, which Chrome counts only once it is held */
+           needs a click on the page after it reloads (see listenOrAsk) */
         chrome.permissions.contains({ permissions: ['tabCapture'] }).then(function (ok) {
           if (ok) { tell({ kind: 'listen', tabId: tab.id }); return; }
           chrome.permissions.request({ permissions: ['tabCapture'] }).then(function (granted) {
             if (!granted) return;
-            $('listenMeta').textContent = 'Allowed — open this menu again and click Listen';
+            /* the popup's own click came before the permission, and Chrome
+               counts only the first click on a page until it reloads */
+            $('listenMeta').textContent = 'Allowed — reload this page, then click Listen';
           }, function () {});
         });
       };
