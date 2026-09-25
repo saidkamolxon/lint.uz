@@ -1644,6 +1644,26 @@ function takeHandoff(toolId, cb) {
       if (handle) handle.getFile().then(cb, function () {});
     });
   }
+  /* The third: from the lint.one browser extension (extension/). Its
+     content script on this page holds the file — a selection, a link, a
+     raw JSON page, a DevTools response — and posts it here once the page
+     says it is listening. postMessage clones the File within this tab, so
+     it never rides in a URL or touches a server. Only this window's own
+     messages count; another site cannot post to a page it did not open,
+     and one it did open is a different window. */
+  window.addEventListener('message', function (e) {
+    if (e.source !== window || e.origin !== location.origin) return;
+    var d = e.data;
+    if (!d || typeof d.lintone !== 'string') return;
+    if (d.lintone === 'ping') {
+      window.postMessage({ lintone: 'ready', tool: toolId }, location.origin);
+    } else if (d.lintone === 'file' && d.file instanceof Blob) {
+      cb(d.file);
+    } else if (d.lintone === 'error' && typeof d.message === 'string') {
+      showToast(d.message);
+    }
+  });
+  window.postMessage({ lintone: 'ready', tool: toolId }, location.origin);
   try {
     var req = indexedDB.open('lintone', 1);
     req.onupgradeneeded = function () {
