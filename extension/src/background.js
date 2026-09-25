@@ -179,14 +179,10 @@ function listenOrAsk(tab, fromMenu) {
     if (ok) return listen(tab);
     return chrome.storage.session.set({ listenTab: tab.id }).then(function () {
       if (!fromMenu) return;
-      /* the popup asks for itself; from the menu, ask here, and if Chrome
-         will not take the request from a menu click, say where to start */
-      return chrome.permissions.request(CAPTURE).catch(function () {
-        chrome.storage.session.remove('listenTab');
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id }, func: self.lintoneGrab,
-          args: ['', { note: 'The first time, start listening from the lint.one button in the toolbar: Chrome asks there.' }]
-        }).catch(function () {});
+      /* the popup asks for itself. Chrome will not ask from a menu click,
+         so the menu opens a small window whose button it does accept */
+      return chrome.windows.create({
+        url: 'grant.html', type: 'popup', width: 420, height: 290, focused: true
       });
     });
   });

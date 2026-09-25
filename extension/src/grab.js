@@ -9,8 +9,7 @@
    is serialised to run there, so it uses nothing from outside itself.
 
    url     what to read
-   opts    { note: only show this message at the foot of the page;
-             usePage: the url is this page, so its text may be taken as
+   opts    { usePage: the url is this page, so its text may be taken as
              shown rather than fetched again;
              replace: open the tool in this tab rather than beside it;
              fallbackName } */
@@ -132,9 +131,6 @@ function lintoneGrab(url, opts) {
       throw e;
     });
   }
-
-  /* only a note to show, nothing to read */
-  if (opts.note) { toast(opts.note); return Promise.resolve(true); }
 
   return new Promise(function (resolve) {
     var port;

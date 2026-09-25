@@ -1,0 +1,26 @@
+/* ==========================================================================
+   lint.one extension — the small window that asks, once, to hear tabs
+   ========================================================================== */
+html, body { height: 100%; }
+body.grant { overflow: hidden; background: var(--surface); }
+.grant main {
+  height: 100%;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: var(--s2);
+  padding: var(--s5);
+}
+.grant h1 {
+  margin: var(--s2) 0 0;
+  font-size: var(--fs-large); font-weight: 600; letter-spacing: -0.01em;
+}
+.grant p { margin: 0; font-size: var(--fs-base); line-height: 1.5; color: var(--muted); }
+.grant .actions {
+  display: flex; gap: var(--s2); justify-content: flex-end;
+  width: 100%; margin-top: var(--s3);
+}
+/* the one filled button takes the Audio tool's hue, as the tile does */
+.grant #allow {
+  --hue: #C026D3; --hue-ink: #FFFFFF;
+  padding: 6px var(--s4);
+}
+.grant .actions button { padding: 6px var(--s4); }
