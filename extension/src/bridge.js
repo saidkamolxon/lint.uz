@@ -36,6 +36,12 @@
 
   var started = false;
 
+  /* The Audio tool may be about to be sent a tab's sound, which Chrome
+     only allows once lint.one has committed here — now, at document_start.
+     Say so at once; waiting for the page to finish loading could let the
+     click that allows it go stale. */
+  if (tool === 'audio') chrome.runtime.sendMessage({ kind: 'committed' }).catch(function () {});
+
   function decode(b64) {
     if (typeof Uint8Array.fromBase64 === 'function') return Uint8Array.fromBase64(b64);
     var s = atob(b64), out = new Uint8Array(s.length);

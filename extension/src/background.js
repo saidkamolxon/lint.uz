@@ -72,7 +72,8 @@ function fail(job, message) {
 
 function attach(tabId, job, port) {
   job.out = port;
-  if (job.capture) { sendCapture(tabId, job, port); return; }
+  /* a tab's sound: sent now if Chrome has answered, else when it does */
+  if (job.capture) { if (job.capture.result) send(job, job.capture.result); return; }
   send(job, { t: 'meta', name: job.name, type: job.type, encoding: job.encoding, size: job.size });
   var parts = job.parts;
   job.parts = [];
@@ -155,60 +156,96 @@ function openText(text, baseName, source, opts) {
    Listening to a tab: the Audio tool, fed by tabCapture
    ========================================================================== */
 
-/* Open the Audio tool beside the tab that is playing. The stream id is
-   asked for only once the tool's bridge connects: Chrome ties the id to
-   the tab that will use it *and* to that tab's origin, which it only has
-   once lint.one has loaded in it. The person clicking the button or the
-   menu item is what allows the capture; no site access is involved. */
+/* Open the Audio tool beside the tab that is playing, and ask Chrome for
+   the tab's sound as early as it can be asked. Two rules meet here:
+   - Chrome only lets an extension capture a tab it was just invoked on
+     (the click on the menu item or the button), and stops counting that
+     click once the person has moved on — so the Audio tab opens in the
+     background and the tab being captured stays in front until then;
+   - the stream id names the tab that will use it *and* that tab's origin,
+     so it can only be asked for once lint.one has committed in the new
+     tab, a moment after it opens, not when it is created.
+   The id waits in the job until the Audio page's bridge collects it. */
 function listen(tab) {
   if (!tab || tab.id < 0) return;
   var job = newJob('', '', 'text', 0);
-  job.capture = { tabId: tab.id, title: tab.title || hostOf(tab.url || '') };
-  return openTab('audio', tab, false).then(function (tabId) { register(tabId, job); });
+  job.capture = { tabId: tab.id, title: tab.title || hostOf(tab.url || ''), result: null };
+  opening++;
+  return chrome.tabs.create({
+    url: BASE + '/audio/', active: false,
+    windowId: tab.windowId, index: tab.index + 1, openerTabId: tab.id
+  }).then(function (created) {
+    register(created.id, job);
+    return whenCommitted(created.id).then(function () {
+      return chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id, consumerTabId: created.id });
+    }).then(function (streamId) {
+      job.capture.result = { t: 'capture', streamId: streamId, title: job.capture.title };
+    }, function (err) {
+      job.capture.result = { t: 'error', message: captureError(err) };
+    }).then(function () {
+      if (job.out) send(job, job.capture.result);
+      chrome.tabs.update(created.id, { active: true }).catch(function () {});
+    });
+  }).finally(function () {
+    setTimeout(function () { opening--; releaseWaiting(); }, 0);
+  });
+}
+
+/* Resolves once lint.one has committed in the tab: bridge.js runs at
+   document_start there and says so at once. (This extension may not read
+   a lint.one tab's address, so tabs.onUpdated cannot tell.) A tab that
+   reported before anyone asked is remembered briefly. */
+var committed = new Map();   // tabId -> time it reported
+var awaiting = new Map();    // tabId -> resolve
+
+function whenCommitted(tabId) {
+  if (committed.has(tabId)) return Promise.resolve();
+  return new Promise(function (resolve, reject) {
+    awaiting.set(tabId, resolve);
+    setTimeout(function () {
+      if (awaiting.get(tabId) !== resolve) return;
+      awaiting.delete(tabId);
+      reject(new Error('lint.one did not open'));
+    }, 10000);
+  });
+}
+
+function onCommitted(tabId) {
+  var resolve = awaiting.get(tabId);
+  if (resolve) { awaiting.delete(tabId); resolve(); return; }
+  committed.set(tabId, Date.now());
+  setTimeout(function () { committed.delete(tabId); }, 10000);
+}
+
+function captureError(err) {
+  var m = String(err && err.message || '');
+  if (/active stream/i.test(m)) return 'That tab is already being listened to.';
+  if (/not been invoked/i.test(m)) {
+    return 'Chrome needs the click on the tab itself: right-click the page that is playing and choose Listen to this tab.';
+  }
+  return 'Chrome would not let lint.one listen to that tab' + (m ? ' (\u201c' + m + '\u201d)' : '') + '.';
 }
 
 /* tabCapture is optional, so installing does not say "all your data on
-   all websites"; Chrome asks the first time someone listens. The tab
-   waiting for that answer is kept in session storage, and the grant
-   itself (permissions.onAdded) starts the listening, so it happens
-   whether or not the popup that asked survived Chrome's prompt. */
+   all websites"; Chrome asks the first time someone listens. Listening
+   cannot simply follow the grant: Chrome only counts a click made on the
+   tab while the permission is already held, so the person chooses Listen
+   once more after allowing it (grant.html says so). */
 var CAPTURE = { permissions: ['tabCapture'] };
 
 function listenOrAsk(tab, fromMenu) {
   return chrome.permissions.contains(CAPTURE).then(function (ok) {
     if (ok) return listen(tab);
-    return chrome.storage.session.set({ listenTab: tab.id }).then(function () {
-      if (!fromMenu) return;
-      /* the popup asks for itself. Chrome will not ask from a menu click,
-         so the menu opens a small window whose button it does accept */
+    /* the popup asks for itself. Chrome will not ask from a menu click,
+       so the menu opens a small window whose button it does accept */
+    if (fromMenu) {
       return chrome.windows.create({
         url: 'grant.html', type: 'popup', width: 420, height: 290, focused: true
       });
-    });
+    }
   });
 }
 
-chrome.permissions.onAdded.addListener(function (p) {
-  if (!p.permissions || p.permissions.indexOf('tabCapture') < 0) return;
-  chrome.storage.session.get('listenTab').then(function (v) {
-    if (v.listenTab == null) return;
-    chrome.storage.session.remove('listenTab');
-    chrome.tabs.get(v.listenTab).then(listen, function () {});
-  });
-});
-
-function sendCapture(consumerId, job, port) {
-  chrome.tabCapture.getMediaStreamId({ targetTabId: job.capture.tabId, consumerTabId: consumerId })
-    .then(function (streamId) {
-      send(job, { t: 'capture', streamId: streamId, title: job.capture.title });
-    }, function (err) {
-      var m = String(err && err.message || '');
-      send(job, { t: 'error', message: /active stream/i.test(m)
-        ? 'That tab is already being listened to.'
-        : 'Chrome would not let lint.one listen to that tab' + (m ? ' (\u201c' + m + '\u201d)' : '') +
-          '. Right-click the tab\u2019s page and choose Listen to this tab again.' });
-    });
-}
 
 /* the menu item only while the tab in front is playing sound */
 function syncListenMenu(tab) {
@@ -535,6 +572,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, reply) {
     chrome.tabs.get(msg.tabId).then(function (t) { return listenOrAsk(t, false); }, function () {});
   } else if (msg.kind === 'auto' && sender.tab && sender.frameId === 0) {
     grabIn(sender.tab, 0, sender.url || sender.tab.url, { usePage: true, replace: true });
+  } else if (msg.kind === 'committed' && sender.tab) {
+    onCommitted(sender.tab.id);
   } else if (msg.kind === 'sync-auto') {
     syncAuto();
   }
