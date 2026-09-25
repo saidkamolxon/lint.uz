@@ -205,7 +205,8 @@ function sendCapture(consumerId, job, port) {
       var m = String(err && err.message || '');
       send(job, { t: 'error', message: /active stream/i.test(m)
         ? 'That tab is already being listened to.'
-        : 'Chrome would not let lint.one listen to that tab. Try again from the tab itself.' });
+        : 'Chrome would not let lint.one listen to that tab' + (m ? ' (\u201c' + m + '\u201d)' : '') +
+          '. Right-click the tab\u2019s page and choose Listen to this tab again.' });
     });
 }
 
