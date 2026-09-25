@@ -10,8 +10,8 @@
       The Audio tool can be sent a tab's sound the same way: a stream id
       from tabCapture, which only this tab, on this origin, can open.
 
-   2. Remember the theme picked on lint.one, so the popup and the DevTools
-      panel wear the same one. */
+   2. Remember the theme picked on lint.one, so the popup wears the same
+      one. */
 (function () {
   'use strict';
 

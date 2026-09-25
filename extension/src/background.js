@@ -12,7 +12,6 @@
      page itself when it is a file (a .json or .csv opened in a tab)
    - the popup: the current page, pasted text, or an empty tool
    - the omnibox: "lint" then a space, then text
-   - the DevTools panel: any response the inspected page loaded
    - auto.js, when "Open data pages automatically" is on
 
    And one thing that is not a file: a tab's sound. "Listen to this tab"
@@ -228,7 +227,7 @@ chrome.tabs.onUpdated.addListener(function (tabId, change, tab) {
 });
 
 /* ==========================================================================
-   Reading a file from a page (grab.js), a response (DevTools), or — for a
+   Reading a file from a page (grab.js), or — for a
    link to another site, once every site is allowed — from here
    ========================================================================== */
 
@@ -274,7 +273,7 @@ function decide(meta) {
   return { tool: tool, name: F.nameFor(meta.name, tool, meta.head) };
 }
 
-/* the 'grab' port: grab.js from a page, or the DevTools panel */
+/* the 'grab' port: grab.js, from the page a file comes from */
 function onGrab(port) {
   var job = null, ended = false;
 

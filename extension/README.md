@@ -1,7 +1,7 @@
 # lint.one for Chrome
 
-Opens what you find in the browser (a selection, a link, a raw JSON page, a
-DevTools response) in the lint.one tool that reads it. Nothing is uploaded:
+Opens what you find in the browser (a selection, a link, a raw JSON page,
+pasted text, a tab's sound) in the lint.one tool that reads it. Nothing is uploaded:
 the file goes from the page to the extension to the tool's tab, all inside
 the browser.
 
@@ -33,11 +33,10 @@ opens files in the local site instead of lint.one, and is named
 | `audio/public/index.html` | the Audio tool | Takes the tab's sound from the stream id the bridge passes on (`listenTab`) |
 | `auto.js` | every site, only when turned on | Sends a raw JSON/XML/YAML/CSV page to lint.one |
 | `popup.*` | the toolbar button | This page, paste, tools, the one setting |
-| `panel.*`, `devtools.*` | DevTools | The lint.one panel |
 | `formats.js` | all of the above | Which tool reads what, the same table the landing page uses |
-| `ui.css`, `ui-theme.js` | popup and panel | The few pieces `shared/` doesn't have; lint.one's theme |
+| `ui.css`, `ui-theme.js` | the popup | The few pieces `shared/` doesn't have; lint.one's theme |
 
-The popup and panel load `shared/theme.css` and `shared/app.css`, which
+The popup loads `shared/theme.css` and `shared/app.css`, which
 the build copies in, so they share the tools' tokens, components, fonts
 and glyphs rather than a copy that drifts. `icons/` holds the mark rendered
 from `shared/glyph.svg` at the sizes Chrome asks for.
@@ -71,7 +70,6 @@ Open JSON, XML, YAML, CSV, logs, PDFs, SQLite and audio from any page in lint.on
 > - The toolbar button: open this page, paste anything, or pick a tool
 > - The address bar: type "lint", a space, and paste
 > - Listen to this tab: a live spectrum of any tab's sound, one click
-> - DevTools: a lint.one panel with every response the page loaded
 > - Optional: open JSON, XML, YAML and CSV pages automatically
 >
 > Private by design: lint.one runs entirely in your browser. The extension
@@ -82,17 +80,22 @@ Open JSON, XML, YAML, CSV, logs, PDFs, SQLite and audio from any page in lint.on
 **Category:** Developer Tools
 
 **Screenshots:** 1280×800. The popup over a JSON page, the right-click menu
-on a link, the DevTools panel, and a file opened in a tool.
+on a link, the Audio tool listening to a tab, and a file opened in a tool.
 
 **Privacy policy URL:** https://lint.one/privacy/ (`site/public/privacy/`)
 
 ### What the install dialog says
 
-*"Read and change all your data on all websites"* — from `devtools_page`
-alone (checked with `chrome.management.getPermissionWarningsByManifest`).
-Without the DevTools panel it would be *"Read and change your data on
-lint.one"*. `tabCapture` would add the same all-sites line, so it is an
-optional permission, asked for on first use instead.
+*"Read and change your data on lint.one"*, and nothing else (checked with
+`chrome.management.getPermissionWarningsByManifest`). Two things would
+turn that into *"Read and change all your data on all websites"*, so
+neither is in the manifest as a requirement:
+
+- `tabCapture` is an optional permission, asked for the first time someone
+  listens to a tab.
+- There is no DevTools panel: `devtools_page` alone brings that line. The
+  panel that was here (commit `d708c3d`, `extension/src/panel.*`) can come
+  back as a separate extension for developers.
 
 ### Permission justifications
 
@@ -106,7 +109,6 @@ The dashboard asks for one line per permission:
 | `storage` | Remembers the one setting and the theme picked on lint.one. |
 | `tabCapture` (optional) | Asked for the first time the person chooses "Listen to this tab": lets the lint.one Audio tab hear the tab the person chose, only when they click, to draw its live spectrum. Nothing is recorded or sent. |
 | Content script on `https://lint.one/*` | Hands the file to the lint.one page that shows it. |
-| `devtools_page` | Adds the lint.one panel to DevTools, which lists the responses of the page being inspected so one can be opened in a tool. Chrome words this as access to all websites; the panel reads only the inspected page, only while DevTools is open. |
 | Optional access to all sites | Asked for only when the person turns on "Open data pages automatically"; lets JSON, XML, YAML and CSV pages open in lint.one by themselves, and links to other sites be read. |
 
 **Single purpose:** open files and data found in the browser in the

@@ -52,8 +52,8 @@ wherever the data already is:
 - **Listen to this tab**, from the toolbar button or the right-click menu
   while a tab plays sound, opens the Audio tool on it with no share-a-tab
   picker. Chrome still marks the tab as captured.
-- **DevTools** gets a *lint.one* panel listing every response the page
-  loaded that a tool reads; one click opens it.
+- **From DevTools:** right-click a request → *Open in new tab*, then open
+  that page from the toolbar button; or *Copy response* and paste it.
 - **Open data pages automatically** (off until you turn it on): JSON, XML,
   YAML and CSV you open in a tab go straight to the tool.
 
@@ -61,10 +61,8 @@ The file travels page → extension → the tool's tab, all inside the
 browser, and reaches the page with `postMessage` — never in a URL and never
 through a server. Access to every site is requested when, and only if,
 you turn on the automatic opening, and tab capture the first time you
-listen to a tab. Chrome's install dialog still says "Read and change all
-your data on all websites", because any extension with a DevTools panel
-could read the pages it inspects; the panel reads only the page whose
-DevTools are open. See [`extension/README.md`](extension/README.md) to
+listen to a tab, so Chrome's install dialog says only "Read and change
+your data on lint.one". See [`extension/README.md`](extension/README.md) to
 load it and to publish it.
 
 ---
