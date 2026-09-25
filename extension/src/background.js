@@ -22,7 +22,7 @@
    request carries the page's own cookies and a link behind a login works
    exactly as clicking it would. */
 
-importScripts('base.js', 'formats.js', 'grab.js');
+importScripts('base.js', 'formats.js', 'grab.js', 'fullscreen.js');
 
 var F = self.LintFormats;
 var BASE = self.LINT_BASE;
@@ -180,6 +180,10 @@ function listen(tab) {
       return chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id, consumerTabId: created.id });
     }).then(function (streamId) {
       job.capture.result = { t: 'capture', streamId: streamId, title: job.capture.title };
+      /* the same click lets a watcher into the tab, so its video can still
+         go properly fullscreen while it is being listened to */
+      chrome.scripting.executeScript({ target: { tabId: tab.id }, func: self.lintoneFullscreen })
+        .catch(function () {});
     }, function (err) {
       job.capture.result = { t: 'error', message: captureError(err) };
     }).then(function () {
@@ -189,6 +193,31 @@ function listen(tab) {
   }).finally(function () {
     setTimeout(function () { opening--; releaseWaiting(); }, 0);
   });
+}
+
+/* A listened-to tab's page went fullscreen or came back (fullscreen.js).
+   Chrome keeps that fullscreen inside the tab while it is captured, so the
+   window is made fullscreen here and afterwards put back as it was. The
+   state to go back to is kept in session storage, since the worker may be
+   stopped while a whole video plays. A window that is already fullscreen
+   (F11, or Chrome's own fullscreen once listening has stopped) is left
+   alone, both ways. */
+function onPageFullscreen(tab, on) {
+  var key = 'fs:' + tab.windowId;
+  chrome.windows.get(tab.windowId).then(function (w) {
+    return chrome.storage.session.get(key).then(function (saved) {
+      if (on) {
+        if (w.state === 'fullscreen') return;
+        return chrome.storage.session.set({ [key]: w.state }).then(function () {
+          return chrome.windows.update(w.id, { state: 'fullscreen' });
+        });
+      }
+      if (!saved[key]) return;
+      return chrome.storage.session.remove(key).then(function () {
+        return chrome.windows.update(w.id, { state: saved[key] });
+      });
+    });
+  }).catch(function () {});
 }
 
 /* Resolves once lint.one has committed in the tab: bridge.js runs at
@@ -582,6 +611,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, reply) {
     chrome.tabs.get(msg.tabId).then(function (t) { return listenOrAsk(t); }, function () {});
   } else if (msg.kind === 'auto' && sender.tab && sender.frameId === 0) {
     grabIn(sender.tab, 0, sender.url || sender.tab.url, { usePage: true, replace: true });
+  } else if (msg.kind === 'fullscreen' && sender.tab) {
+    onPageFullscreen(sender.tab, !!msg.on);
   } else if (msg.kind === 'committed' && sender.tab) {
     onCommitted(sender.tab.id);
   } else if (msg.kind === 'sync-auto') {
