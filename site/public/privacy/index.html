@@ -160,9 +160,9 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <p>Every tool runs entirely in the page. There are no accounts, no analytics, no advertising and no third-party requests: the fonts and libraries are served by lint.one itself. You can check this in your browser's developer tools, where the Network panel shows nothing leaving while you work.</p>
       <p>Your browser keeps a few things on your device so the pages behave the way you left them. None of them holds anything you opened:</p>
       <ul>
-        <li><strong>Three cookies.</strong> <code>lintuz_theme</code> and <code>lintuz_contrast</code> remember the theme and contrast you picked. <code>lintuz_from</code> lasts two minutes after you move from one tool to another, so the next tool can name the format waiting on your clipboard.</li>
+        <li><strong>Three cookies.</strong> <code>lintuz_theme</code> and <code>lintuz_contrast</code> remember the theme and contrast you picked. <code>lintuz_from</code> lasts two minutes, and only when a converted document couldn't be handed to the next tool directly, so that tool can name the format waiting on your clipboard.</li>
         <li><strong>Local storage</strong> holds your text size, split width and a few view settings.</li>
-        <li><strong>IndexedDB</strong> holds a file you drop on the home page for the second it takes its tool to open, and it is deleted as the tool reads it.</li>
+        <li><strong>IndexedDB</strong> holds a file you drop on the home page, or a document you convert for another tool, for the second it takes that tool to open, and it is deleted as the tool reads it.</li>
         <li><strong>An offline copy</strong> of the site's own pages, kept by the service worker, so lint.one works without a connection.</li>
       </ul>
 

@@ -79,18 +79,22 @@ included, is at [lint.one/privacy](https://lint.one/privacy/).
 
 Three cookies, none carrying document data: `lintuz_theme` and
 `lintuz_contrast` remember the look you picked so every page agrees, and
-`lintuz_from` lives for two minutes after you click "Open JSON viewer" so the
-destination can say *which* format is waiting on your clipboard. A file dropped on
-the landing page waits in your browser's IndexedDB for the second it takes
-the tool to open, and is deleted as it is read. Your text size,
+`lintuz_from` lives for two minutes, only if a converted document could not
+be handed over directly (below), so the destination can say *which* format is
+waiting on your clipboard. A file dropped on the landing page, or a document
+converted for another tool, waits in your browser's IndexedDB for the second it
+takes the tool to open, and is deleted as it is read. Your text size,
 split width and a few view toggles sit in localStorage. Nothing else is stored.
 
 ### Moving between tools
 
-Converting copies the result to your clipboard and offers a button to open the
-tool that reads it. The document travels on your clipboard — never in a URL,
-never through a server — so the destination asks you to paste rather than
-filling itself in.
+Converting (YAML → JSON, JSON → YAML, XML → JSON, CSV → JSON, a SQLite
+result → JSON or CSV) copies the result to your clipboard and offers to open
+the tool that reads it — click the button or press Enter. The tool opens with
+the document already in it: it travels through IndexedDB on your device, the
+way a dropped file does, never in a URL and never through a server. If the
+browser blocks IndexedDB, the destination asks you to paste from the
+clipboard instead.
 
 ---
 

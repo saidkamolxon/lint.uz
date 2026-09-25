@@ -166,11 +166,18 @@ function showToast(msg, action) {
     a.href = action.href;
     a.target = '_blank';
     a.rel = 'noopener';
-    a.addEventListener('click', function () {
-      /* tell the destination which tool sent the user, so it can name the
-         format in its prompt. Carries no document data. */
-      if (action.from) writeHandoff(action.from, action.format);
+    /* the click and Enter do the same thing: the action's own handler when
+       it has one (a converted document carried to its tool), otherwise the
+       link in a new tab */
+    var follow = function () {
       t.classList.remove('show');
+      detach();
+      if (action.onFollow) action.onFollow();
+      else window.open(action.href, '_blank', 'noopener');
+    };
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      follow();
     });
     t.appendChild(a);
     life = 7000;   /* long enough to actually reach for it */
@@ -183,9 +190,7 @@ function showToast(msg, action) {
     var onKey = function (e) {
       if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       e.preventDefault();
-      a.click();
-      window.open(a.href, '_blank', 'noopener');
-      detach();
+      follow();
     };
     var cancel = function () { detach(); };
     var detach = function () {
@@ -211,9 +216,10 @@ function showToast(msg, action) {
 }
 
 /* ---------- cross-tool handoff ----------
-   A short-lived cookie naming the tool the user just left, so the
-   destination can say "your JSON from YAML is on the clipboard" instead of a
-   generic hint. The document itself never leaves the clipboard. */
+   A converted document goes to its tool through IndexedDB (openConverted,
+   below). Only when that fails does this short-lived cookie name the tool
+   the user just left, so the destination can say "your JSON from YAML is on
+   the clipboard" instead of a generic hint. It carries no document data. */
 var HANDOFF_COOKIE = 'lintuz_from';
 
 function writeHandoff(fromId, format) {
@@ -1632,6 +1638,30 @@ function init(config) {
    Any failure means the tool simply opens empty. */
 var HANDOFF_TTL = 60000;
 
+/* The sending side: park a file for `tool` and call back once it is
+   committed, with true — or false if IndexedDB is missing, blocked or
+   full, when the caller falls back to something else. */
+function parkHandoff(tool, file, cb) {
+  var called = false;
+  var finish = function (ok) { if (!called) { called = true; cb(ok); } };
+  try {
+    var req = indexedDB.open('lintone', 1);
+    req.onupgradeneeded = function () {
+      if (!req.result.objectStoreNames.contains('handoff')) req.result.createObjectStore('handoff');
+    };
+    req.onsuccess = function () {
+      var db = req.result;
+      try {
+        var tx = db.transaction('handoff', 'readwrite');
+        tx.objectStore('handoff').put({ tool: tool, file: file, at: Date.now() }, 'file');
+        tx.oncomplete = function () { db.close(); finish(true); };
+        tx.onerror = tx.onabort = function () { db.close(); finish(false); };
+      } catch (e) { db.close(); finish(false); }
+    };
+    req.onerror = req.onblocked = function () { finish(false); };
+  } catch (e) { finish(false); }
+}
+
 function takeHandoff(toolId, cb) {
   /* The other way a file arrives: from the OS. Once lint.one is installed,
      "Open with lint.one" (or a double-click, if the user made it the
@@ -1694,19 +1724,53 @@ function takeHandoff(toolId, cb) {
   } catch (e) {}
 }
 
-/* Copy a converted document, then offer to open the tool that reads it.
+/* Copy a converted document, then offer to open the tool that reads it —
+   with the document already in it. Following the offer parks the text in
+   IndexedDB as a File, exactly as the landing page parks a dropped file,
+   and opens the tool, whose takeHandoff takes it. It never rides in a URL
+   and never leaves the device. The copy stays too, for pasting elsewhere.
    from = the id of the tool doing the sending; to = the id it converts into. */
+var CONVERT_EXT = { json: 'json', yaml: 'yaml', csv: 'csv', xml: 'xml' };
+
 function copyAndOffer(text, label, from, to) {
   var dest = null;
   for (var i = 0; i < SUITE.length; i++) if (SUITE[i].id === to) dest = SUITE[i];
   var done = function () {
     showToast(label + ' copied',
-      dest ? { label: 'Open ' + dest.name + ' viewer', href: dest.host,
-               from: from, format: label } : null);
+      dest ? { label: 'Open in ' + dest.name + ' viewer', href: dest.host + '/',
+               onFollow: function () { openConverted(text, label, from, dest); } } : null);
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
   } else fallbackCopy(text, done);
+}
+
+/* The name the converted document arrives under: the open file's own name
+   with the new extension (deploy.yaml -> deploy.json), or, for pasted text
+   and samples, where it came from (from-yaml.json). */
+function convertedName(from, to) {
+  var ext = CONVERT_EXT[to] || 'txt';
+  var chip = document.querySelector('.doc-name');
+  var name = chip ? chip.textContent.trim() : '';
+  var m = /^(.+)\.[A-Za-z0-9]{1,8}$/.exec(name);
+  return (m ? m[1] : 'from-' + from) + '.' + ext;
+}
+
+function openConverted(text, label, from, dest) {
+  var url = dest.host + '/';
+  /* the tab is opened now, while the click still counts as the person's,
+     so no popup blocker stands in the way; it is sent to the tool once the
+     document is parked, so the tool cannot look before it is there */
+  var w = window.open('', '_blank');
+  if (w) try { w.opener = null; } catch (e) {}
+  var file = new File([text], convertedName(from, dest.id), { type: 'text/plain' });
+  parkHandoff(dest.id, file, function (ok) {
+    /* without IndexedDB the clipboard is still the way: the destination
+       then asks for a paste and names what is waiting */
+    if (!ok) writeHandoff(from, label);
+    if (w) w.location.replace(url);
+    else location.href = url;
+  });
 }
 
 /* The empty state every tool opens on: a heading saying what to do, one
