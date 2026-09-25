@@ -7,8 +7,11 @@
       page with window.postMessage — a structured clone within this tab.
       It is never in a URL, and no server is involved.
 
-   2. Remember the theme picked on lint.one, so the popup and the DevTools
-      panel wear the same one. */
+      The Audio tool can be sent a tab's sound the same way: a stream id
+      from tabCapture, which only this tab, on this origin, can open.
+
+   2. Remember the theme picked on lint.one, so the popup wears the same
+      one. */
 (function () {
   'use strict';
 
@@ -61,6 +64,10 @@
         var file = new File(parts, meta.name, { type: meta.type || '' });
         parts = [];
         toPage({ lintone: 'file', file: file });
+        port.disconnect();
+      } else if (msg.t === 'capture' && typeof msg.streamId === 'string') {
+        /* not a file: a tab's sound, for the Audio tool to open */
+        toPage({ lintone: 'capture', streamId: msg.streamId, title: msg.title || '' });
         port.disconnect();
       } else if (msg.t === 'error') {
         toPage({ lintone: 'error', message: msg.message });

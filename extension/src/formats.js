@@ -1,7 +1,6 @@
 /* Which lint.one tool reads a thing: by its file name, by the type a server
    gave it, and last by what it starts with. Loaded by the service worker
-   (importScripts), the popup and the DevTools panel, so all three always
-   agree — and agree with the landing page, whose extension table this
+   (importScripts) and the popup, so the two always agree — and agree with the landing page, whose extension table this
    copies, so a file dropped there and a link opened here land in the same
    tool. */
 (function (global) {

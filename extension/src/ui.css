@@ -1,5 +1,5 @@
 /* ==========================================================================
-   lint.one extension — what the popup and the DevTools panel share.
+   lint.one extension — the popup's base.
    Everything else comes from shared/theme.css (tokens, themes) and
    shared/app.css (buttons, menus, tiles, kbd), the same files every tool
    loads; this adds only the pieces those pages never needed.
