@@ -221,8 +221,8 @@ function captureError(err) {
   var m = String(err && err.message || '');
   if (/active stream/i.test(m)) return 'That tab is already being listened to.';
   if (/not been invoked/i.test(m)) {
-    return 'Reload the page that is playing, then right-click it and choose Listen to this tab. ' +
-      '(Chrome ignores a click on that page from before lint.one could listen until it reloads.)';
+    return 'Open the page that is playing in a new tab, then right-click it and choose Listen to this tab. ' +
+      '(Chrome keeps ignoring a tab clicked before lint.one could listen.)';
   }
   return 'Chrome would not let lint.one listen to that tab' + (m ? ' (\u201c' + m + '\u201d)' : '') + '.';
 }
@@ -230,21 +230,22 @@ function captureError(err) {
 /* tabCapture is optional, so installing does not say "all your data on
    all websites"; Chrome asks the first time someone listens. Listening
    cannot simply follow the grant: Chrome only counts a click made on the
-   tab while the permission is already held — and only the first click on
-   a page counts at all until it reloads, so a page clicked before the
-   permission existed has to reload once (grant.html offers to). */
+   tab while the permission is already held — and Chrome keeps what the
+   first click on a tab allowed for as long as that tab stays on the same
+   site, reloads included. A tab clicked before the permission existed
+   therefore has to be opened afresh once (grant.html does it, with
+   tabs.duplicate); from then on one click is enough. Checked with real
+   input in a headed Chromium: a reload does not clear it, a new tab does. */
 var CAPTURE = { permissions: ['tabCapture'] };
 
-function listenOrAsk(tab, fromMenu) {
+function listenOrAsk(tab) {
   return chrome.permissions.contains(CAPTURE).then(function (ok) {
     if (ok) return listen(tab);
-    /* the popup asks for itself. Chrome will not ask from a menu click,
-       so the menu opens a small window whose button it does accept */
-    if (fromMenu) {
-      return chrome.windows.create({
-        url: 'grant.html?tab=' + tab.id, type: 'popup', width: 420, height: 290, focused: true
-      });
-    }
+    /* Chrome will not ask from a menu click, so a small window asks, on a
+       button it does accept; the popup sends people here too */
+    return chrome.windows.create({
+      url: 'grant.html?tab=' + tab.id, type: 'popup', width: 420, height: 290, focused: true
+    });
   });
 }
 
@@ -260,6 +261,13 @@ chrome.tabs.onActivated.addListener(function (info) {
 });
 chrome.tabs.onUpdated.addListener(function (tabId, change, tab) {
   if ('audible' in change && tab.active) syncListenMenu(tab);
+});
+/* switching windows activates no tab, so the tab in front of the window
+   that now has focus is looked at here (after the permission window
+   closes, for one) */
+chrome.windows.onFocusChanged.addListener(function (windowId) {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+  chrome.tabs.query({ active: true, windowId: windowId }).then(function (t) { syncListenMenu(t[0]); }, function () {});
 });
 
 /* ==========================================================================
@@ -501,7 +509,7 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
   } else if (info.menuItemId === 'media' && info.srcUrl) {
     grabIn(tab, frameId, info.srcUrl, {});
   } else if (info.menuItemId === 'listen') {
-    listenOrAsk(tab, true);
+    listenOrAsk(tab);
   } else if (info.menuItemId === 'page') {
     grabIn(tab, frameId, info.frameUrl || info.pageUrl || tab.url, { usePage: true });
   }
@@ -571,7 +579,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, reply) {
       grabIn(tab, 0, tab.url, { usePage: true });
     }).catch(function () {});
   } else if (msg.kind === 'listen' && msg.tabId >= 0) {
-    chrome.tabs.get(msg.tabId).then(function (t) { return listenOrAsk(t, false); }, function () {});
+    chrome.tabs.get(msg.tabId).then(function (t) { return listenOrAsk(t); }, function () {});
   } else if (msg.kind === 'auto' && sender.tab && sender.frameId === 0) {
     grabIn(sender.tab, 0, sender.url || sender.tab.url, { usePage: true, replace: true });
   } else if (msg.kind === 'committed' && sender.tab) {

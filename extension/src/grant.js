@@ -1,7 +1,9 @@
 /* Asks for tab capture on a click Chrome accepts, then gets the playing
-   tab ready. Chrome counts only the first click on a page until it
-   reloads, and the click that opened this window came before the
-   permission existed — so the tab reloads once, and then Listen works. */
+   tab ready. Chrome keeps what the first click on a tab allowed while the
+   tab stays on the same site, reloads included, and the click that opened
+   this window came before the permission existed — so the tab is opened
+   afresh in its place (duplicated, the old one closed), and then Listen
+   works on it. */
 (function () {
   'use strict';
   var CAPTURE = { permissions: ['tabCapture'] };
@@ -18,12 +20,14 @@
         return;
       }
       document.querySelector('h1').textContent = 'Allowed — one last step';
-      $('msg').textContent = 'That tab reloads once so Chrome lets lint.one hear it. Then right-click it and choose Listen to this tab. From then on it opens straight away.';
-      $('allow').textContent = 'Reload the tab';
+      $('msg').textContent = 'Chrome needs a fresh copy of that tab before lint.one can hear it: it opens again in its place. Then right-click it and choose Listen to this tab. From then on it is one click.';
+      $('allow').textContent = 'Open it afresh';
       $('allow').removeEventListener('click', onAllow);
       $('allow').addEventListener('click', function () {
-        (tabId > 0 ? chrome.tabs.reload(tabId).then(function () {
-          return chrome.tabs.update(tabId, { active: true });
+        (tabId > 0 ? chrome.tabs.duplicate(tabId).then(function (copy) {
+          return chrome.tabs.remove(tabId).then(function () {
+            return chrome.tabs.update(copy.id, { active: true });
+          });
         }) : Promise.resolve()).catch(function () {}).then(function () { window.close(); });
       });
       $('cancel').textContent = 'Not now';
