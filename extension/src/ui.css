@@ -1,0 +1,46 @@
+/* ==========================================================================
+   lint.one extension — what the popup and the DevTools panel share.
+   Everything else comes from shared/theme.css (tokens, themes) and
+   shared/app.css (buttons, menus, tiles, kbd), the same files every tool
+   loads; this adds only the pieces those pages never needed.
+   ========================================================================== */
+
+/* the brand is monochrome: outside a tool, the hue is the ink, and a
+   format's hue appears only where that format is meant */
+:root { --hue: var(--ink); --hue-ink: var(--surface); }
+
+/* The lint.one mark as the landing page draws it: the glyph cut out of an
+   ink tile, its corner 15/64 of its side as on every tile in the suite */
+.logo {
+  display: flex; align-items: center; gap: var(--s2);
+  color: inherit; text-decoration: none; border-radius: var(--radius);
+}
+.logo-mark {
+  width: 22px; height: 22px; flex: none;
+  border-radius: calc(22px * 15 / 64);
+  background: var(--ink);
+}
+.logo-mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: var(--surface);
+  -webkit-mask: url("/shared/glyph.svg") center / 100% no-repeat;
+  mask: url("/shared/glyph.svg") center / 100% no-repeat;
+}
+.logo-name { font-size: var(--fs-mid); font-weight: 600; letter-spacing: -0.01em; }
+.logo-tld { color: var(--faint); font-weight: 500; }
+
+/* larger tool tiles, keeping the tile's proportions */
+.tool-tile.tile-md { width: 28px; height: 28px; border-radius: calc(28px * 15 / 64); }
+.tool-tile.tile-lg { width: 32px; height: 32px; border-radius: calc(32px * 15 / 64); }
+/* a tile for "not decided yet": the shape, in the line colour */
+.tool-tile.dot-none { background: var(--line-strong); }
+.tool-tile.dot-none::before { display: none; }
+
+/* a small caps-free section label, as .menu-label draws it */
+.label {
+  display: block;
+  font-size: var(--fs-micro); font-weight: 600; letter-spacing: 0.02em;
+  color: var(--faint);
+}
+
+.keys { display: inline-flex; gap: 3px; align-items: center; }

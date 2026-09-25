@@ -9,6 +9,8 @@
     "dev": "node build.mjs && cd site && npx wrangler dev",
     "deploy": "node build.mjs && cd site && npx wrangler deploy",
     "deploy:redirect": "cd redirect && npx wrangler deploy",
+    "build:extension": "node extension/build.mjs",
+    "dev:extension": "node extension/build.mjs --dev",
     "waitlist": "cd site && npx wrangler d1 execute lintone-waitlist --remote --command=\"SELECT format, COUNT(*) AS people FROM interest GROUP BY format ORDER BY people DESC\""
   },
   "keywords": [

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — lint.one</title>
+<meta name="description" content="What lint.one and its browser extension store, and what they never see: the files you open stay on your device.">
+<link rel="canonical" href="https://lint.one/privacy/">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#FBFBFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lint.one">
+<meta property="og:url" content="https://lint.one/privacy/">
+<meta property="og:title" content="Privacy — lint.one">
+<meta property="og:description" content="What lint.one and its browser extension store, and what they never see: the files you open stay on your device.">
+<meta property="og:image" content="https://lint.one/og/home.png">
+<meta name="color-scheme" content="light dark">
+<meta name="darkreader-lock">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/shared/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/menu.css">
+<script src="/shared/theme-boot.js"></script>
+<style>
+/* The landing page's frame and type scale, for a page that is only text:
+   one readable column, the same top bar and footer. */
+* { box-sizing: border-box; }
+:root {
+  --size-xs: 13px;
+  --size-s: 15px;
+  --size-m: 17px;
+  --size-l: 20px;
+  --size-xl: 28px;
+  --size-2xl: 40px;
+}
+body {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--size-m);
+  line-height: 1.65;
+  background: var(--surface);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+.top { display: flex; align-items: center; gap: 12px; padding: 20px 0; }
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: var(--size-l); font-weight: 600; letter-spacing: -0.01em; line-height: 1;
+  text-decoration: none; color: inherit;
+}
+.logo-mark { width: 28px; height: 28px; border-radius: 6.5px; flex: none; background: var(--ink); }
+.logo-mark::before {
+  content: ""; display: block; width: 100%; height: 100%;
+  background: var(--surface);
+  mask: url("/shared/glyph.svg") center / 100% no-repeat;
+}
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.ghost {
+  font: inherit; font-size: var(--size-s); line-height: 1;
+  color: var(--muted); text-decoration: none;
+  padding: 10px 12px; border-radius: 8px;
+  background: none; border: none; cursor: pointer;
+}
+.ghost:hover { background: var(--row-hover); color: var(--ink); }
+.icon-btn { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* ---------- the text ---------- */
+article { max-width: 68ch; padding-top: 48px; }
+h1 {
+  margin: 0 0 12px;
+  font-size: var(--size-2xl); font-weight: 600; line-height: 1.1; letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lead { margin: 0; font-size: var(--size-l); line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.updated { margin: 16px 0 0; font-size: var(--size-s); color: var(--faint); }
+h2 {
+  margin: 48px 0 8px;
+  font-size: var(--size-l); font-weight: 600; line-height: 1.3; letter-spacing: -0.01em;
+}
+p { margin: 0 0 14px; }
+ul { margin: 0 0 14px; padding-left: 22px; }
+li { margin: 0 0 8px; }
+li::marker { color: var(--faint); }
+strong { font-weight: 600; }
+a { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+a:hover { text-decoration-color: currentColor; }
+code {
+  font-family: var(--mono); font-size: 0.85em;
+  background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm); padding: 1px 5px;
+}
+
+/* the one promise, set apart from the detail that backs it */
+.promise {
+  margin: 36px 0 0; padding: 20px 24px;
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: 12px;
+}
+.promise p { margin: 0; }
+.promise p + p { margin-top: 8px; color: var(--muted); font-size: var(--size-s); }
+
+footer {
+  margin-top: 96px;
+  padding: 24px 0 44px;
+  border-top: var(--hairline) solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+  font-size: var(--size-s); color: var(--faint);
+}
+footer a { color: var(--muted); text-decoration: none; }
+footer a:first-of-type { margin-left: auto; }
+footer a:hover { color: var(--ink); text-decoration: underline; }
+
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+@media (max-width: 720px) {
+  .wrap { padding: 0 16px; }
+  .top { padding: 14px 0; }
+  article { padding-top: 24px; }
+  h1 { font-size: var(--size-xl); }
+  .lead { font-size: var(--size-m); }
+  footer { margin-top: 64px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="logo" href="/">
+      <span class="logo-mark" aria-hidden="true"></span>
+      <span>lint.one</span>
+    </a>
+    <div class="top-right">
+      <div class="menu-wrap">
+        <button class="ghost icon-btn" id="themeBtn" aria-label="Theme" title="Theme" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <div class="menu" id="themeMenu" role="menu"></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <article>
+      <h1>Privacy</h1>
+      <p class="lead">What lint.one and its browser extension keep, and what they never see.</p>
+      <p class="updated">Last updated 25 September 2026</p>
+
+      <div class="promise">
+        <p><strong>The files and text you open never leave your device.</strong></p>
+        <p>They are read, parsed and shown by code running in your browser. No page and no part of the extension sends them anywhere, lint.one included.</p>
+      </div>
+
+      <h2>The website</h2>
+      <p>Every tool runs entirely in the page. There are no accounts, no analytics, no advertising and no third-party requests: the fonts and libraries are served by lint.one itself. You can check this in your browser's developer tools, where the Network panel shows nothing leaving while you work.</p>
+      <p>Your browser keeps a few things on your device so the pages behave the way you left them. None of them holds anything you opened:</p>
+      <ul>
+        <li><strong>Three cookies.</strong> <code>lintuz_theme</code> and <code>lintuz_contrast</code> remember the theme and contrast you picked. <code>lintuz_from</code> lasts two minutes after you move from one tool to another, so the next tool can name the format waiting on your clipboard.</li>
+        <li><strong>Local storage</strong> holds your text size, split width and a few view settings.</li>
+        <li><strong>IndexedDB</strong> holds a file you drop on the home page for the second it takes its tool to open, and it is deleted as the tool reads it.</li>
+        <li><strong>An offline copy</strong> of the site's own pages, kept by the service worker, so lint.one works without a connection.</li>
+      </ul>
+
+      <h2>Counting requests for new formats</h2>
+      <p>Visiting an address for a format lint.one doesn't read yet (<code>lint.one/toml</code>, say) shows a page where you can add yourself to the count of people who want it. Only if you do, the server stores the format, the time, and a one-way hash of your IP address mixed with that format and a server-side secret. The hash lets each person count once. It can't be turned back into an address, and nothing else about you is kept.</p>
+
+      <h2>The browser extension</h2>
+      <p>The lint.one extension opens what you choose (a selection, a link, a page, a DevTools response, text you paste) in the lint.one tool that reads it. When you do:</p>
+      <ul>
+        <li>A link or page is read by the page you found it on, with that page's own cookies, exactly as clicking it would. A selection is read from the page when you ask.</li>
+        <li>The file then passes from that page to the extension to the lint.one tab, inside your browser. It is never put in a web address and never sent to any server, lint.one's included.</li>
+        <li>The extension stores two things in your browser: whether <em>Open data pages automatically</em> is on, and the theme you picked on lint.one, so its menu matches.</li>
+        <li>It collects no data, has no analytics, and runs no code from anywhere but its own package.</li>
+      </ul>
+      <p>At install, the extension can run on lint.one, where it hands over the file, and on a page only when you click it there. Access to every site is asked for only if you turn on <em>Open data pages automatically</em>. It is used to recognise JSON, XML, YAML and CSV pages as you open them, and to read links to other sites that you choose to open. Turning the setting off gives that access back.</p>
+
+      <h2>Hosting</h2>
+      <p>lint.one is served by Cloudflare. Like any web host, Cloudflare handles the requests your browser makes for lint.one's own pages and files, and its <a href="https://www.cloudflare.com/privacypolicy/">privacy policy</a> covers that. Those requests never contain what you open, since that never leaves your browser.</p>
+
+      <h2>Changes and questions</h2>
+      <p>If any of this changes, this page changes with it, and the date above moves. lint.one is open source, so everything here can be checked in the <a href="https://github.com/saidkamolxon/lint.uz">source code</a>. Questions are welcome as <a href="https://github.com/saidkamolxon/lint.uz/issues">GitHub issues</a>.</p>
+    </article>
+  </main>
+
+  <footer>
+    <span>MIT licensed. No accounts, no analytics.</span>
+    <a href="/">All tools</a>
+    <a href="https://github.com/saidkamolxon/lint.uz">Source code</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+'use strict';
+var menu = document.getElementById('themeMenu');
+var btn = document.getElementById('themeBtn');
+function closeMenu() {
+  menu.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
+}
+/* the same theme menu as every other page */
+LintTheme.buildMenu(menu, closeMenu);
+btn.addEventListener('click', function (e) {
+  e.stopPropagation();
+  btn.setAttribute('aria-expanded', String(menu.classList.toggle('open')));
+});
+document.addEventListener('click', closeMenu);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+})();
+</script>
+</body>
+</html>

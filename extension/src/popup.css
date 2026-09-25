@@ -1,0 +1,142 @@
+/* ==========================================================================
+   lint.one extension — the toolbar popup
+   ========================================================================== */
+
+/* app.css sizes body to the viewport for the tools' full-height frame; a
+   popup is sized by its content instead */
+html, body { height: auto; }
+body.popup { width: 360px; overflow: visible; background: var(--surface); }
+
+.bar {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+}
+.private {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--fs-small); color: var(--muted);
+}
+.private svg { width: 13px; height: 13px; color: var(--ok); }
+
+main { padding: var(--s3) var(--s4); display: grid; gap: var(--s3); }
+
+/* ---------- this page ---------- */
+.page-btn {
+  display: flex; align-items: center; gap: var(--s3);
+  width: 100%; padding: var(--s3);
+  text-align: left; white-space: normal;
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.page-btn:hover { background: var(--raised); border-color: var(--tool-hue, var(--line-strong)); }
+.page-btn:active { background: var(--row-hover); }
+.page-btn:focus-visible { outline-color: var(--tool-hue, var(--ink)); }
+.page-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.page-name {
+  font-size: var(--fs-base); font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.page-meta {
+  font-size: var(--fs-small); font-weight: 400; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.page-go {
+  flex: none; padding: 4px 10px;
+  font-size: var(--fs-small); font-weight: 600;
+  color: #FFFFFF; background: var(--tool-hue, var(--ink));
+  border-radius: var(--radius);
+}
+
+/* ---------- paste ---------- */
+.paste { display: grid; gap: var(--s2); }
+#paste {
+  display: block; width: 100%; height: 84px; min-height: 60px; max-height: 200px; resize: vertical;
+  padding: var(--s2) var(--s3);
+  font-family: var(--mono); font-size: var(--fs-small); line-height: 1.55;
+  color: var(--ink);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  white-space: pre; overflow: auto;
+  tab-size: 2;
+}
+#paste::placeholder { color: var(--faint); font-family: var(--ui); font-size: var(--fs-base); }
+/* it has focus whenever the popup opens, so the ring is the border itself
+   rather than the heavier outline a focused control gets elsewhere */
+#paste:focus-visible {
+  outline: none;
+  border-color: var(--tool-hue, var(--line-strong));
+  box-shadow: 0 0 0 1px var(--tool-hue, var(--line-strong));
+}
+
+.paste-bar { display: flex; align-items: center; gap: var(--s2); }
+.paste-bar .keys { color: var(--faint); }
+.as-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 6px 4px 6px; font-size: var(--fs-small);
+}
+.as-btn .chev { width: 13px; height: 13px; color: var(--muted); margin-left: -1px; }
+.as-btn[disabled] { opacity: 1; color: var(--faint); cursor: default; }
+.as-btn[disabled] .chev { opacity: 0.5; }
+.as-btn[disabled] .tool-tile { display: none; }
+.as-menu { left: 0; right: auto; min-width: 170px; }
+#openPaste { padding: 5px 14px; }
+#openPaste:not([disabled]) { background: var(--tool-hue, var(--ink)); border-color: var(--tool-hue, var(--ink)); color: #FFFFFF; }
+#openPaste:not([disabled]):hover { background: color-mix(in srgb, var(--tool-hue, var(--ink)) 86%, #000); }
+#openPaste[disabled] { background: var(--sunken); border-color: var(--line); color: var(--faint); opacity: 1; }
+
+/* ---------- tools ---------- */
+.tools { display: grid; gap: var(--s2); }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); }
+.tool-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 6px var(--s1);
+  font-size: var(--fs-small); font-weight: 500; color: var(--muted);
+  border-radius: var(--radius-lg);
+}
+.tool-btn:hover { color: var(--ink); }
+.tool-btn:focus-visible { outline-color: var(--tool-hue); }
+
+/* ---------- setting ---------- */
+.setting {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: var(--hairline) solid var(--line);
+}
+.setting-text { flex: 1; min-width: 0; }
+.setting-title { font-weight: 600; font-size: var(--fs-base); }
+.setting-note { margin-top: 2px; font-size: var(--fs-small); line-height: 1.45; color: var(--muted); }
+
+/* a switch, drawn in the ink like every other chosen state outside a tool */
+.switch {
+  position: relative; flex: none; margin-top: 1px;
+  width: 32px; height: 18px; padding: 0;
+  border-radius: 999px;
+  background: var(--line-strong); border: none;
+  transition: background-color var(--t-mid);
+}
+.switch:hover { background: color-mix(in srgb, var(--line-strong) 80%, var(--ink)); }
+.switch .knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform var(--t-mid);
+}
+.switch[aria-checked="true"] { background: var(--ink); }
+.switch[aria-checked="true"] .knob { transform: translateX(14px); background: var(--surface); }
+.switch[aria-busy="true"] { opacity: 0.6; }
+
+/* ---------- foot ---------- */
+.foot {
+  padding: var(--s2) var(--s4) var(--s3);
+  font-size: var(--fs-small); line-height: 1.5; color: var(--faint);
+  border-top: var(--hairline) solid var(--line);
+  background: var(--raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch, .switch .knob { transition: none; }
+}

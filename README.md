@@ -37,11 +37,36 @@ the PDF viewer, a `.log` in Logs — and can be made the default app for
 any of them. The manifest's `file_handlers` send each type to its page;
 the file is handed to the page by the browser, never uploaded.
 
+## Browser extension
+
+[`extension/`](extension/) is a Chrome extension that brings lint.one to
+wherever the data already is:
+
+- **Right-click** a selection, a link or an audio element, or a page that
+  is a file (`/users.json`, `/report.csv`), and choose *Open in lint.one*.
+  A link is read by the page it is on, with that page's cookies, so a file
+  behind a login opens exactly as clicking it would.
+- **The toolbar button** opens the page you are on, anything you paste,
+  or any tool.
+- **The address bar:** type `lint`, a space, then paste.
+- **DevTools** gets a *lint.one* panel listing every response the page
+  loaded that a tool reads; one click opens it.
+- **Open data pages automatically** (off until you turn it on): JSON, XML,
+  YAML and CSV you open in a tab go straight to the tool.
+
+The file travels page → extension → the tool's tab, all inside the
+browser, and reaches the page with `postMessage` — never in a URL and never
+through a server. The extension asks only for what those features need at
+install; access to every site is requested when, and only if, you turn on
+the automatic opening. See [`extension/README.md`](extension/README.md) to
+load it and to publish it.
+
 ---
 
 ## Privacy
 
-**Your data never leaves your browser.**
+**Your data never leaves your browser.** The full policy, the extension
+included, is at [lint.one/privacy](https://lint.one/privacy/).
 
 - **Entirely client-side.** Parsing, validation, formatting and conversion run
   in the page via `JSON.parse`, `DOMParser` and bundled zero-telemetry
@@ -152,6 +177,7 @@ of the two changed.
 ```bash
 npm run deploy           # the site
 npm run deploy:redirect  # the redirect worker
+npm run build:extension  # the extension, zipped for the Chrome Web Store
 ```
 
 ## License
