@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lint.one</title>
+<meta name="color-scheme" content="light dark">
+<link rel="preload" href="/shared/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="popup.css">
+<script src="ui-theme.js"></script>
+</head>
+<body class="popup">
+
+<header class="bar">
+  <a class="logo" href="#" id="home" title="Open lint.one">
+    <span class="logo-mark" aria-hidden="true"></span>
+    <span class="logo-name">lint<span class="logo-tld">.one</span></span>
+  </a>
+  <span class="spacer"></span>
+  <span class="private" title="Everything opens in lint.one, in this browser. Nothing is uploaded.">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    Stays in this browser
+  </span>
+</header>
+
+<main>
+  <!-- the tab this popup was opened over, when it is a file a tool reads -->
+  <section class="page" id="page" hidden>
+    <button type="button" class="page-btn" id="pageBtn">
+      <span class="tool-tile tile-lg" id="pageTile" aria-hidden="true"></span>
+      <span class="page-text">
+        <span class="page-name" id="pageName"></span>
+        <span class="page-meta" id="pageMeta"></span>
+      </span>
+      <span class="page-go">Open</span>
+    </button>
+  </section>
+
+  <section class="paste">
+    <label class="label" for="paste">Paste</label>
+    <textarea id="paste" spellcheck="false" autocomplete="off" rows="5"
+      placeholder="JSON, XML, YAML, CSV or a log"></textarea>
+    <div class="paste-bar">
+      <div class="menu-wrap">
+        <button type="button" class="as-btn bordered" id="asBtn" aria-haspopup="true" aria-expanded="false" disabled>
+          <span class="tool-tile" id="asTile" aria-hidden="true"></span>
+          <span id="asName">Format</span>
+          <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="menu as-menu" id="asMenu" role="menu"></div>
+      </div>
+      <span class="spacer"></span>
+      <span class="keys" id="openKeys"></span>
+      <button type="button" class="primary" id="openPaste" disabled>Open</button>
+    </div>
+  </section>
+
+  <section class="tools">
+    <div class="label">Tools</div>
+    <div class="grid" id="tools"></div>
+  </section>
+
+  <section class="setting">
+    <div class="setting-text">
+      <div class="setting-title" id="autoTitle">Open data pages automatically</div>
+      <div class="setting-note" id="autoNote">JSON, XML, YAML and CSV you open in a tab go straight to lint.one, and links to other sites open too. Chrome asks for access to every site first.</div>
+    </div>
+    <button type="button" class="switch" id="autoSwitch" role="switch" aria-checked="false"
+      aria-labelledby="autoTitle" aria-describedby="autoNote"><span class="knob"></span></button>
+  </section>
+</main>
+
+<footer class="foot">
+  Also in the right-click menu, and in the address bar: type <kbd>lint</kbd> then <kbd>Space</kbd>.
+</footer>
+
+<script src="base.js"></script>
+<script src="formats.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

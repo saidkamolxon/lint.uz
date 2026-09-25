@@ -1,0 +1,173 @@
+/* Which lint.one tool reads a thing: by its file name, by the type a server
+   gave it, and last by what it starts with. Loaded by the service worker
+   (importScripts), the popup and the DevTools panel, so all three always
+   agree — and agree with the landing page, whose extension table this
+   copies, so a file dropped there and a link opened here land in the same
+   tool. */
+(function (global) {
+  'use strict';
+
+  /* the suite's names and hues, as shared/app.js and the README have them */
+  var TOOLS = [
+    { id: 'json',   name: 'JSON',   hue: '#4F46E5', ext: 'json' },
+    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
+    { id: 'yaml',   name: 'YAML',   hue: '#B45309', ext: 'yaml' },
+    { id: 'csv',    name: 'CSV',    hue: '#4D7C0F', ext: 'csv' },
+    { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
+    { id: 'log',    name: 'Logs',   hue: '#0369A1', ext: 'log' },
+    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' },
+    { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' }
+  ];
+  var BY_ID = {};
+  TOOLS.forEach(function (t) { BY_ID[t.id] = t; });
+
+  /* site/public/index.html's BY_EXT */
+  var BY_EXT = {
+    json: 'json', geojson: 'json', jsonc: 'json',
+    jsonl: 'log', ndjson: 'log',
+    xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
+    rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
+    yaml: 'yaml', yml: 'yaml',
+    csv: 'csv', tsv: 'csv', psv: 'csv',
+    pdf: 'pdf',
+    log: 'log', txt: 'log', out: 'log', err: 'log',
+    mp3: 'audio', wav: 'audio', flac: 'audio', ogg: 'audio', oga: 'audio',
+    opus: 'audio', m4a: 'audio', aac: 'audio', weba: 'audio',
+    aif: 'audio', aiff: 'audio',
+    db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
+    sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite'
+  };
+
+  function extOf(name) {
+    var m = /\.([a-z0-9]{1,8})$/i.exec(name || '');
+    return m ? m[1].toLowerCase() : '';
+  }
+
+  function byName(name) {
+    var e = extOf(name);
+    return e && Object.prototype.hasOwnProperty.call(BY_EXT, e) ? BY_EXT[e] : null;
+  }
+
+  /* A server's Content-Type. text/plain says nothing, and text/html is a
+     web page — neither picks a tool on its own. */
+  function byType(type) {
+    var t = String(type || '').split(';')[0].trim().toLowerCase();
+    if (!t) return null;
+    if (t === 'application/pdf') return 'pdf';
+    if (/^audio\//.test(t)) return 'audio';
+    if (/sqlite/.test(t)) return 'sqlite';
+    if (/(^|[\/+])x?-?ndjson$|jsonl|json-seq/.test(t)) return 'log';
+    if (/(^|[\/+])json$/.test(t)) return 'json';
+    if (/(^|[\/+])x?-?yaml$|\/yml$/.test(t)) return 'yaml';
+    if (t === 'text/csv' || t === 'text/tab-separated-values') return 'csv';
+    if (/(^|[\/+])xml$/.test(t) && t !== 'application/xhtml+xml') return 'xml';
+    return null;
+  }
+
+  function isWebPage(type) {
+    return /^(text\/html|application\/xhtml\+xml)\b/i.test(String(type || ''));
+  }
+
+  var TIMESTAMP = /^\s*\[?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|\d{2}:\d{2}:\d{2}|[A-Z][a-z]{2} +\d{1,2} \d{2}:\d{2}:\d{2})/;
+  var LEVEL = /^\s*\[?(TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|ERR|FATAL|CRITICAL|VERBOSE)\b/;
+  var YAML_LINE = /^(\s*-(\s|$)|\s*[A-Za-z_"'][\w .\/"'-]*:(\s|$)|\s+\S|\s*#|---|\.\.\.)/;
+
+  /* What a piece of text is, from the text alone. JSON and XML announce
+     themselves in their first character; logs by timestamps or levels at
+     the start of their lines; CSV by the same count of one delimiter on
+     every line; YAML by "key:" and "- " lines. Whatever is left is read as
+     a log, the one tool that takes any text. Malformed JSON still goes to
+     the JSON tool: finding the error is what it is for. */
+  function sniffText(text) {
+    var s = String(text || '').replace(/^﻿/, '');
+    var lines = s.split(/\r?\n/).filter(function (l) { return l.trim() !== ''; }).slice(0, 40);
+    if (!lines.length) return 'log';
+    var c = s.trim().charAt(0);
+
+    /* "[2024-05-01 10:00] GET /" and "[INFO] ..." open with a bracket too */
+    if (c === '[' && (TIMESTAMP.test(lines[0]) || LEVEL.test(lines[0]))) return 'log';
+    if (c === '{' || c === '[') {
+      /* one object per line is a log to read, not one document to parse */
+      if (lines.length > 1 && lines.every(function (l) {
+        var t = l.trim();
+        if (t.charAt(0) !== '{' || t.charAt(t.length - 1) !== '}') return false;
+        try { JSON.parse(t); return true; } catch (e) { return false; }
+      })) return 'log';
+      return 'json';
+    }
+    if (c === '<') return 'xml';
+
+    var logLike = lines.filter(function (l) { return TIMESTAMP.test(l) || LEVEL.test(l); }).length;
+    if (logLike >= Math.max(1, lines.length * 0.5)) return 'log';
+
+    if (lines.length >= 2) {
+      var delims = [',', '\t', ';', '|'];
+      for (var i = 0; i < delims.length; i++) {
+        var d = delims[i];
+        var counts = lines.slice(0, 20).map(function (l) { return l.split(d).length - 1; });
+        var first = counts[0];
+        if (first >= 1 && counts.filter(function (n) { return n === first; }).length >= counts.length * 0.8) {
+          return 'csv';
+        }
+      }
+    }
+
+    if (/^---(\s|$)/.test(s.trim()) ||
+        lines.filter(function (l) { return YAML_LINE.test(l); }).length >= lines.length * 0.8 &&
+        lines.some(function (l) { return /^\s*(-\s|[^:#]+:(\s|$))/.test(l); })) return 'yaml';
+
+    return 'log';
+  }
+
+  /* The first bytes of a file, read as text. Binary formats carry a
+     signature there; anything else is text and sniffed as such. */
+  function sniffHead(head) {
+    var h = String(head || '');
+    if (h.slice(0, 16) === 'SQLite format 3\u0000') return 'sqlite';
+    if (h.slice(0, 5) === '%PDF-') return 'pdf';
+    if (/^(ID3|fLaC|OggS|FORM)/.test(h) || /^RIFF....WAVE/.test(h) ||
+        /^....ftypM4A/.test(h)) return 'audio';
+    return sniffText(h);
+  }
+
+  /* The one decision: name first (the person or server chose it), then the
+     server's type, then the content. */
+  function pick(name, type, head) {
+    return byName(name) || byType(type) || (head == null ? null : sniffHead(head));
+  }
+
+  /* A name worth showing in the tool's document chip: the one given, with
+     the tool's extension added if it has none that the tool reads. */
+  function nameFor(base, tool, text) {
+    var n = String(base || '').trim() || 'untitled';
+    if (byName(n) === tool) return n;
+    var ext = BY_ID[tool] ? BY_ID[tool].ext : 'txt';
+    if (tool === 'csv' && text && /\t/.test(String(text).split('\n')[0])) ext = 'tsv';
+    return n.replace(/\.(txt|text)$/i, '') + '.' + ext;
+  }
+
+  /* what a person might type after "lint" to mean a tool: its id, its
+     name, or any extension that leads to it */
+  function toolFromWord(word) {
+    var w = String(word || '').trim().toLowerCase().replace(/^\./, '');
+    if (BY_ID[w]) return w;
+    for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].name.toLowerCase() === w) return TOOLS[i].id;
+    if (w === 'logs') return 'log';
+    return Object.prototype.hasOwnProperty.call(BY_EXT, w) ? BY_EXT[w] : null;
+  }
+
+  global.LintFormats = {
+    TOOLS: TOOLS,
+    BY_ID: BY_ID,
+    BY_EXT: BY_EXT,
+    extOf: extOf,
+    byName: byName,
+    byType: byType,
+    isWebPage: isWebPage,
+    sniffText: sniffText,
+    sniffHead: sniffHead,
+    pick: pick,
+    nameFor: nameFor,
+    toolFromWord: toolFromWord
+  };
+})(self);
