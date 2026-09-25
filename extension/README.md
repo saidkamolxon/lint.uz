@@ -82,8 +82,7 @@ Open JSON, XML, YAML, CSV, logs, PDFs, SQLite and audio from any page in lint.on
 **Screenshots:** 1280×800. The popup over a JSON page, the right-click menu
 on a link, the DevTools panel, and a file opened in a tool.
 
-**Privacy policy URL:** a page on lint.one that says what the README's
-Privacy section says, plus that the extension collects nothing.
+**Privacy policy URL:** https://lint.one/privacy/ (`site/public/privacy/`)
 
 ### Permission justifications
 

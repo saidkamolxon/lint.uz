@@ -65,7 +65,8 @@ load it and to publish it.
 
 ## Privacy
 
-**Your data never leaves your browser.**
+**Your data never leaves your browser.** The full policy, the extension
+included, is at [lint.one/privacy](https://lint.one/privacy/).
 
 - **Entirely client-side.** Parsing, validation, formatting and conversion run
   in the page via `JSON.parse`, `DOMParser` and bundled zero-telemetry
