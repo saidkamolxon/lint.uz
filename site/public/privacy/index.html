@@ -174,10 +174,11 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <ul>
         <li>A link or page is read by the page you found it on, with that page's own cookies, exactly as clicking it would. A selection is read from the page when you ask.</li>
         <li>The file then passes from that page to the extension to the lint.one tab, inside your browser. It is never put in a web address and never sent to any server, lint.one's included.</li>
+        <li>When you choose <em>Listen to this tab</em>, the lint.one Audio tab hears that tab's sound to draw its spectrum and plays it back to you. It is not recorded, saved or sent anywhere, and it stops when you stop listening or close either tab.</li>
         <li>The extension stores two things in your browser: whether <em>Open data pages automatically</em> is on, and the theme you picked on lint.one, so its menu matches.</li>
         <li>It collects no data, has no analytics, and runs no code from anywhere but its own package.</li>
       </ul>
-      <p>At install, the extension can run on lint.one, where it hands over the file, and on a page only when you click it there. Access to every site is asked for only if you turn on <em>Open data pages automatically</em>. It is used to recognise JSON, XML, YAML and CSV pages as you open them, and to read links to other sites that you choose to open. Turning the setting off gives that access back.</p>
+      <p>The extension runs on lint.one, where it hands over the file, and on a page only when you click it there. Its DevTools panel sees the responses of the page you are inspecting, only while DevTools is open; that panel is why Chrome's install dialog mentions all websites. Hearing a tab is asked for the first time you choose <em>Listen to this tab</em>. Access to every site is asked for only if you turn on <em>Open data pages automatically</em>. It is used to recognise JSON, XML, YAML and CSV pages as you open them, and to read links to other sites that you choose to open. Turning the setting off gives that access back.</p>
 
       <h2>Hosting</h2>
       <p>lint.one is served by Cloudflare. Like any web host, Cloudflare handles the requests your browser makes for lint.one's own pages and files, and its <a href="https://www.cloudflare.com/privacypolicy/">privacy policy</a> covers that. Those requests never contain what you open, since that never leaves your browser.</p>

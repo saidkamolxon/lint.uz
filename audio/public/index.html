@@ -761,11 +761,52 @@ async function paintInputs(currentId) {
 }
 $('inputSelect').addEventListener('change', () => listenInput($('inputSelect').value));
 
-function startLive(stream, kind, label, detail) {
+/* ---------- a tab, handed over by the lint.one extension ----------
+   "Listen to this tab" in the extension sends a tabCapture stream id
+   through its bridge, so no share-a-tab picker is needed. Chrome silences
+   a tab while it is captured, so its sound is played here, through the
+   volume slider, instead. Only this window's own messages count. */
+addEventListener('message', (e) => {
+  if (e.source !== window || e.origin !== location.origin) return;
+  const d = e.data;
+  if (d && d.lintone === 'capture' && typeof d.streamId === 'string') listenTab(d.streamId, d.title);
+});
+
+async function listenTab(streamId, title) {
+  ensureAudio();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: {
+      chromeMediaSource: 'tab', chromeMediaSourceId: streamId
+    } } });
+  } catch (e) {
+    setStatus('err', 'Could not listen to that tab');
+    LintApp.toast('Could not listen to that tab. Try again from the tab itself');
+    return;
+  }
+  startLive(stream, 'system', 'Tab audio', title || '', { playback: true });
+  /* a tab opened by the extension has had no click yet, and a page may
+     not start sound before one; the first click or key anywhere does */
+  if (actx.state !== 'running') {
+    setStatus('ok', 'Click anywhere to hear it');
+    const start = () => {
+      removeEventListener('pointerdown', start, true);
+      removeEventListener('keydown', start, true);
+      actx.resume().then(() => { if (live) setStatus('ok', 'Listening to tab audio'); });
+    };
+    addEventListener('pointerdown', start, true);
+    addEventListener('keydown', start, true);
+  }
+}
+
+/* playback: also send the sound to the speakers, for a source the browser
+   has silenced (a captured tab); shared and input sound is heard already */
+function startLive(stream, kind, label, detail, opts) {
   stopLive();
   player.pause();
   const node = actx.createMediaStreamSource(stream);
   node.connect(analyser);
+  if (opts && opts.playback) node.connect(gain);
   live = { stream, node, kind, label, detail };
   stream.getAudioTracks().forEach((t) => { t.onended = stopListening; });
   setSource(kind);

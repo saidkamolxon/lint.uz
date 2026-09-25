@@ -38,6 +38,19 @@
     </button>
   </section>
 
+  <!-- while the tab is playing sound: hear it in the Audio tool, with no
+       share-a-tab picker -->
+  <section class="page" id="listen" hidden>
+    <button type="button" class="page-btn" id="listenBtn">
+      <span class="tool-tile tile-lg dot-audio" aria-hidden="true"></span>
+      <span class="page-text">
+        <span class="page-name">Listen to this tab</span>
+        <span class="page-meta" id="listenMeta">Live spectrum</span>
+      </span>
+      <span class="page-go">Listen</span>
+    </button>
+  </section>
+
   <section class="paste">
     <label class="label" for="paste">Paste</label>
     <textarea id="paste" spellcheck="false" autocomplete="off" rows="5"

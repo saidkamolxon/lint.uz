@@ -15,6 +15,10 @@
    - the DevTools panel: any response the inspected page loaded
    - auto.js, when "Open data pages automatically" is on
 
+   And one thing that is not a file: a tab's sound. "Listen to this tab"
+   opens the Audio tool on it through tabCapture, without the share-a-tab
+   picker the page alone would need.
+
    A file read from a page is read by grab.js *in that page*, so the
    request carries the page's own cookies and a link behind a login works
    exactly as clicking it would. */
@@ -69,6 +73,7 @@ function fail(job, message) {
 
 function attach(tabId, job, port) {
   job.out = port;
+  if (job.capture) { sendCapture(tabId, job, port); return; }
   send(job, { t: 'meta', name: job.name, type: job.type, encoding: job.encoding, size: job.size });
   var parts = job.parts;
   job.parts = [];
@@ -146,6 +151,81 @@ function openText(text, baseName, source, opts) {
   job.done = true;
   return openTab(tool, source, opts.replace).then(function (tabId) { register(tabId, job); });
 }
+
+/* ==========================================================================
+   Listening to a tab: the Audio tool, fed by tabCapture
+   ========================================================================== */
+
+/* Open the Audio tool beside the tab that is playing. The stream id is
+   asked for only once the tool's bridge connects: Chrome ties the id to
+   the tab that will use it *and* to that tab's origin, which it only has
+   once lint.one has loaded in it. The person clicking the button or the
+   menu item is what allows the capture; no site access is involved. */
+function listen(tab) {
+  if (!tab || tab.id < 0) return;
+  var job = newJob('', '', 'text', 0);
+  job.capture = { tabId: tab.id, title: tab.title || hostOf(tab.url || '') };
+  return openTab('audio', tab, false).then(function (tabId) { register(tabId, job); });
+}
+
+/* tabCapture is optional, so installing does not say "all your data on
+   all websites"; Chrome asks the first time someone listens. The tab
+   waiting for that answer is kept in session storage, and the grant
+   itself (permissions.onAdded) starts the listening, so it happens
+   whether or not the popup that asked survived Chrome's prompt. */
+var CAPTURE = { permissions: ['tabCapture'] };
+
+function listenOrAsk(tab, fromMenu) {
+  return chrome.permissions.contains(CAPTURE).then(function (ok) {
+    if (ok) return listen(tab);
+    return chrome.storage.session.set({ listenTab: tab.id }).then(function () {
+      if (!fromMenu) return;
+      /* the popup asks for itself; from the menu, ask here, and if Chrome
+         will not take the request from a menu click, say where to start */
+      return chrome.permissions.request(CAPTURE).catch(function () {
+        chrome.storage.session.remove('listenTab');
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id }, func: self.lintoneGrab,
+          args: ['', { note: 'The first time, start listening from the lint.one button in the toolbar: Chrome asks there.' }]
+        }).catch(function () {});
+      });
+    });
+  });
+}
+
+chrome.permissions.onAdded.addListener(function (p) {
+  if (!p.permissions || p.permissions.indexOf('tabCapture') < 0) return;
+  chrome.storage.session.get('listenTab').then(function (v) {
+    if (v.listenTab == null) return;
+    chrome.storage.session.remove('listenTab');
+    chrome.tabs.get(v.listenTab).then(listen, function () {});
+  });
+});
+
+function sendCapture(consumerId, job, port) {
+  chrome.tabCapture.getMediaStreamId({ targetTabId: job.capture.tabId, consumerTabId: consumerId })
+    .then(function (streamId) {
+      send(job, { t: 'capture', streamId: streamId, title: job.capture.title });
+    }, function (err) {
+      var m = String(err && err.message || '');
+      send(job, { t: 'error', message: /active stream/i.test(m)
+        ? 'That tab is already being listened to.'
+        : 'Chrome would not let lint.one listen to that tab. Try again from the tab itself.' });
+    });
+}
+
+/* the menu item only while the tab in front is playing sound */
+function syncListenMenu(tab) {
+  chrome.contextMenus.update('listen', { visible: !!(tab && tab.audible) }, function () {
+    void chrome.runtime.lastError;
+  });
+}
+chrome.tabs.onActivated.addListener(function (info) {
+  chrome.tabs.get(info.tabId).then(syncListenMenu, function () {});
+});
+chrome.tabs.onUpdated.addListener(function (tabId, change, tab) {
+  if ('audible' in change && tab.active) syncListenMenu(tab);
+});
 
 /* ==========================================================================
    Reading a file from a page (grab.js), a response (DevTools), or — for a
@@ -341,6 +421,12 @@ function buildMenus() {
     chrome.contextMenus.create({ id: 'link', title: 'Open link in lint.one', contexts: ['link'] });
     chrome.contextMenus.create({ id: 'media', title: 'Open audio in lint.one', contexts: ['audio'] });
     chrome.contextMenus.create({
+      id: 'listen', title: 'Listen to this tab in lint.one', contexts: ['page', 'video', 'audio'],
+      documentUrlPatterns: ['http://*/*', 'https://*/*'], visible: false
+    }, function () {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(function (t) { syncListenMenu(t[0]); });
+    });
+    chrome.contextMenus.create({
       id: 'page', title: 'Open this file in lint.one', contexts: ['page', 'frame'],
       documentUrlPatterns: filePagePatterns()
     });
@@ -379,6 +465,8 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
     grabIn(tab, frameId, info.linkUrl, {});
   } else if (info.menuItemId === 'media' && info.srcUrl) {
     grabIn(tab, frameId, info.srcUrl, {});
+  } else if (info.menuItemId === 'listen') {
+    listenOrAsk(tab, true);
   } else if (info.menuItemId === 'page') {
     grabIn(tab, frameId, info.frameUrl || info.pageUrl || tab.url, { usePage: true });
   }
@@ -447,6 +535,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, reply) {
     chrome.tabs.get(msg.tabId).then(function (tab) {
       grabIn(tab, 0, tab.url, { usePage: true });
     }).catch(function () {});
+  } else if (msg.kind === 'listen' && msg.tabId >= 0) {
+    chrome.tabs.get(msg.tabId).then(function (t) { return listenOrAsk(t, false); }, function () {});
   } else if (msg.kind === 'auto' && sender.tab && sender.frameId === 0) {
     grabIn(sender.tab, 0, sender.url || sender.tab.url, { usePage: true, replace: true });
   } else if (msg.kind === 'sync-auto') {

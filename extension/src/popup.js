@@ -41,6 +41,27 @@
 
   chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
     var tab = tabs[0];
+    /* not the Audio tool itself: it is the one listening */
+    if (tab && tab.audible && (tab.url || '').indexOf(BASE + '/audio/') !== 0) {
+      var where = '';
+      try { where = new URL(tab.url).hostname; } catch (e) {}
+      $('listenMeta').textContent = 'Live spectrum' + (where ? ' · ' + where : '');
+      tint($('listen'), 'audio');
+      $('listenBtn').onclick = function () {
+        /* the first time, Chrome asks for tab capture here; the worker
+           starts listening once it is granted (listenOrAsk) */
+        chrome.permissions.contains({ permissions: ['tabCapture'] }).then(function (ok) {
+          if (ok) { tell({ kind: 'listen', tabId: tab.id }); return; }
+          chrome.runtime.sendMessage({ kind: 'listen', tabId: tab.id }).catch(function () {}).then(function () {
+            return chrome.permissions.request({ permissions: ['tabCapture'] });
+          }).then(function (granted) {
+            if (granted) window.close();
+            else chrome.storage.session.remove('listenTab');
+          }, function () {});
+        });
+      };
+      $('listen').hidden = false;
+    }
     if (!tab || !/^https?:/.test(tab.url || '')) return;
     var name = nameFromUrl(tab.url);
     var host = new URL(tab.url).hostname;
