@@ -14,6 +14,14 @@ body.grant { overflow: hidden; background: var(--surface); }
   font-size: var(--fs-large); font-weight: 600; letter-spacing: -0.01em;
 }
 .grant p { margin: 0; font-size: var(--fs-base); line-height: 1.5; color: var(--muted); }
+/* what Chrome's prompt is about to say, set apart so it is read before it */
+.grant .note {
+  padding: var(--s2) var(--s3);
+  font-size: var(--fs-small); color: var(--muted);
+  background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+}
 .grant .actions {
   display: flex; gap: var(--s2); justify-content: flex-end;
   width: 100%; margin-top: var(--s3);

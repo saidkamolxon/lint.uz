@@ -13,12 +13,14 @@
   $('allow').addEventListener('click', function onAllow() {
     chrome.permissions.request(CAPTURE).then(function (granted) {
       if (!granted) {
+        $('note').hidden = true;
         document.querySelector('h1').textContent = 'Not allowed';
         $('msg').textContent = 'You can allow it any time: choose Listen to this tab again.';
         $('allow').hidden = true;
         $('cancel').textContent = 'Close';
         return;
       }
+      $('note').hidden = true;
       document.querySelector('h1').textContent = 'Allowed — one last step';
       $('msg').textContent = 'Chrome needs a fresh copy of that tab before lint.one can hear it: it opens again in its place. Then right-click it and choose Listen to this tab. From then on it is one click.';
       $('allow').textContent = 'Open it afresh';

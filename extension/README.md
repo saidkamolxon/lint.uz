@@ -92,7 +92,9 @@ turn that into *"Read and change all your data on all websites"*, so
 neither is in the manifest as a requirement:
 
 - `tabCapture` is an optional permission, asked for the first time someone
-  listens to a tab.
+  listens to a tab. Chrome's prompt for it then says "Read and change all
+  your data on all websites" (its fixed wording for tab capture), so the
+  window that asks first (`grant.html`) says that before Chrome does.
 - There is no DevTools panel: `devtools_page` alone brings that line. The
   panel that was here (commit `d708c3d`, `extension/src/panel.*`) can come
   back as a separate extension for developers.

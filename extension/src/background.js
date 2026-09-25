@@ -244,7 +244,7 @@ function listenOrAsk(tab) {
     /* Chrome will not ask from a menu click, so a small window asks, on a
        button it does accept; the popup sends people here too */
     return chrome.windows.create({
-      url: 'grant.html?tab=' + tab.id, type: 'popup', width: 420, height: 290, focused: true
+      url: 'grant.html?tab=' + tab.id, type: 'popup', width: 440, height: 370, focused: true
     });
   });
 }
