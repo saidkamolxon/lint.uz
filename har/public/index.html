@@ -1,0 +1,1706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HAR Viewer &amp; Sanitizer · lint.one</title>
+<meta name="description" content="A private HAR viewer. See every request in a HAR file, find the failed and slow ones, and save a copy without cookies, tokens and passwords — all in your browser. Nothing is uploaded.">
+<link rel="canonical" href="https://lint.one/har/">
+<!-- one installable app for the whole suite; its file_handlers send each
+     format to its own page, where LintApp.takeHandoff takes the file -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="lint">
+<meta name="theme-color" content="#FBFBFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lint.one">
+<meta property="og:url" content="https://lint.one/har/">
+<meta property="og:title" content="HAR Viewer &amp; Sanitizer · lint.one">
+<meta property="og:description" content="A private HAR viewer. See every request in a HAR file, find the failed and slow ones, and save a copy without cookies, tokens and passwords — all in your browser. Nothing is uploaded.">
+<meta property="og:image" content="https://lint.one/og/har.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<!-- the pages carry their own light and dark themes; Dark Reader would
+     repaint them on top and lose the format colours and glyphs -->
+<meta name="darkreader-lock">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<style>
+/* ==========================================================================
+   HAR builds its own frame, as SQLite and LOG do: a HAR is a list of
+   requests, not a text to edit. Everything below is scoped to this tool
+   and uses the shared tokens.
+   ========================================================================== */
+.app { overflow: hidden; }
+[hidden] { display: none !important; }
+
+.har-main { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; }
+
+#progress {
+  position: absolute; left: 0; top: 0; height: 2px;
+  background: var(--hue); width: 0;
+  transition: width var(--t-mid); z-index: 40;
+}
+
+/* ---------- the toolbar's filters ---------- */
+.filter-wrap { display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 360px; }
+#filter {
+  width: 100%;
+  font-family: var(--mono); font-size: var(--fs-base);
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px var(--s3);
+}
+#filter::placeholder { color: var(--faint); font-family: var(--ui); }
+#filter:focus { background: var(--raised); border-color: color-mix(in srgb, var(--hue) 45%, var(--line)); outline: none; }
+#filterCount {
+  font-family: var(--mono); font-size: var(--fs-small);
+  color: var(--muted); white-space: nowrap;
+  padding: 0 var(--s1); font-variant-numeric: tabular-nums;
+}
+#filterCount.none { color: var(--bad); }
+
+/* ---------- what is wrong in this file, at a glance ----------
+   One row above the list: each problem is a count that filters the list to
+   it, and the secrets open their panel. The pips carry the only colour:
+   red for failures, amber for what is worth a look. */
+.findings {
+  display: flex; align-items: center; gap: var(--s1); flex-wrap: wrap; flex: none;
+  padding: var(--s1) var(--s3);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+  min-height: 38px; font-size: var(--fs-small);
+}
+.findings button { font-size: var(--fs-small); padding: 3px var(--s2); color: var(--muted); font-weight: 500; }
+.findings button:hover { color: var(--ink); }
+.findings button b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.findings button[aria-pressed="true"] b { color: inherit; }
+.findings .pip {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  margin-right: 6px; vertical-align: 1px; background: var(--warn);
+}
+.findings .pip.bad { background: var(--bad); }
+.findings .pip.ok { background: var(--ok); }
+.findings .clean { color: var(--muted); padding: 0 var(--s2); }
+.grouping { display: flex; align-items: center; gap: var(--s2); color: var(--muted); margin-right: var(--s2); }
+#groupSel {
+  font: inherit; font-size: var(--fs-small); color: var(--ink);
+  background: var(--raised); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: 3px var(--s2);
+}
+
+/* a group of requests, and its members under it */
+.req.grp { cursor: pointer; background: color-mix(in srgb, var(--ink) 3%, var(--surface)); }
+.req.grp:hover { background: var(--row-hover); }
+.req.grp .nm { font-weight: 600; }
+.req.grp .cnt { color: var(--muted); font-weight: 400; }
+.req.grp .gbad { color: var(--bad); font-weight: 500; font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.9); }
+.req.grp .st .more { color: var(--faint); margin-left: 1px; }
+.req.grp .chev { width: 14px; height: 14px; color: var(--muted); transition: transform var(--t-fast); }
+.req.grp .chev.open { transform: rotate(90deg); }
+.req.member .nm { padding-left: calc(var(--s2) + 2ch); }
+.wf-bar.thin { top: calc(50% - 3px); height: 6px; min-width: 1px; background: color-mix(in srgb, var(--ink) 45%, transparent); }
+.wf-bar.thin.bad { background: var(--bad); }
+.findings .spacer { min-width: 0; }
+
+/* ---------- the list ---------- */
+#list {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); position: relative;
+  /* the columns follow the list's own width, which the panel takes from */
+  container-type: inline-size;
+}
+#viewport { flex: 1; min-height: 0; overflow: auto; position: relative; }
+#spacer { position: relative; width: 100%; }
+#rows { position: absolute; top: 0; left: 0; right: 0; }
+
+/* the columns, shared by the head and every row */
+.req, .req-head {
+  display: grid;
+  /* widths in ch, so the columns grow with the text size */
+  grid-template-columns: var(--ln-w, 5ch) 7ch 8.5ch minmax(18ch, 1fr) minmax(12ch, 24ch) 11ch 11ch 9.5ch minmax(120px, 22%);
+  align-items: center;
+  font-size: var(--code-size, var(--fs-base));
+}
+.req > span, .req-head > button, .req-head > span {
+  padding: 0 var(--s2); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.req-head {
+  position: sticky; top: 0; z-index: 3;
+  height: 30px;
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line-strong);
+}
+.req-head > button, .req-head > span {
+  height: 100%; border: none; border-radius: 0;
+  text-align: left; font-size: var(--fs-small); font-weight: 600; color: var(--t-key);
+  display: flex; align-items: center; gap: 4px;
+}
+.req-head > button:hover { background: var(--row-hover); }
+.req-head > .num { justify-content: flex-end; }
+.req-head .sort { color: var(--hue); font-size: 10px; }
+.req-head .rn { background: color-mix(in srgb, var(--hue) var(--gutter-tint), var(--raised)); }
+
+.req {
+  height: var(--row-h, 26px);
+  font-family: var(--mono);
+  border-bottom: var(--hairline) solid var(--line);
+  cursor: default;
+}
+.req:hover { background: var(--row-hover); }
+.req.selected { background: color-mix(in srgb, var(--hue) 10%, transparent); }
+.req .rn {
+  align-self: stretch; display: flex; align-items: center; justify-content: flex-end;
+  background: color-mix(in srgb, var(--hue) var(--gutter-tint), var(--raised));
+  color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted));
+  font-size: calc(var(--code-size, var(--fs-base)) * 0.85);
+  font-variant-numeric: tabular-nums;
+}
+.req.selected .rn { color: var(--hue); font-weight: 600; }
+.req .st { font-variant-numeric: tabular-nums; }
+.req .st.bad, .req.failed .nm { color: var(--bad); }
+.req .st.bad { font-weight: 600; }
+.req .st.redir, .req .st.none { color: var(--muted); }
+.req .m { color: var(--muted); }
+.req .nm { color: var(--ink); }
+.req .nm .q { color: var(--muted); }
+.req .dom, .req .ty { color: var(--muted); font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.92); }
+.req .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--t-num); }
+.req .num.faint { color: var(--faint); font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.92); }
+.req .key { font-size: 11px; color: var(--warn); margin-left: 4px; }
+
+/* the waterfall: when a request started and how long it took, on the
+   file's one time axis. Neutral ink, as the list's text is; a failed
+   request is drawn in the error colour. */
+.req .wf { position: relative; height: 100%; padding: 0; }
+.wf-in { position: absolute; inset: 0 var(--s3) 0 var(--s2); }
+.wf-bar {
+  position: absolute; top: calc(50% - 4px); height: 8px; min-width: 2px;
+  display: flex; border-radius: 1px; overflow: hidden;
+}
+.wf-bar i { display: block; height: 100%; }
+.wf-bar .b { background: var(--line-strong); }
+.wf-bar .w { background: color-mix(in srgb, var(--ink) 38%, transparent); }
+.wf-bar .r { background: color-mix(in srgb, var(--ink) 72%, transparent); flex: 1; }
+.req.failed .wf-bar .w, .req.failed .wf-bar .r { background: var(--bad); }
+
+@container (max-width: 1000px) {
+  .req, .req-head { grid-template-columns: var(--ln-w, 5ch) 7ch 8.5ch minmax(18ch, 1fr) 11ch 9.5ch minmax(100px, 18%); }
+  .req .dom, .req .ty, .req-head .dom, .req-head .ty { display: none; }
+}
+@container (max-width: 560px) {
+  .req, .req-head { grid-template-columns: 7ch 8.5ch minmax(0, 1fr) 9.5ch; }
+  .req .rn, .req-head .rn, .req .wf, .req-head .wf, .req .sz, .req-head .sz { display: none; }
+}
+
+/* ---------- the panel: one request, the secrets, or the file ---------- */
+#detail {
+  width: var(--detail-w, 480px); flex: none; min-width: 0;
+  display: flex; flex-direction: column;
+  background: var(--raised);
+  border-left: var(--hairline) solid var(--line);
+  position: relative;
+}
+@media (max-width: 860px) {
+  #detail { position: absolute; inset: 0 0 0 auto; width: min(100%, 92vw); z-index: 30; box-shadow: var(--shadow); }
+  .detail-grip { display: none; }
+}
+.detail-grip {
+  position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
+  cursor: col-resize; z-index: 2;
+}
+.detail-grip:hover, .detail-grip.dragging { background: color-mix(in srgb, var(--hue) 35%, transparent); }
+.detail-head {
+  display: flex; align-items: center; gap: var(--s1); flex: none;
+  padding: var(--s1) var(--s2) var(--s1) var(--s3);
+  border-bottom: var(--hairline) solid var(--line);
+  font-size: var(--fs-small); color: var(--muted);
+  min-height: 38px;
+}
+.detail-head .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail-head .title strong { color: var(--ink); font-weight: 600; font-family: var(--mono); }
+.detail-head .title .bad { color: var(--bad); font-weight: 600; }
+.detail-tabs { display: flex; flex: none; padding: var(--s2) var(--s3) 0; border-bottom: var(--hairline) solid var(--line); gap: var(--s1); }
+.detail-tabs button {
+  border-radius: 0; border: none; border-bottom: 2px solid transparent;
+  padding: 5px var(--s2) 7px; color: var(--muted); font-size: var(--fs-small);
+}
+.detail-tabs button:hover { background: none; color: var(--ink); }
+.detail-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.detail-tabs button .n { font-weight: 400; color: var(--faint); margin-left: 3px; }
+.detail-body { flex: 1; overflow: auto; padding: var(--s3) var(--s3) var(--s5); }
+
+.sec-label {
+  display: flex; align-items: center; gap: var(--s2);
+  margin: var(--s4) 0 var(--s2);
+  font-size: var(--fs-small); color: var(--muted); font-weight: 600;
+}
+.sec-label:first-child { margin-top: 0; }
+.sec-label::after { content: ""; flex: 1; border-top: var(--hairline) solid var(--line); }
+.sec-label .n { font-weight: 400; color: var(--faint); }
+.sec-label button {
+  order: 2; font-size: var(--fs-small); color: var(--muted); font-weight: 500;
+  padding: 2px var(--s2); border-radius: var(--radius);
+}
+.sec-label button:hover { color: var(--ink); }
+
+/* name: value pairs — headers, cookies, query */
+.kv { margin: 0; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.9); line-height: 1.55; }
+.kv div { display: grid; grid-template-columns: minmax(90px, 36%) 1fr; gap: var(--s3); padding: 2px 0; }
+.kv dt { color: var(--t-key); overflow-wrap: anywhere; }
+.kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+.kv dd.secret { background: color-mix(in srgb, var(--warn) 14%, transparent); border-radius: var(--radius-sm); }
+.kv .none { color: var(--faint); font-family: var(--ui); }
+.kv-empty { color: var(--faint); font-size: var(--fs-small); margin: 0; }
+
+/* facts about the request, the file */
+.meta { margin: 0; font-size: var(--fs-base); }
+.meta div {
+  display: grid; grid-template-columns: 112px 1fr; gap: var(--s3);
+  padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
+  align-items: baseline;
+}
+.meta div:last-child { border-bottom: none; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.9); overflow-wrap: anywhere; color: var(--ink); }
+.meta dd.bad { color: var(--bad); font-weight: 600; }
+.meta dd small { display: block; font-family: var(--ui); color: var(--muted); margin-top: 2px; }
+
+.actions { display: flex; gap: var(--s1); flex-wrap: wrap; margin: var(--s3) 0 0; }
+.actions .menu { left: 0; right: auto; }
+.actions .caret { margin-left: 4px; color: var(--faint); }
+
+.body-text {
+  margin: 0; padding: var(--s2) var(--s3);
+  font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.9); line-height: 1.55;
+  background: var(--sunken); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+}
+.body-img {
+  display: block; max-width: 100%; max-height: 320px;
+  border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  background: repeating-conic-gradient(var(--sunken) 0 25%, var(--raised) 0 50%) 0 0 / 12px 12px;
+}
+.note { color: var(--muted); font-size: var(--fs-small); line-height: 1.55; margin: var(--s2) 0 0; }
+.note.first { margin-top: 0; }
+.warn-note {
+  font-size: var(--fs-small); line-height: 1.5; color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--warn) 40%, transparent);
+  border-radius: var(--radius); padding: var(--s2) var(--s3); margin: 0 0 var(--s3);
+}
+.bad-note {
+  font-size: var(--fs-small); line-height: 1.5; color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--bad) 30%, transparent);
+  border-radius: var(--radius); padding: var(--s2) var(--s3); margin: 0 0 var(--s3);
+}
+.j-key { color: var(--t-key); }
+.j-str { color: var(--t-str); }
+.j-num { color: var(--t-num); }
+.j-lit { color: var(--t-bool); font-weight: 600; }
+
+/* timing: each phase on the request's own scale */
+.phases { display: grid; grid-template-columns: 128px 1fr 76px; gap: 6px var(--s3); align-items: center; font-size: var(--fs-small); }
+.phases .ph { color: var(--muted); }
+.phases .ph small { display: block; color: var(--faint); font-size: var(--fs-micro); }
+.phases .track { position: relative; height: 10px; background: var(--sunken); border-radius: 2px; }
+.phases .track i { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--ink) 45%, transparent); border-radius: 2px; min-width: 1px; }
+.phases .track i.main { background: color-mix(in srgb, var(--ink) 72%, transparent); }
+.phases .ms { text-align: right; font-family: var(--mono); color: var(--t-num); font-variant-numeric: tabular-nums; }
+.phases .total { font-weight: 600; color: var(--ink); }
+.phases .rule { grid-column: 1 / -1; border-top: var(--hairline) solid var(--line); }
+
+/* the initiator's stack */
+.stack { margin: 0; padding: 0; list-style: none; font-family: var(--mono); font-size: var(--fs-small); line-height: 1.6; }
+.stack li { overflow-wrap: anywhere; }
+.stack .fn { color: var(--ink); }
+.stack .at { color: var(--muted); }
+
+/* the secrets */
+.secret-group { margin: 0 0 var(--s4); }
+.secret-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s3);
+  width: 100%; text-align: left;
+  padding: 6px var(--s2); margin: 0 calc(-1 * var(--s2));
+  border: none; border-radius: var(--radius);
+  box-sizing: content-box;
+  font-weight: 400;
+}
+.secret-item:hover { background: var(--row-hover); }
+.secret-item .nm { font-family: var(--mono); font-weight: 600; color: var(--t-key); overflow: hidden; text-overflow: ellipsis; }
+.secret-item .where { font-size: var(--fs-small); color: var(--muted); text-align: right; white-space: nowrap; }
+.secret-item .val { grid-column: 1 / -1; font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.save-box {
+  border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: var(--s3); margin: 0 0 var(--s4); background: var(--surface);
+}
+.save-box p { margin: 0 0 var(--s3); font-size: var(--fs-small); line-height: 1.55; color: var(--ink); }
+.save-box .actions { margin: 0; }
+
+/* the empty state sits where every other tool's does */
+#list > .empty-state { margin-top: calc(40vh - 37px - var(--s5)); }
+#rows > .empty-state { margin-top: 18vh; }
+
+/* the shared dragover cue targets #editorPane, which this tool has none of */
+body.dragover .har-main::after {
+  content: "";
+  position: absolute; inset: var(--s2);
+  border: 2px dashed var(--hue);
+  border-radius: var(--radius-lg);
+  background: var(--hue-wash);
+  pointer-events: none; z-index: 50;
+}
+
+:root[data-contrast="more"] .req .dom,
+:root[data-contrast="more"] .req .ty,
+:root[data-contrast="more"] .req .num.faint { color: var(--ink); }
+:root[data-contrast="more"] .wf-bar .w { background: color-mix(in srgb, var(--ink) 55%, transparent); }
+
+/* A phone cannot fit the filters beside Open: they take a second row of
+   the toolbar, which the break starts. */
+.row-break { display: none; }
+@media (max-width: 860px) {
+  .har-toolbar { flex-wrap: wrap; row-gap: var(--s2); }
+  .har-toolbar .row-break:not([hidden]) { display: block; order: 1; flex-basis: 100%; height: 0; }
+  .har-toolbar .filter-wrap, .har-toolbar #filterCount, .har-toolbar #typeSeg { order: 1; }
+  .har-toolbar .filter-wrap { flex: 1 1 0; min-width: 0; max-width: none; }
+}
+@media (max-width: 620px) {
+  #typeSeg { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'har',
+  name: 'HAR',
+  host: 'lint.one/har',
+  label: 'HAR',
+  hue: '#475569',
+  hueInk: '#FFFFFF',
+  accept: '.har,application/json'
+};
+</script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/app.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = LintApp.esc;
+const fmtNum = (n) => LintApp.fmtNum(Number(n));
+
+/* ==========================================================================
+   Chrome — built here rather than by shared/shell.js, which draws an
+   editor and a tree this tool has no use for. Themes, the suite menu, the
+   toast and the document chip still come from the shared runtime.
+   ========================================================================== */
+const c = window.LINT_CONFIG;
+const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
+document.documentElement.style.setProperty('--hue', c.hue);
+document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+
+const TYPES = [
+  ['all', 'All'], ['xhr', 'Fetch/XHR'], ['doc', 'Doc'], ['js', 'JS'], ['css', 'CSS'], ['img', 'Img'], ['other', 'Other']
+];
+
+$('app').innerHTML = `
+  <header class="toolbar har-toolbar">
+    <span class="brand">
+      <span class="brand-text"><span class="brand-name">${c.name}</span></span>
+    </span>
+    <button id="btnOpen" class="primary" title="Open a HAR file, or drop one anywhere">Open</button>
+
+    <span class="row-break needs-file" aria-hidden="true"></span>
+    <label class="filter-wrap needs-file">
+      <input id="filter" type="text" spellcheck="false" autocomplete="off"
+             placeholder="Search URLs, headers, bodies" aria-label="Filter requests"
+             title="Words are looked for in URLs, headers and bodies; -word hides. Also: status:404, status:5xx, method:post, time:>1s, size:>1mb, domain:api, type:xhr, mime:json">
+    </label>
+    <span id="filterCount" class="needs-file"></span>
+    <div class="seg needs-file" id="typeSeg" role="radiogroup" aria-label="Type">
+      ${TYPES.map(([id, label], k) => `<button data-type="${id}" role="radio" aria-checked="${k === 0}">${label}</button>`).join('')}
+    </div>
+
+    <span class="spacer"></span>
+    <div class="menu-wrap needs-file">
+      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
+      <div class="menu" id="moreMenu" role="menu">
+        <button class="menu-item" id="btnSave" role="menuitem">Save without secrets</button>
+        <button class="menu-item" id="btnCopyUrls" role="menuitem">Copy the URLs listed</button>
+        <button class="menu-item" id="btnCopyCsv" role="menuitem">Copy the list as CSV</button>
+        <button class="menu-item" id="btnToJson" role="menuitem">Open the file in JSON viewer</button>
+        <button class="menu-item" id="btnFile" role="menuitem">About this file</button>
+      </div>
+    </div>
+    <div class="group" id="chromeSlot"></div>
+    <input type="file" id="fileInput" accept="${c.accept}" hidden>
+  </header>
+
+  <main class="har-main">
+    <div id="progress"></div>
+    <section id="list" aria-label="Requests">
+      <div class="findings" id="findings" hidden></div>
+      <div id="viewport" hidden>
+        <div class="req-head" id="head" role="row"></div>
+        <div id="spacer"><div id="rows" role="rowgroup"></div></div>
+      </div>
+    </section>
+
+    <aside id="detail" aria-label="Details" hidden>
+      <div class="detail-grip" id="detailGrip" title="Drag to resize"></div>
+      <div class="detail-head">
+        <span class="title" id="detailTitle"></span>
+        <button id="detailPrev" class="icon-btn" title="Previous request (↑)" aria-label="Previous request"></button>
+        <button id="detailNext" class="icon-btn" title="Next request (↓)" aria-label="Next request"></button>
+        <button id="detailClose" class="icon-btn" title="Close (Esc)" aria-label="Close"></button>
+      </div>
+      <div class="detail-tabs" id="detailTabs" role="tablist"></div>
+      <div class="detail-body" id="detailBody"></div>
+    </aside>
+  </main>
+
+  <footer class="status" id="statusBar" hidden>
+    <span class="dot"></span>
+    <span id="statusMsg"></span>
+    <span id="pathBox"></span>
+  </footer>
+`;
+
+LintApp.mountChrome($('chromeSlot'), 'har');
+LintApp.wireMenu($('btnMore'), $('moreMenu'));
+
+const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+$('btnMore').innerHTML = I('<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
+  '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>');
+$('detailPrev').innerHTML = I('<path d="M6 15l6-6 6 6"/>');
+$('detailNext').innerHTML = I('<path d="M6 9l6 6 6-6"/>');
+$('detailClose').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
+
+/* ==========================================================================
+   The worker — every call is a promise
+   ========================================================================== */
+const worker = new Worker('./worker.js');
+const calls = new Map();
+let nextId = 1;
+worker.onmessage = (e) => {
+  const m = e.data;
+  const call = calls.get(m.id);
+  if (!call) return;
+  calls.delete(m.id);
+  if (m.ok) call.resolve(m); else call.reject(new Error(m.error));
+};
+function rpc(type, data) {
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    calls.set(id, { resolve, reject });
+    worker.postMessage({ id, type, ...data });
+  });
+}
+
+/* ==========================================================================
+   State
+   ========================================================================== */
+let doc = null;          // {name, size, list, secrets, file, t0, span}
+let source = null;       // {file} or {text}: what "Open in JSON viewer" sends
+let visible = [];        // indexes into doc.list, in the order shown
+let selected = -1;       // an index into doc.list
+let sort = { key: 'start', dir: 1 };
+let typeFilter = 'all';
+let focus = null;        // a finding the list is narrowed to: 'failed' | 'slow' | 'large' | 'repeated'
+let repeated = new Set();  // indexes of requests made more than once, same method and URL
+let panel = null;        // 'request' | 'secrets' | 'file' | null
+let tab = 'headers';     // the request panel's tab
+let detailSeq = 0;
+let ROW_H = 26;
+
+function setBusy(pct) { $('progress').style.width = pct === null ? '0' : pct + '%'; }
+function setStatus(kind, msg) {
+  $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusBar').hidden = false;
+  $('statusMsg').textContent = msg;
+}
+
+function fmtMs(ms) {
+  if (!(ms > 0)) return '0 ms';
+  if (ms < 1) return ms.toFixed(2) + ' ms';
+  if (ms < 1000) return Math.round(ms) + ' ms';
+  if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + ' s';
+  return Math.floor(ms / 60000) + ' min ' + Math.round(ms % 60000 / 1000) + ' s';
+}
+function failed(r) { return r.status >= 400 || r.status === 0 || !!r.error; }
+
+/* ==========================================================================
+   Opening
+   ========================================================================== */
+async function openFile(file) {
+  if (!file) return;
+  setStatus('', 'Reading ' + file.name + '…');
+  setBusy(30);
+  try {
+    const d = await rpc('open', { file });
+    source = { file };
+    show(d, file.name, file.size);
+  } catch (err) {
+    setBusy(null);
+    if (!doc) reset();
+    setStatus('err', err.message);
+    LintApp.toast(err.message);
+  }
+}
+
+async function openSample() {
+  if (!window.makeSampleHar) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = './sample.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('The sample could not load'));
+      document.head.appendChild(s);
+    }).catch((err) => { LintApp.toast(err.message); });
+    if (!window.makeSampleHar) return;
+  }
+  const text = JSON.stringify(window.makeSampleHar(), null, 2);
+  try {
+    const d = await rpc('open', { text });
+    source = { text };
+    show(d, 'shop.example.har', new Blob([text]).size);
+  } catch (err) { LintApp.toast(err.message); }
+}
+
+function show(d, name, size) {
+  let span = 0;
+  d.list.forEach((r) => { span = Math.max(span, r.start + r.time); });
+  doc = { name, size, list: d.list, secrets: d.secrets, file: d.file, t0: d.t0, span: span || 1 };
+  d.list.forEach((r) => {
+    const seg = r.path.split('?')[0].split('/').filter(Boolean).pop();
+    r.name = seg ? decodeSafe(seg) : (r.host || r.url) + '/';
+    r.query = r.path.includes('?') ? r.path.slice(r.path.indexOf('?')) : '';
+  });
+  setBusy(100);
+  setTimeout(() => setBusy(null), 300);
+
+  document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = false; });
+  LintApp.setDocument(name, reset);
+  $('pathBox').textContent = name;
+  $('list').querySelectorAll(':scope > .empty-state').forEach((el) => el.remove());
+  $('viewport').hidden = false;
+  $('findings').hidden = false;
+  $('viewport').scrollTop = 0;
+
+  const n = d.list.length;
+  const bad = d.list.filter(failed).length;
+  const bytes = d.list.reduce((s, r) => s + (r.transfer || 0), 0);
+  const known = d.list.some((r) => r.transfer != null);
+  setStatus('ok', [
+    fmtNum(n) + (n === 1 ? ' request' : ' requests'),
+    bad ? fmtNum(bad) + ' failed' : null,
+    known ? LintApp.fmtBytes(bytes) + ' transferred' : null,
+    fmtMs(span)
+  ].filter(Boolean).join(', '));
+
+  findRepeated();
+  opened = new Set();
+  $('list').classList.toggle('grouped', !!grouping);
+  lastSearch = { key: null, hits: null };
+  selected = -1;
+  panel = null;
+  $('detail').hidden = true;
+  $('filter').value = '';
+  typeFilter = 'all';
+  focus = null;
+  paintFindings();
+  paintTypes();
+  sort = { key: 'start', dir: 1 };
+  $('btnToJson').hidden = size > 20 * 1048576;
+  applyFilters();
+  if (!n) LintApp.toast('This HAR file has no requests in it');
+}
+
+function decodeSafe(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
+
+function reset() {
+  rpc('close', {}).catch(() => {});
+  doc = null;
+  source = null;
+  visible = [];
+  selected = -1;
+  panel = null;
+  LintApp.setDocument(null);
+  document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = true; });
+  $('viewport').hidden = true;
+  $('findings').hidden = true;
+  $('rows').innerHTML = '';
+  $('detail').hidden = true;
+  $('statusBar').hidden = true;
+  $('pathBox').textContent = '';
+  showEmpty();
+}
+
+const EMPTY = LintApp.emptyState({
+  title: 'Open a HAR file or drop it here',
+  body: 'Save one from your browser’s Network tab with “Export HAR”. Requests, timings and secrets are read in this tab; the file never leaves it.',
+  extra: '<div class="empty-actions">' +
+    '<button class="primary" data-empty="open">Open a file</button>' +
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+});
+function showEmpty() {
+  const list = $('list');
+  list.querySelectorAll(':scope > .empty-state').forEach((el) => el.remove());
+  list.insertAdjacentHTML('beforeend', EMPTY);
+}
+$('list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-empty]');
+  if (!b) return;
+  if (b.dataset.empty === 'open') $('fileInput').click();
+  else openSample();
+});
+
+/* ==========================================================================
+   Filtering and sorting
+   ========================================================================== */
+/* The box takes words, looked for anywhere in a request (URL, headers,
+   bodies), and a few field:value tests for what words cannot say. A -
+   before either turns it round. */
+const FIELD_RE = /^(-?)(status|method|domain|host|type|mime|time|size|url):(.+)$/i;
+
+function parseQuery(raw) {
+  const inc = [], exc = [], tests = [];
+  raw.split(/\s+/).forEach((t) => {
+    if (!t) return;
+    const f = FIELD_RE.exec(t);
+    const test = f && fieldTest(f[2].toLowerCase(), f[3]);
+    if (test) { tests.push(f[1] ? (r) => !test(r) : test); return; }
+    if (t[0] === '-' && t.length > 1) exc.push(t.slice(1).toLowerCase());
+    else inc.push(t.toLowerCase());
+  });
+  return { inc, exc, tests };
+}
+
+/* "1s", "250ms", ">1.5s"; "1mb", "200kb" — a comparison, or null */
+function measure(v, kind) {
+  const m = /^(>=|<=|>|<|=)?(\d+(?:\.\d+)?)\s*([a-z]*)$/i.exec(v);
+  if (!m) return null;
+  const n = parseFloat(m[2]);
+  const u = m[3].toLowerCase();
+  let x;
+  if (kind === 'time') x = u === 's' ? n * 1000 : u === 'm' || u === 'min' ? n * 60000 : u === '' || u === 'ms' ? n : NaN;
+  else x = n * ({ '': 1, b: 1, k: 1024, kb: 1024, m: 1048576, mb: 1048576, g: 1073741824, gb: 1073741824 }[u] ?? NaN);
+  if (isNaN(x)) return null;
+  const op = m[1] || (kind === 'status' ? '=' : '>=');
+  return (y) => op === '>' ? y > x : op === '<' ? y < x : op === '>=' ? y >= x : op === '<=' ? y <= x : y === x;
+}
+
+function fieldTest(key, v) {
+  const lv = v.toLowerCase();
+  if (key === 'status') {
+    if (/^[1-5]xx$/.test(lv)) { const c = Number(lv[0]); return (r) => Math.floor(r.status / 100) === c; }
+    if (lv === 'failed' || lv === 'error') return failed;
+    const cmp = measure(lv.replace(/[a-z]+$/, ''), 'status');
+    return cmp && ((r) => cmp(r.status));
+  }
+  if (key === 'method') return (r) => r.method.toLowerCase() === lv;
+  if (key === 'domain' || key === 'host') return (r) => r.host.toLowerCase().includes(lv);
+  if (key === 'url') return (r) => r.url.toLowerCase().includes(lv);
+  if (key === 'mime') return (r) => r.mime.includes(lv);
+  if (key === 'type') return (r) => r.type === lv || (TYPE_LABEL[r.type] || '').startsWith(lv) || (lv === 'xhr' && r.type === 'xhr');
+  if (key === 'time') { const cmp = measure(lv, 'time'); return cmp && ((r) => cmp(r.time)); }
+  if (key === 'size') { const cmp = measure(lv, 'size'); return cmp && ((r) => cmp(bodySize(r))); }
+  return null;
+}
+
+function bodySize(r) { return Math.max(r.size ?? 0, r.transfer ?? 0); }
+
+const TYPE_OF_SEG = { font: 'other', media: 'other', ws: 'other', other: 'other' };
+
+/* ---------- findings ---------- */
+const SLOW_MS = 1000;
+const LARGE = 1048576;
+const FINDS = {
+  failed: { test: failed, one: 'failed', many: 'failed', pip: 'bad', tip: 'Status 400 and up, or no answer' },
+  slow: { test: (r) => r.time >= SLOW_MS, one: 'slow', many: 'slow', pip: '', tip: 'Took a second or more' },
+  large: { test: (r) => bodySize(r) >= LARGE, one: 'large', many: 'large', pip: '', tip: 'A megabyte or more' },
+  repeated: { test: (r, k) => repeated.has(k), one: 'repeated', many: 'repeated', pip: '',
+              tip: 'The same method and URL, asked for more than once' }
+};
+
+/* the same request made again: often a missing cache, or a component
+   fetching what another already has */
+function findRepeated() {
+  const byKey = new Map();
+  doc.list.forEach((r, k) => {
+    if (r.type === 'ws') return;
+    const key = r.method + ' ' + r.url;
+    (byKey.get(key) || byKey.set(key, []).get(key)).push(k);
+  });
+  repeated = new Set();
+  doc.repeatedExtra = 0;
+  byKey.forEach((ks) => {
+    if (ks.length < 2) return;
+    ks.forEach((k) => repeated.add(k));
+    doc.repeatedExtra += ks.length - 1;
+  });
+}
+
+function paintFindings() {
+  if (!doc) return;
+  const list = doc.list;
+  let html = '';
+  Object.entries(FINDS).forEach(([id, f]) => {
+    /* repeated counts the calls beyond the first: the ones that need not have been made */
+    const n = id === 'repeated' ? doc.repeatedExtra : list.reduce((s, r, k) => s + (f.test(r, k) ? 1 : 0), 0);
+    if (!n) return;
+    html += `<button data-find="${id}" aria-pressed="${focus === id}" title="${f.tip}">` +
+      `<span class="pip ${f.pip}"></span><b>${fmtNum(n)}</b> ${n === 1 ? f.one : f.many}</button>`;
+  });
+  if (!html) html = '<span class="clean"><span class="pip ok"></span>No failed, slow, large or repeated requests</span>';
+  const secrets = secretGroups().length;
+  html += '<span class="spacer"></span>' +
+    `<label class="grouping" title="Fold the list into endpoints (one path, its IDs as {id}) or domains">Group ` +
+    `<select id="groupSel">${[['', 'None'], ['endpoint', 'By endpoint'], ['domain', 'By domain']].map(([v, l]) =>
+      `<option value="${v}"${v === grouping ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` +
+    `<button id="btnSecrets" aria-pressed="${panel === 'secrets'}" title="Cookies, tokens and passwords in this file">` +
+    `<span class="pip ${secrets ? '' : 'ok'}"></span>` + (secrets ? `<b>${fmtNum(secrets)}</b> ${secrets === 1 ? 'secret' : 'secrets'}` : 'No secrets') +
+    '</button>';
+  $('findings').innerHTML = html;
+}
+
+$('findings').addEventListener('change', (e) => {
+  if (e.target.id === 'groupSel') setGrouping(e.target.value);
+});
+$('findings').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'btnSecrets') { if (panel === 'secrets') closePanel(); else showSecrets(); return; }
+  focus = focus === b.dataset.find ? null : b.dataset.find;
+  paintFindings();
+  applyFilters();
+});
+
+/* ---------- the list ---------- */
+let searchSeq = 0;
+let lastSearch = { key: null, hits: null };   // the worker's last answer, kept while the words stay
+
+async function applyFilters() {
+  if (!doc) return;
+  const q = parseQuery($('filter').value);
+  let hits = null;
+  if (q.inc.length || q.exc.length) {
+    const key = q.inc.join(' ') + '\u0000' + q.exc.join(' ');
+    if (lastSearch.key !== key) {
+      const seq = ++searchSeq;
+      let d;
+      try { d = await rpc('search', { inc: q.inc, exc: q.exc }); } catch (err) { return; }
+      if (seq !== searchSeq || !doc) return;
+      lastSearch = { key, hits: new Set(d.hits) };
+    }
+    hits = lastSearch.hits;
+  } else searchSeq++;
+  const list = doc.list;
+  const f = focus && FINDS[focus];
+  const out = [];
+  for (let k = 0; k < list.length; k++) {
+    const r = list[k];
+    if (typeFilter !== 'all' && (TYPE_OF_SEG[r.type] || r.type) !== typeFilter) continue;
+    if (f && !f.test(r, k)) continue;
+    if (hits && !hits.has(r.i)) continue;
+    if (q.tests.length && !q.tests.every((t) => t(r))) continue;
+    out.push(k);
+  }
+  const key = sort.key, dir = sort.dir;
+  const val = {
+    start: (r) => r.start, status: (r) => r.status, method: (r) => r.method, name: (r) => r.name.toLowerCase(),
+    host: (r) => r.host, type: (r) => r.type, size: (r) => r.transfer ?? r.size ?? -1, time: (r) => r.time
+  }[key];
+  /* repeated requests are shown side by side, unless a column says otherwise */
+  const together = focus === 'repeated' && key === 'start';
+  out.sort((a, b) => {
+    if (together) {
+      const ka = list[a].method + ' ' + list[a].url, kb = list[b].method + ' ' + list[b].url;
+      if (ka !== kb) return ka < kb ? -1 : 1;
+    }
+    const x = val(list[a]), y = val(list[b]);
+    return (x < y ? -1 : x > y ? 1 : list[a].start - list[b].start || a - b) * (x === y ? 1 : dir);
+  });
+  visible = out;
+  buildModel();
+
+  const filtering = out.length !== list.length;
+  const fc = $('filterCount');
+  fc.classList.toggle('none', filtering && !out.length);
+  fc.textContent = !filtering ? '' : out.length ? fmtNum(out.length) + ' of ' + fmtNum(list.length) : 'no matches';
+  paintHead();
+  sizeRows();
+  draw();
+}
+
+function paintTypes() {
+  $('typeSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.type === typeFilter)));
+}
+
+$('typeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  typeFilter = b.dataset.type;
+  paintTypes();
+  applyFilters();
+});
+let filterTimer;
+$('filter').addEventListener('input', () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(applyFilters, 120);
+});
+
+/* ==========================================================================
+   The list — only the rows on screen exist in the DOM
+   ========================================================================== */
+const COLS = [
+  ['rn', '#', null], ['st', 'Status', 'status'], ['m', 'Method', 'method'], ['nm', 'Name', 'name'],
+  ['dom', 'Domain', 'host'], ['ty', 'Type', 'type'], ['sz num', 'Size', 'size'], ['tm num', 'Time', 'time'],
+  ['wf', 'Waterfall', 'start']
+];
+const TYPE_LABEL = { xhr: 'fetch', doc: 'document', js: 'script', css: 'style', img: 'image', font: 'font', media: 'media', ws: 'websocket', other: 'other' };
+
+function paintHead() {
+  $('head').innerHTML = COLS.map(([cls, label, key]) => {
+    if (!key) return `<span class="${cls}">${label}</span>`;
+    const on = sort.key === key && !(key === 'start' && sort.dir === 1);
+    const arrow = on ? `<span class="sort">${sort.dir > 0 ? '▲' : '▼'}</span>` : '';
+    const tip = key === 'start' ? 'When each request started and how long it took. Click to sort by start' : 'Sort by ' + label.toLowerCase();
+    return `<button class="${cls}" data-sort="${key}" title="${tip}">${cls.includes('num') ? arrow + label : label + arrow}</button>`;
+  }).join('');
+}
+
+$('head').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sort]');
+  if (!b) return;
+  const key = b.dataset.sort;
+  /* a first click sorts the way that finds problems first: the slowest,
+     the largest, the highest status; a second turns it round; a third
+     goes back to the order of the file */
+  const firstDir = /^(size|time|status)$/.test(key) ? -1 : 1;
+  if (sort.key !== key) sort = { key, dir: firstDir };
+  else if (sort.dir === firstDir && key !== 'start') sort.dir = -firstDir;
+  else sort = { key: 'start', dir: 1 };
+  applyFilters();
+});
+
+/* ---------- grouping ----------
+   By endpoint: the same method on the same path, with the parts that name
+   one thing out of many (/users/42, /orders/9f1c…) read as {id}, so every
+   user's avatar is one endpoint. By domain: every request to one host. */
+let grouping = '';
+try { grouping = localStorage.getItem('lintone-har-group') || ''; } catch (e) {}
+if (!/^(endpoint|domain)?$/.test(grouping)) grouping = '';
+let groups = [];          // {key, label, method, host, members, failed, status, max, total, first}
+let opened = new Set();   // the keys of the groups shown open
+let model = [];           // the rows on screen, in order: k for a request, -(g + 1) for a group
+let members = new Set();  // requests shown under a group's row
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function pattern(path) {
+  return path.split('?')[0].split('/').map((seg) => {
+    if (!seg) return seg;
+    const d = decodeSafe(seg);
+    if (/^\d+$/.test(d)) return '{id}';
+    if (UUID_RE.test(d)) return '{uuid}';
+    if (/^[0-9a-f]{16,}$/i.test(d)) return '{hash}';
+    if (d.length >= 20 && /^[\w-]+$/.test(d) && /\d/.test(d) && /[a-z]/i.test(d) && !/\./.test(d)) return '{token}';
+    return seg;
+  }).join('/') || '/';
+}
+
+function groupKey(r) {
+  return grouping === 'domain' ? r.host || '(no host)' : r.method + ' ' + r.host + pattern(r.path);
+}
+
+function buildModel() {
+  if (!grouping) { groups = []; members = new Set(); model = visible; return; }
+  const list = doc.list;
+  const byKey = new Map();
+  visible.forEach((k) => {
+    const r = list[k];
+    const key = groupKey(r);
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, label: grouping === 'domain' ? (r.host || '(no host)') : pattern(r.path), method: grouping === 'domain' ? '' : r.method,
+            host: r.host, members: [], failed: 0, statuses: new Map(), max: 0, sum: 0, total: 0, first: Infinity, types: new Map() };
+      byKey.set(key, g);
+    }
+    g.members.push(k);
+    if (failed(r)) g.failed++;
+    g.statuses.set(r.status, (g.statuses.get(r.status) || 0) + 1);
+    g.types.set(r.type, (g.types.get(r.type) || 0) + 1);
+    g.max = Math.max(g.max, r.time);
+    g.sum += r.time;
+    g.total += r.transfer ?? r.size ?? 0;
+    g.first = Math.min(g.first, r.start);
+  });
+  groups = [...byKey.values()];
+  const most = (m) => [...m.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  groups.forEach((g) => { g.status = most(g.statuses); g.type = most(g.types); });
+
+  /* the busiest first, unless a column was chosen */
+  const key = sort.key, dir = sort.dir;
+  const val = {
+    start: (g) => g.first, status: (g) => g.failed, method: (g) => g.method, name: (g) => g.label.toLowerCase(),
+    host: (g) => g.host, type: (g) => g.type, size: (g) => g.total, time: (g) => g.max
+  }[key];
+  groups.sort((a, b) => {
+    if (key === 'start' && dir === 1) return b.members.length - a.members.length || a.first - b.first;
+    const x = val(a), y = val(b);
+    return (x < y ? -1 : x > y ? 1 : b.members.length - a.members.length) * (x === y ? 1 : dir);
+  });
+  /* one group has nothing to fold away */
+  if (groups.length === 1) opened.add(groups[0].key);
+
+  model = [];
+  visible = [];
+  members = new Set();
+  groups.forEach((g, gi) => {
+    g.members.forEach((k) => visible.push(k));
+    /* a group of one is just that request */
+    if (g.members.length === 1) { model.push(g.members[0]); return; }
+    model.push(-(gi + 1));
+    if (opened.has(g.key)) g.members.forEach((k) => { model.push(k); members.add(k); });
+  });
+}
+
+function toggleGroup(gi, open) {
+  const g = groups[gi];
+  if (!g) return;
+  const now = open ?? !opened.has(g.key);
+  if (now) opened.add(g.key); else opened.delete(g.key);
+  buildModel();
+  sizeRows();
+  draw();
+}
+
+function setGrouping(v) {
+  grouping = v;
+  try { localStorage.setItem('lintone-har-group', v); } catch (e) {}
+  opened = new Set();
+  $('list').classList.toggle('grouped', !!v);
+  paintFindings();
+  applyFilters();
+}
+
+function sizeRows() {
+  $('spacer').style.height = (model.length * ROW_H) + 'px';
+  const w = String(doc ? doc.list.length : 0).length;
+  $('viewport').style.setProperty('--ln-w', Math.max(4, w + 2) + 'ch');
+}
+
+function reqRow(k) {
+  const r = doc.list[k];
+  const bad = failed(r);
+  const stCls = bad ? 'bad' : r.status >= 300 && r.status < 400 ? 'redir' : '';
+  const size = r.cached && !r.transfer ? '<span class="sz num faint">cache</span>'
+    : r.transfer != null ? `<span class="sz num">${LintApp.fmtBytes(r.transfer)}</span>`
+    : r.size != null ? `<span class="sz num">${LintApp.fmtBytes(r.size)}</span>` : '<span class="sz num faint">—</span>';
+  const t = r.time || 1;
+  return `<div class="req${bad ? ' failed' : ''}${members.has(k) ? ' member' : ''}${k === selected ? ' selected' : ''}" data-k="${k}" role="row" aria-selected="${k === selected}">` +
+    `<span class="rn">${k + 1}</span>` +
+    `<span class="st ${stCls}" title="${esc(r.error || r.statusText)}">${r.status || (r.error ? 'failed' : '—')}</span>` +
+    `<span class="m">${esc(r.method)}</span>` +
+    `<span class="nm" title="${esc(r.url)}">${esc(r.name)}<span class="q">${esc(r.query)}</span>` +
+      (r.secrets ? `<span class="key" title="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request">●</span>` : '') + `</span>` +
+    `<span class="dom" title="${esc(r.host)}">${esc(r.host)}</span>` +
+    `<span class="ty" title="${esc(r.mime)}">${TYPE_LABEL[r.type] || r.type}</span>` +
+    size +
+    `<span class="tm num">${fmtMs(r.time)}</span>` +
+    `<span class="wf" title="Started at ${fmtMs(r.start)}, took ${fmtMs(r.time)}"><span class="wf-in">${bar(r,
+      `<i class="b" style="width:${(r.before / t * 100).toFixed(1)}%"></i><i class="w" style="width:${(r.wait / t * 100).toFixed(1)}%"></i><i class="r"></i>`)}</span></span>` +
+    `</div>`;
+}
+
+function bar(r, inner, cls) {
+  const left = r.start / doc.span * 100;
+  const width = Math.max(0.15, r.time / doc.span * 100);
+  return `<span class="wf-bar${cls ? ' ' + cls : ''}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%">${inner || ''}</span>`;
+}
+
+/* a group's row: how many, how many failed, the slowest; its waterfall
+   draws every member on the file's time axis */
+function groupRow(gi) {
+  const g = groups[gi];
+  const open = opened.has(g.key);
+  const n = g.members.length;
+  const stCls = g.failed === n ? 'bad' : '';
+  const marks = g.members.length > 400 ? g.members.filter((_, i) => i % Math.ceil(g.members.length / 400) === 0) : g.members;
+  return `<div class="req grp${g.failed === n ? ' failed' : ''}" data-g="${gi}" role="row" aria-expanded="${open}">` +
+    `<span class="rn"><svg class="chev${open ? ' open' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>` +
+    `<span class="st ${stCls}" title="${g.statuses.size > 1 ? 'Most answered ' + g.status : 'All answered ' + g.status}">${g.status || '—'}${g.statuses.size > 1 ? '<span class="more">+</span>' : ''}</span>` +
+    `<span class="m">${esc(g.method)}</span>` +
+    `<span class="nm" title="${esc(g.key)}">${esc(g.label)}<span class="cnt"> ×${fmtNum(n)}</span>` +
+      (g.failed && g.failed < n ? `<span class="gbad"> · ${fmtNum(g.failed)} failed</span>` : '') + `</span>` +
+    `<span class="dom">${grouping === 'domain' ? '' : esc(g.host)}</span>` +
+    `<span class="ty">${TYPE_LABEL[g.type] || g.type}</span>` +
+    `<span class="sz num" title="All of them">${LintApp.fmtBytes(g.total)}</span>` +
+    `<span class="tm num" title="The slowest; on average ${fmtMs(g.sum / n)}">${fmtMs(g.max)}</span>` +
+    `<span class="wf"><span class="wf-in">${marks.map((k) => bar(doc.list[k], '', 'thin' + (failed(doc.list[k]) ? ' bad' : ''))).join('')}</span></span>` +
+    `</div>`;
+}
+
+function draw() {
+  const vp = $('viewport');
+  const rows = $('rows');
+  if (!doc) return;
+  if (!model.length) {
+    rows.style.transform = '';
+    rows.innerHTML = doc.list.length ? LintApp.emptyState({
+      title: 'Nothing matches',
+      body: 'No request passes the current filters. Clear the box, choose All, or turn the chosen finding off.'
+    }) : '';
+    return;
+  }
+  const headH = $('head').offsetHeight;
+  const top = Math.max(0, vp.scrollTop - headH);
+  const first = Math.max(0, Math.floor(top / ROW_H) - 8);
+  const count = Math.ceil(vp.clientHeight / ROW_H) + 16;
+  const last = Math.min(model.length, first + count);
+  rows.style.transform = 'translateY(' + (first * ROW_H) + 'px)';
+  let html = '';
+  for (let p = first; p < last; p++) {
+    const v = model[p];
+    html += v < 0 ? groupRow(-v - 1) : reqRow(v);
+  }
+  rows.innerHTML = html;
+}
+
+$('viewport').addEventListener('scroll', () => requestAnimationFrame(draw));
+window.addEventListener('resize', () => requestAnimationFrame(draw));
+
+$('rows').addEventListener('click', (e) => {
+  const row = e.target.closest('.req');
+  if (!row) return;
+  if (row.dataset.g != null) { toggleGroup(Number(row.dataset.g)); return; }
+  select(Number(row.dataset.k), true);
+});
+
+function select(k, open) {
+  selected = k;
+  $('rows').querySelectorAll('.req[data-k]').forEach((el) => {
+    const on = Number(el.dataset.k) === k;
+    el.classList.toggle('selected', on);
+    el.setAttribute('aria-selected', String(on));
+  });
+  if (open || panel === 'request') showRequest(k);
+}
+
+function reveal(k) {
+  /* a request inside a folded group opens the group first */
+  if (grouping && !model.includes(k)) {
+    const gi = groups.findIndex((g) => g.members.includes(k));
+    if (gi >= 0) { opened.add(groups[gi].key); buildModel(); sizeRows(); }
+  }
+  const p = model.indexOf(k);
+  if (p < 0) return;
+  const vp = $('viewport');
+  const headH = $('head').offsetHeight;
+  const y = p * ROW_H;
+  if (y < vp.scrollTop) vp.scrollTop = y;
+  else if (y + ROW_H + headH > vp.scrollTop + vp.clientHeight) vp.scrollTop = y + ROW_H + headH - vp.clientHeight;
+  draw();
+}
+
+function step(dir) {
+  if (!visible.length) return;
+  let p = visible.indexOf(selected);
+  p = p < 0 ? (dir > 0 ? 0 : visible.length - 1) : Math.max(0, Math.min(visible.length - 1, p + dir));
+  select(visible[p], panel === 'request');
+  reveal(visible[p]);
+}
+
+/* ==========================================================================
+   The panel
+   ========================================================================== */
+function openPanel(kind) {
+  panel = kind;
+  paintFindings();
+  $('detail').hidden = false;
+  $('detailPrev').hidden = $('detailNext').hidden = kind !== 'request';
+}
+function closePanel() {
+  panel = null;
+  paintFindings();
+  $('detail').hidden = true;
+  requestAnimationFrame(draw);
+}
+$('detailClose').addEventListener('click', closePanel);
+$('detailPrev').addEventListener('click', () => step(-1));
+$('detailNext').addEventListener('click', () => step(1));
+
+const TABS = [['headers', 'Headers'], ['payload', 'Payload'], ['response', 'Response'], ['timing', 'Timing']];
+let current = null;      // the opened request, in full: {k, d}
+
+async function showRequest(k) {
+  const r = doc.list[k];
+  openPanel('request');
+  const seq = ++detailSeq;
+  $('detailTitle').innerHTML = `<strong>${esc(r.method)}</strong> ` +
+    `<span class="${failed(r) ? 'bad' : ''}">${r.status || 'failed'}</span> · ${esc(r.name)}`;
+  $('detailTitle').title = r.url;
+  let d;
+  try { d = (await rpc('entry', { i: r.i })); } catch (err) { $('detailBody').innerHTML = `<p class="note first">${esc(err.message)}</p>`; return; }
+  if (seq !== detailSeq) return;
+  current = { k, d };
+  paintTabs();
+  paintRequest();
+}
+
+function paintTabs() {
+  const d = current.d;
+  const hasPayload = d.request.query.length || d.request.post;
+  if (tab === 'payload' && !hasPayload) tab = 'headers';
+  $('detailTabs').hidden = false;
+  $('detailTabs').innerHTML = TABS.map(([id, label]) => {
+    if (id === 'payload' && !hasPayload) return '';
+    return `<button role="tab" data-tab="${id}" aria-selected="${tab === id}">${label}</button>`;
+  }).join('');
+}
+$('detailTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tab]');
+  if (!b || !current) return;
+  tab = b.dataset.tab;
+  paintTabs();
+  paintRequest();
+});
+
+/* the values this request carries that the secrets list names */
+function secretValues(k) {
+  const i = doc.list[k].i;
+  return new Set(doc.secrets.filter((s) => s.i === i).map((s) => s.value));
+}
+function isSecret(values, v) {
+  if (!values.size || !v) return false;
+  for (const s of values) if (v.includes(s)) return true;
+  return false;
+}
+
+function kv(list, values) {
+  if (!list.length) return '<p class="kv-empty">None</p>';
+  return '<dl class="kv">' + list.map((h) =>
+    `<div><dt>${esc(h.name)}</dt><dd${isSecret(values, h.value) ? ' class="secret" title="A secret: left out of a file saved without secrets"' : ''}>${h.value === '' ? '<span class="none">empty</span>' : esc(h.value)}</dd></div>`
+  ).join('') + '</dl>';
+}
+
+function paintRequest() {
+  const { k, d } = current;
+  const r = doc.list[k];
+  const values = secretValues(k);
+  let html = '';
+  if (tab === 'headers') {
+    if (r.error && (r.status === 0 || r.error !== r.statusText)) html += `<div class="bad-note">${esc(r.error)}</div>`;
+    const reqHeaders = d.request.headers.filter((h) => h.name.toLowerCase() !== 'cookie' || !d.request.cookies.length);
+    html += `<div class="sec-label">General</div><dl class="meta">` +
+      `<div><dt>URL</dt><dd>${esc(d.request.url)}</dd></div>` +
+      `<div><dt>Method</dt><dd>${esc(d.request.method)}</dd></div>` +
+      `<div><dt>Status</dt><dd class="${failed(r) ? 'bad' : ''}">${r.status || '—'} ${esc(d.response.statusText || r.error || '')}</dd></div>` +
+      (r.ip ? `<div><dt>Server</dt><dd>${esc(r.ip)}${r.http ? ' · ' + esc(r.http) : ''}</dd></div>` : r.http ? `<div><dt>Protocol</dt><dd>${esc(r.http)}</dd></div>` : '') +
+      `<div><dt>Size</dt><dd>${r.transfer != null ? LintApp.fmtBytes(r.transfer) + ' over the network' : '—'}` +
+        (r.size != null ? `<small>${LintApp.fmtBytes(r.size)} of ${esc(r.mime || 'content')}${r.cached ? ', from the cache' : ''}</small>` : '') + `</dd></div>` +
+      `<div><dt>Started</dt><dd>${esc(fmtDate(d.started))}<small>${fmtMs(r.start)} after the first request</small></dd></div>` +
+      (d.initiator && d.initiator.url ? `<div><dt>Made by</dt><dd>${esc(d.initiator.url)}${d.initiator.line != null ? ':' + (d.initiator.line + 1) : ''}<small>${esc(d.initiator.type)}</small></dd></div>` : '') +
+      (d.response.redirectURL ? `<div><dt>Redirects to</dt><dd>${esc(d.response.redirectURL)}</dd></div>` : '') +
+      `</dl>` +
+      `<div class="actions">` +
+        `<div class="menu-wrap"><button class="bordered" id="btnCopyAs" aria-haspopup="true" title="This request as code, to run it again">Copy as<span class="caret">▾</span></button>` +
+          `<div class="menu" id="copyAsMenu" role="menu">` +
+            COPY_AS.map(([id, label]) => `<button class="menu-item" role="menuitem" data-as="${id}">${label}</button>`).join('') +
+          `</div></div>` +
+        `<button class="bordered" data-act="url">Copy URL</button>` +
+      `</div>` +
+      `<div class="sec-label">Response headers <span class="n">${d.response.headers.length}</span><button data-copy="res-headers">Copy</button></div>` +
+      kv(d.response.headers, values) +
+      `<div class="sec-label">Request headers <span class="n">${reqHeaders.length}</span><button data-copy="req-headers">Copy</button></div>` +
+      kv(reqHeaders, values);
+    if (d.request.cookies.length) html += `<div class="sec-label">Request cookies <span class="n">${d.request.cookies.length}</span></div>` + kv(d.request.cookies, values);
+    if (d.response.cookies.length) html += `<div class="sec-label">Cookies set <span class="n">${d.response.cookies.length}</span></div>` +
+      kv(d.response.cookies.map((c) => ({ name: c.name, value: c.value })), values);
+    if (d.initiator && d.initiator.frames.length) {
+      html += `<div class="sec-label">Call stack</div><ol class="stack">` + d.initiator.frames.map((f) =>
+        `<li><span class="fn">${esc(f.fn || '(anonymous)')}</span> <span class="at">${esc(f.url)}${f.line != null ? ':' + (f.line + 1) : ''}</span></li>`).join('') + '</ol>';
+    }
+  } else if (tab === 'payload') {
+    if (d.request.query.length) html += `<div class="sec-label">Query <span class="n">${d.request.query.length}</span></div>` +
+      kv(d.request.query.map((q) => ({ name: decodeSafe(q.name), value: decodeSafe(q.value) })), values);
+    const p = d.request.post;
+    if (p) {
+      html += `<div class="sec-label">Body <span class="n">${esc(p.mime)}</span>${p.text ? '<button data-copy="req-body">Copy</button>' : ''}</div>`;
+      if (p.params.length) html += kv(p.params, values);
+      if (p.text) html += bodyHtml(p.text, p.mime);
+      else if (!p.params.length) html += '<p class="kv-empty">Empty</p>';
+    }
+  } else if (tab === 'response') {
+    const ct = d.response.content;
+    if (ct.image) {
+      html += `<img class="body-img" alt="The response image" src="${esc(ct.image)}">` +
+        `<p class="note">${esc(ct.mime)}${ct.size != null ? ', ' + LintApp.fmtBytes(ct.size) : ''}</p>`;
+    } else if (ct.text) {
+      const json = /json/.test(ct.mime) || /^\s*[{[]/.test(ct.text.text.slice(0, 64));
+      html += `<div class="actions" style="margin:0 0 var(--s3)">` +
+        `<button class="bordered" data-copy="res-body">Copy</button>` +
+        (json ? `<button class="bordered" data-act="res-json">Open in JSON viewer</button>` : '') + `</div>` +
+        bodyHtml(ct.text, ct.mime);
+    } else {
+      html += `<p class="note first">${esc(ct.note || (r.status === 204 || r.status === 304 ? 'This response has no body.' :
+        'The browser did not keep this body in the file. Chrome leaves out large and binary bodies unless the HAR is saved “with content”.'))}</p>`;
+    }
+    if (d.ws) {
+      html += `<div class="sec-label">WebSocket messages <span class="n">${fmtNum(d.wsCount)}</span></div>` +
+        '<dl class="kv">' + d.ws.map((w) => `<div><dt>${w.type === 'send' ? '↑ sent' : '↓ received'}</dt><dd>${esc(w.data ? w.data.text : '')}</dd></div>`).join('') + '</dl>';
+    }
+  } else {
+    html += timingHtml(d, r);
+  }
+  $('detailBody').innerHTML = html;
+  $('detailBody').scrollTop = 0;
+  if ($('btnCopyAs')) {
+    LintApp.wireMenu($('btnCopyAs'), $('copyAsMenu'));
+    $('copyAsMenu').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-as]');
+      if (!b || !current) return;
+      LintApp.closeMenus();
+      const as = COPY_AS.find((x) => x[0] === b.dataset.as);
+      LintApp.copy(as[2](current.d), as[3]);
+    });
+  }
+}
+
+function bodyHtml(t, mime) {
+  let text = t.text;
+  let pretty = false;
+  if (/json/.test(mime || '') || /^\s*[{[]/.test(text.slice(0, 64))) {
+    if (!t.cut) { try { text = JSON.stringify(JSON.parse(text), null, 2); pretty = true; } catch (e) {} }
+  }
+  const shown = text.length > 200000 ? text.slice(0, 200000) : text;
+  return `<pre class="body-text">${pretty ? jsonHtml(shown) : esc(shown)}</pre>` +
+    (t.cut || shown.length < text.length ? `<p class="note">Shown: the first ${LintApp.fmtBytes(shown.length)} of ${LintApp.fmtBytes(t.cut || text.length)}. Copy takes it all.</p>` : '');
+}
+
+const JSON_TOKEN_RE = /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b/g;
+function jsonHtml(text) {
+  let out = '', last = 0, m;
+  JSON_TOKEN_RE.lastIndex = 0;
+  while ((m = JSON_TOKEN_RE.exec(text)) !== null) {
+    out += esc(text.slice(last, m.index));
+    if (m[1]) out += '<span class="' + (m[2] ? 'j-key' : 'j-str') + '">' + esc(m[1]) + '</span>' + (m[2] || '');
+    else if (m[3]) out += '<span class="j-num">' + m[3] + '</span>';
+    else out += '<span class="j-lit">' + m[4] + '</span>';
+    last = m.index + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+
+function fmtDate(s) {
+  const t = Date.parse(s);
+  if (!isFinite(t)) return s || '—';
+  const d = new Date(t);
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+/* each phase of the request, on its own time scale */
+const PHASES = [
+  ['blocked', 'Queued', 'waiting for a free connection'],
+  ['dns', 'DNS lookup', ''],
+  ['connect', 'Connecting', 'TCP, and TLS within it'],
+  ['ssl', 'TLS', 'part of connecting'],
+  ['send', 'Sending', ''],
+  ['wait', 'Waiting', 'the server’s time to answer'],
+  ['receive', 'Downloading', '']
+];
+function timingHtml(d, r) {
+  const t = d.timings || {};
+  const total = r.time || 1;
+  let at = 0, html = '<div class="phases">';
+  PHASES.forEach(([key, label, hint]) => {
+    const ms = t[key];
+    if (!(ms >= 0)) return;
+    /* TLS is inside Connecting, so it starts where Connecting ends minus itself */
+    const start = key === 'ssl' ? Math.max(0, at - ms) : at;
+    if (key !== 'ssl') at += ms;
+    html += `<span class="ph">${label}${hint ? `<small>${hint}</small>` : ''}</span>` +
+      `<span class="track"><i class="${key === 'wait' ? 'main' : ''}" style="left:${(start / total * 100).toFixed(2)}%;width:${(ms / total * 100).toFixed(2)}%"></i></span>` +
+      `<span class="ms">${fmtMs(ms)}</span>`;
+  });
+  html += `<span class="rule"></span><span class="ph total">Total</span><span></span><span class="ms total">${fmtMs(r.time)}</span></div>`;
+  const slow = t.wait > 0 && t.wait / total > 0.6 && total > 300;
+  html += `<p class="note">Started ${fmtMs(r.start)} after the first request in the file.` +
+    (slow ? ' Most of this time the browser was waiting for the server to answer.' : '') + '</p>';
+  return html;
+}
+
+/* ---------- copying a request ---------- */
+function curlOf(d) {
+  const q = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+  const parts = ['curl ' + q(d.request.url)];
+  const m = String(d.request.method || 'GET').toUpperCase();
+  const body = d.request.post && d.request.post.text ? d.request.post.text.text : null;
+  if (m !== 'GET' && !(m === 'POST' && body != null)) parts.push('-X ' + m);
+  d.request.headers.forEach((h) => {
+    if (h.name[0] === ':' || /^content-length$/i.test(h.name)) return;
+    parts.push('-H ' + q(h.name + ': ' + h.value));
+  });
+  if (body != null) parts.push('--data-raw ' + q(body));
+  if (d.request.headers.some((h) => /^accept-encoding$/i.test(h.name))) parts.push('--compressed');
+  return parts.join(' \\\n  ');
+}
+function fetchOf(d) {
+  const headers = {};
+  d.request.headers.forEach((h) => {
+    if (h.name[0] === ':' || /^(content-length|host|connection|accept-encoding|user-agent|cookie|referer|origin)$/i.test(h.name) || /^sec-/i.test(h.name)) return;
+    headers[h.name] = h.value;
+  });
+  const o = { method: d.request.method, headers };
+  if (d.request.post && d.request.post.text) o.body = d.request.post.text.text;
+  if (d.request.headers.some((h) => /^cookie$/i.test(h.name))) o.credentials = 'include';
+  return 'fetch(' + JSON.stringify(d.request.url) + ', ' + JSON.stringify(o, null, 2) + ');';
+}
+/* the headers worth sending again: not HTTP/2's pseudo-headers, and not
+   those the client works out for itself */
+function sendable(d, skip) {
+  return d.request.headers.filter((h) => h.name[0] !== ':' && !/^(content-length|host|connection|accept-encoding)$/i.test(h.name) &&
+    !(skip && skip.test(h.name)));
+}
+function bodyOf(d) { return d.request.post && d.request.post.text ? d.request.post.text.text : null; }
+function mimeOf(d) {
+  const h = d.request.headers.find((x) => /^content-type$/i.test(x.name));
+  return (h ? h.value : d.request.post && d.request.post.mime) || '';
+}
+
+function pythonOf(d) {
+  const body = bodyOf(d);
+  const hs = sendable(d);
+  return 'import requests\n\n' +
+    'url = ' + JSON.stringify(d.request.url) + '\n' +
+    'headers = {\n' + hs.map((h) => '    ' + JSON.stringify(h.name) + ': ' + JSON.stringify(h.value) + ',').join('\n') + (hs.length ? '\n' : '') + '}\n' +
+    (body != null ? 'data = ' + JSON.stringify(body) + '\n' : '') +
+    '\nresponse = requests.request(' + JSON.stringify(String(d.request.method).toUpperCase()) + ', url, headers=headers' + (body != null ? ', data=data' : '') + ')\n' +
+    'print(response.status_code)\nprint(response.text)\n';
+}
+
+function csharpOf(d) {
+  const body = bodyOf(d);
+  const cookies = d.request.headers.some((h) => /^cookie$/i.test(h.name));
+  const hs = sendable(d, /^content-type$/i);
+  const mime = (mimeOf(d).split(';')[0].trim()) || 'text/plain';
+  const str = (v) => JSON.stringify(String(v));
+  return 'using System.Net.Http;\nusing System.Text;\n\n' +
+    /* a Cookie header set by hand is dropped while the handler keeps cookies itself */
+    (cookies ? 'using var client = new HttpClient(new HttpClientHandler { UseCookies = false });\n' : 'using var client = new HttpClient();\n') +
+    'using var request = new HttpRequestMessage(new HttpMethod(' + str(String(d.request.method).toUpperCase()) + '), ' + str(d.request.url) + ');\n' +
+    hs.map((h) => 'request.Headers.TryAddWithoutValidation(' + str(h.name) + ', ' + str(h.value) + ');\n').join('') +
+    (body != null ? 'request.Content = new StringContent(' + str(body) + ', Encoding.UTF8, ' + str(mime) + ');\n' : '') +
+    '\nusing var response = await client.SendAsync(request);\n' +
+    'Console.WriteLine((int)response.StatusCode);\n' +
+    'Console.WriteLine(await response.Content.ReadAsStringAsync());\n';
+}
+
+function powershellOf(d) {
+  const q = (v) => "'" + String(v).replace(/'/g, "''") + "'";
+  const body = bodyOf(d);
+  const ua = d.request.headers.find((h) => /^user-agent$/i.test(h.name));
+  const mime = mimeOf(d);
+  const hs = sendable(d, /^(content-type|user-agent)$/i);
+  return '$headers = @{\n' + hs.map((h) => '  ' + q(h.name) + ' = ' + q(h.value)).join('\n') + (hs.length ? '\n' : '') + '}\n' +
+    '$response = Invoke-WebRequest -Uri ' + q(d.request.url) + ' -Method ' + String(d.request.method).toUpperCase() + ' -Headers $headers' +
+    (ua ? ' -UserAgent ' + q(ua.value) : '') +
+    (mime ? ' -ContentType ' + q(mime) : '') +
+    (body != null ? ' -Body ' + q(body) : '') + '\n' +
+    '$response.StatusCode\n$response.Content\n';
+}
+
+function httpOf(d) {
+  let path = d.request.url, host = '';
+  try { const u = new URL(d.request.url); path = u.pathname + u.search; host = u.host; } catch (e) {}
+  const body = bodyOf(d);
+  const hs = d.request.headers.filter((h) => h.name[0] !== ':' && !/^host$/i.test(h.name));
+  return String(d.request.method).toUpperCase() + ' ' + path + ' HTTP/1.1\n' +
+    (host ? 'Host: ' + host + '\n' : '') + headerText(hs) + '\n' + (body != null ? '\n' + body : '') + '\n';
+}
+
+const COPY_AS = [
+  ['curl', 'cURL', curlOf, 'cURL command'],
+  ['fetch', 'JavaScript fetch', fetchOf, 'fetch() call'],
+  ['python', 'Python requests', pythonOf, 'Python code'],
+  ['csharp', 'C# HttpClient', csharpOf, 'C# code'],
+  ['powershell', 'PowerShell', powershellOf, 'PowerShell command'],
+  ['http', 'Raw HTTP', httpOf, 'HTTP request']
+];
+
+function headerText(list) { return list.map((h) => h.name + ': ' + h.value).join('\n'); }
+
+$('detailBody').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-act],[data-copy]');
+  if (b && current) {
+    const d = current.d;
+    const r = doc.list[current.k];
+    const act = b.dataset.act || b.dataset.copy;
+    if (act === 'url') LintApp.copy(d.request.url, 'URL');
+    else if (act === 'res-headers') LintApp.copy(headerText(d.response.headers), 'Response headers');
+    else if (act === 'req-headers') LintApp.copy(headerText(d.request.headers), 'Request headers');
+    else if (act === 'req-body' || act === 'res-body' || act === 'res-json') {
+      const full = await rpc('body', { i: r.i, which: act === 'req-body' ? 'request' : 'response' });
+      if (act === 'res-json') {
+        let text = full.text;
+        try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (err) {}
+        LintApp.openIn(text, (r.name || 'response').replace(/\.json$/i, '') + '.json', 'json');
+      } else LintApp.copy(full.text, act === 'req-body' ? 'Request body' : 'Response body');
+    }
+    return;
+  }
+  const s = e.target.closest('[data-goto]');
+  if (s) goTo(Number(s.dataset.goto));
+});
+
+/* ==========================================================================
+   Secrets
+   ========================================================================== */
+const KINDS = [
+  ['cookie', 'Cookies', 'A session cookie signs in whoever sends it.'],
+  ['header', 'Authorization and API keys', ''],
+  ['url', 'Tokens in URLs', ''],
+  ['body', 'Passwords and tokens in bodies', '']
+];
+
+/* one row per secret value, however many requests carry it */
+function secretGroups() {
+  const byV = new Map();
+  doc.secrets.forEach((s) => {
+    let g = byV.get(s.v);
+    if (!g) { g = { ...s, requests: new Set() }; byV.set(s.v, g); }
+    g.requests.add(s.i);
+  });
+  return [...byV.values()];
+}
+
+function showSecrets() {
+  openPanel('secrets');
+  current = null;
+  $('detailTabs').hidden = true;
+  const groups = secretGroups();
+  $('detailTitle').innerHTML = '<strong>Secrets</strong>';
+  $('detailTitle').title = '';
+  let html = '';
+  if (!groups.length) {
+    html = '<p class="note first">No cookies, tokens, API keys or passwords were found in this file. It looks safe to send, but a glance at anything unusual in it costs little.</p>';
+  } else {
+    html += `<div class="save-box"><p>Anyone who gets this file can use these to act as you${groups.some((g) => g.kind === 'cookie' || g.kind === 'header') ? ', often without a password' : ''}. ` +
+      `Before you send it, save a copy with each one replaced by <code>[redacted]</code>. Everything else stays as it is.</p>` +
+      `<div class="actions"><button class="bordered" data-save>Save without secrets</button></div></div>`;
+    KINDS.forEach(([kind, title]) => {
+      const list = groups.filter((g) => g.kind === kind);
+      if (!list.length) return;
+      html += `<div class="secret-group"><div class="sec-label">${title} <span class="n">${list.length}</span></div>` +
+        list.map((g) => {
+          const first = Math.min(...g.requests);
+          const k = doc.list.findIndex((r) => r.i === first);
+          const n = g.requests.size;
+          return `<button class="secret-item" data-goto="${k}" title="Show the ${n === 1 ? 'request' : 'first request'} with it">` +
+            `<span class="nm">${esc(g.name)}</span>` +
+            `<span class="where">${n === 1 ? esc(g.where) : 'in ' + fmtNum(n) + ' requests'}</span>` +
+            `<span class="val">${esc(g.preview)}</span></button>`;
+        }).join('') + '</div>';
+    });
+    html += '<p class="note">Found by name (Authorization, Cookie, token, password, api_key…) and by shape (JWTs, and keys from GitHub, Stripe, AWS, Google and Slack). A secret with an unusual name can still slip through, so look over anything you are unsure of.</p>';
+  }
+  $('detailBody').innerHTML = html;
+  $('detailBody').scrollTop = 0;
+}
+
+function goTo(k) {
+  if (k < 0) return;
+  if (!visible.includes(k)) {
+    $('filter').value = '';
+    typeFilter = 'all';
+    focus = null;
+    paintFindings();
+    paintTypes();
+    applyFilters();
+  }
+  tab = 'headers';
+  select(k, true);
+  reveal(k);
+}
+
+$('detail').addEventListener('click', (e) => { if (e.target.closest('[data-save]')) saveClean(); });
+
+async function saveClean() {
+  if (!doc) return;
+  setBusy(40);
+  try {
+    const d = await rpc('redact', {});
+    setBusy(100);
+    setTimeout(() => setBusy(null), 300);
+    if (d.left) { LintApp.toast('Some secrets could not be removed; the file was not saved'); return; }
+    const name = doc.name.replace(/\.har$/i, '') + '.redacted.har';
+    const url = URL.createObjectURL(new Blob([d.text], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const n = secretGroups().length;
+    LintApp.toast(n ? 'Saved ' + name + ' with ' + fmtNum(n) + (n === 1 ? ' secret' : ' secrets') + ' removed' : 'Saved ' + name);
+  } catch (err) {
+    setBusy(null);
+    LintApp.toast(err.message);
+  }
+}
+
+/* ==========================================================================
+   About this file
+   ========================================================================== */
+function showFile() {
+  openPanel('file');
+  current = null;
+  $('detailTabs').hidden = true;
+  $('detailTitle').innerHTML = '<strong>' + esc(doc.name) + '</strong>';
+  const f = doc.file;
+  const list = doc.list;
+  const types = {};
+  list.forEach((r) => { types[TYPE_LABEL[r.type] || r.type] = (types[TYPE_LABEL[r.type] || r.type] || 0) + 1; });
+  const hosts = {};
+  list.forEach((r) => { if (r.host) hosts[r.host] = (hosts[r.host] || 0) + 1; });
+  const slowest = [...list].sort((a, b) => b.time - a.time).slice(0, 5);
+  const largest = [...list].sort((a, b) => (b.transfer ?? b.size ?? 0) - (a.transfer ?? a.size ?? 0)).slice(0, 5);
+  const row = (r, v) => `<button class="secret-item" data-goto="${list.indexOf(r)}"><span class="nm">${esc(r.name)}</span><span class="where">${v}</span><span class="val">${esc(r.host)}</span></button>`;
+  let html = `<dl class="meta">` +
+    `<div><dt>Requests</dt><dd>${fmtNum(list.length)}<small>${Object.entries(types).sort((a, b) => b[1] - a[1]).map(([t, n]) => fmtNum(n) + ' ' + t).join(', ')}</small></dd></div>` +
+    `<div><dt>Size</dt><dd>${doc.size != null ? LintApp.fmtBytes(doc.size) : '—'}</dd></div>` +
+    (f.creator ? `<div><dt>Saved by</dt><dd>${esc(f.creator)}${f.browser ? '<small>' + esc(f.browser) + '</small>' : ''}</dd></div>` : '') +
+    (f.version ? `<div><dt>HAR version</dt><dd>${esc(f.version)}</dd></div>` : '') +
+    (doc.t0 ? `<div><dt>Recorded</dt><dd>${esc(fmtDate(new Date(doc.t0).toISOString()))}<small>over ${fmtMs(doc.span)}</small></dd></div>` : '') +
+    `<div><dt>Domains</dt><dd>${fmtNum(Object.keys(hosts).length)}<small>${Object.entries(hosts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([h, n]) => esc(h) + ' (' + n + ')').join(', ')}</small></dd></div>` +
+    `</dl>`;
+  if (f.pages.length) {
+    html += `<div class="sec-label">Pages <span class="n">${f.pages.length}</span></div><dl class="kv">` +
+      f.pages.map((p) => `<div><dt>${p.onLoad > 0 ? 'loaded in ' + fmtMs(p.onLoad) : 'page'}</dt><dd>${esc(p.title)}</dd></div>`).join('') + '</dl>';
+  }
+  if (list.length) {
+    html += `<div class="sec-label">Slowest</div>` + slowest.map((r) => row(r, fmtMs(r.time))).join('');
+    html += `<div class="sec-label">Largest</div>` + largest.map((r) => row(r, LintApp.fmtBytes(r.transfer ?? r.size ?? 0))).join('');
+  }
+  $('detailBody').innerHTML = html;
+  $('detailBody').scrollTop = 0;
+}
+
+/* ==========================================================================
+   The menu
+   ========================================================================== */
+$('btnSave').addEventListener('click', () => { LintApp.closeMenus(); saveClean(); });
+$('btnFile').addEventListener('click', () => { LintApp.closeMenus(); showFile(); });
+$('btnCopyUrls').addEventListener('click', () => {
+  LintApp.closeMenus();
+  if (!visible.length) { LintApp.toast('No requests are listed'); return; }
+  LintApp.copy(visible.map((k) => doc.list[k].url).join('\n') + '\n', fmtNum(visible.length) + (visible.length === 1 ? ' URL' : ' URLs'));
+});
+$('btnCopyCsv').addEventListener('click', () => {
+  LintApp.closeMenus();
+  if (!visible.length) { LintApp.toast('No requests are listed'); return; }
+  const cell = (v) => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const lines = ['started_ms,method,status,url,type,mime,transfer_bytes,size_bytes,time_ms,wait_ms,error'];
+  visible.forEach((k) => {
+    const r = doc.list[k];
+    lines.push([r.start.toFixed(1), r.method, r.status, r.url, TYPE_LABEL[r.type] || r.type, r.mime, r.transfer, r.size, r.time.toFixed(1), r.wait.toFixed(1), r.error].map(cell).join(','));
+  });
+  LintApp.copyAndOffer(lines.join('\n') + '\n', 'CSV', 'har', 'csv');
+});
+$('btnToJson').addEventListener('click', async () => {
+  LintApp.closeMenus();
+  if (!source) return;
+  const text = source.file ? await source.file.text() : source.text;
+  LintApp.openIn(text, doc.name.replace(/\.har$/i, '') + '.json', 'json');
+});
+
+/* ==========================================================================
+   Files, keys
+   ========================================================================== */
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => {
+  if (e.target.files[0]) openFile(e.target.files[0]);
+  e.target.value = '';
+});
+['dragover', 'dragenter'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dragover');
+  }));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+/* drag the panel's left edge to give it more room */
+$('detailGrip').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const grip = $('detailGrip');
+  const main = $('detail').parentElement.getBoundingClientRect();
+  grip.classList.add('dragging');
+  grip.setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    const w = Math.max(320, Math.min(main.width - 320, main.right - ev.clientX));
+    $('detail').style.setProperty('--detail-w', w + 'px');
+  };
+  const up = () => {
+    grip.classList.remove('dragging');
+    grip.removeEventListener('pointermove', move);
+    grip.removeEventListener('pointerup', up);
+    draw();
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up);
+});
+
+const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+  if (mod && k === 'o') { e.preventDefault(); $('fileInput').click(); return; }
+  if (!doc) return;
+  if (mod && k === 'f') { e.preventDefault(); $('filter').focus(); $('filter').select(); return; }
+  if (e.key === 'Escape' && typing()) { document.activeElement.blur(); return; }
+  if (typing()) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); return; }
+  if (e.key === 'Enter' && selected >= 0) { e.preventDefault(); showRequest(selected); return; }
+  if (e.key === 'Escape' && panel) { e.preventDefault(); closePanel(); return; }
+  if (e.key === 'Escape' && selected >= 0) { select(-1, false); return; }
+  if (mod && k === 'c' && selected >= 0 && !String(window.getSelection())) {
+    e.preventDefault();
+    LintApp.copy(doc.list[selected].url, 'URL');
+  }
+});
+
+if (LintApp.textZoom) LintApp.textZoom((s) => {
+  ROW_H = Math.round(26 * s);
+  $('rows').style.setProperty('--row-h', ROW_H + 'px');
+  if (doc) { sizeRows(); draw(); }
+});
+LintApp.shortcuts([{ title: 'HAR', items: [
+  { keys: ['up', 'down'], label: 'Previous or next request' },
+  { keys: ['enter'], label: 'Open the chosen request' },
+  { keys: ['esc'], label: 'Close the panel' },
+  { keys: ['mod+f'], label: 'Filter requests' },
+  { keys: ['mod+c'], label: 'Copy the chosen request’s URL' }
+] }]);
+
+reset();
+LintApp.takeHandoff('har', openFile);
+</script>
+</body>
+</html>

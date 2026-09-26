@@ -2,7 +2,7 @@
   "id": "/",
   "name": "lint",
   "short_name": "lint",
-  "description": "Read JSON, XML, YAML, CSV, PDF, logs, SQLite, Parquet, .env and audio files in your browser. Nothing you open leaves your device.",
+  "description": "Read JSON, XML, YAML, CSV, PDF, logs, SQLite, Parquet, .env, HAR and audio files in your browser. Nothing you open leaves your device.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -19,6 +19,7 @@
     { "name": "CSV", "url": "/csv/", "icons": [{ "src": "/icons/file-csv.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "ENV", "url": "/env/", "icons": [{ "src": "/icons/file-env.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "LOG", "url": "/log/", "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "HAR", "url": "/har/", "icons": [{ "src": "/icons/file-har.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "XML", "url": "/xml/", "icons": [{ "src": "/icons/file-xml.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "SQLite", "url": "/sqlite/", "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "PDF", "url": "/pdf/", "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
@@ -35,6 +36,7 @@
     { "action": "/audio/", "accept": { "audio/*": [".mp3", ".wav", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".aif", ".aiff"] }, "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] },
     { "action": "/sqlite/", "accept": { "application/vnd.sqlite3": [".db", ".sqlite", ".sqlite3", ".db3", ".s3db", ".sl3", ".gpkg", ".mbtiles"] }, "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] },
     { "action": "/parquet/", "accept": { "application/vnd.apache.parquet": [".parquet", ".parq", ".pqt"] }, "icons": [{ "src": "/icons/file-parquet.png", "sizes": "256x256", "type": "image/png" }] },
-    { "action": "/env/", "accept": { "text/plain": [".env"] }, "icons": [{ "src": "/icons/file-env.png", "sizes": "256x256", "type": "image/png" }] }
+    { "action": "/env/", "accept": { "text/plain": [".env"] }, "icons": [{ "src": "/icons/file-env.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/har/", "accept": { "application/json": [".har"] }, "icons": [{ "src": "/icons/file-har.png", "sizes": "256x256", "type": "image/png" }] }
   ]
 }

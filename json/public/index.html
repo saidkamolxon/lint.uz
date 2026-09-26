@@ -221,6 +221,7 @@ function highlight(text) {
    while the rest are still shown. */
 var jsonl = null;            // {records, bad: [{line, message}]} in JSON Lines mode
 var offeredLog = false;     // the LOG viewer was offered for this document
+var offeredHar = false;     // the HAR viewer was offered for this document
 
 function parseLines(text) {
   var rows = text.split('\n'), records = [], bad = [], first = true;
@@ -596,7 +597,21 @@ var app = LintApp.init({
     extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
   /* the editor is Compare's "before", so every edit re-runs the diff */
-  onParsed: function () {
+  onParsed: function (value) {
+    /* a browser's HAR export reads better as requests: offered once a document */
+    var isHar = !jsonl && value && typeof value === 'object' && value.log && Array.isArray(value.log.entries);
+    if (!isHar) offeredHar = false;
+    else if (!offeredHar && LintApp.openIn) {
+      offeredHar = true;
+      LintApp.toast('This is a HAR file: the requests a browser made', {
+        label: 'Open in HAR viewer', href: '/har/',
+        onFollow: function () {
+          var chip = document.querySelector('.doc-name');
+          var name = chip && chip.textContent.trim() ? chip.textContent.trim().replace(/\.json$/i, '') : 'network';
+          LintApp.openIn(app.editor.getValue(), /\.har$/i.test(name) ? name : name + '.har', 'har');
+        }
+      });
+    }
     /* JSON Lines that are a log read better in LOG: offered once a document */
     if (!jsonl) offeredLog = false;
     else if (!offeredLog && LintApp.jsonlKind && LintApp.jsonlKind(app.editor.getValue().slice(0, 65536)) === 'log') {

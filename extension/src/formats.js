@@ -13,6 +13,7 @@
     { id: 'csv',    name: 'CSV',    hue: '#4D7C0F', ext: 'csv' },
     { id: 'env', name: 'ENV', hue: '#A32972', ext: 'env' },
     { id: 'log',    name: 'LOG',    hue: '#0369A1', ext: 'log' },
+    { id: 'har',    name: 'HAR',    hue: '#475569', ext: 'har' },
     { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
     { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' },
     { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
@@ -25,6 +26,7 @@
   /* site/public/index.html's BY_EXT */
   var BY_EXT = {
     json: 'json', geojson: 'json', jsonc: 'json',
+    har: 'har',
     jsonl: 'log', ndjson: 'log',   // until settle() reads what is in them
     xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
     rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
@@ -68,8 +70,13 @@
 
   /* A choice made by name or type, looked at again with the file's start:
      JSON Lines that are data go to JSON, a log to LOG */
+  /* a HAR is JSON that opens {"log": {"version" | "creator" | …: the
+     browser's own export, which HAR reads better than a tree does */
+  var HAR_HEAD = /^\s*\{\s*"log"\s*:\s*\{\s*"(version|creator|browser|pages|entries|comment)"/;
+
   function settle(tool, head, size) {
     if ((tool !== 'log' && tool !== 'json') || head == null) return tool;
+    if (HAR_HEAD.test(String(head).replace(/^\uFEFF/, ''))) return 'har';
     var kind = jsonlKind(head);
     if (kind === 'log') return 'log';
     if (kind === 'data') return size > JSON_TOOL_LIMIT ? 'log' : 'json';
@@ -127,6 +134,7 @@
 
     /* "[2024-05-01 10:00] GET /" and "[INFO] ..." open with a bracket too */
     if (c === '[' && (TIMESTAMP.test(lines[0]) || LEVEL.test(lines[0]))) return 'log';
+    if (c === '{' && HAR_HEAD.test(s)) return 'har';
     if (c === '{' || c === '[') {
       /* one record per line: a log to read, or data to see as records */
       return jsonlKind(s) === 'log' ? 'log' : 'json';

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lint.one — file viewers that never send your data anywhere</title>
-<meta name="description" content="JSON, XML, YAML, CSV, PDF, log, SQLite and Parquet viewers, a .env checker, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
+<meta name="description" content="JSON, XML, YAML, CSV, PDF, log, HAR, SQLite and Parquet viewers, a .env checker, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
 <link rel="canonical" href="https://lint.one/">
 <!-- one installable app for the whole suite; its file_handlers send each
      format to its own page, where LintApp.takeHandoff takes the file -->
@@ -17,7 +17,7 @@
 <meta property="og:site_name" content="lint.one">
 <meta property="og:url" content="https://lint.one/">
 <meta property="og:title" content="lint.one — file viewers that never send your data anywhere">
-<meta property="og:description" content="JSON, XML, YAML, CSV, PDF, log, SQLite and Parquet viewers, a .env checker, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
+<meta property="og:description" content="JSON, XML, YAML, CSV, PDF, log, HAR, SQLite and Parquet viewers, a .env checker, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
 <meta property="og:image" content="https://lint.one/og/home.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -256,7 +256,7 @@ h1, h2 { text-wrap: balance; }
    list rather than a centred picture. */
 .tools {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin: 80px 0 0; padding: 0; list-style: none;
 }
@@ -305,6 +305,7 @@ h1, h2 { text-wrap: balance; }
 /* saffron is the one light hue: its glyph is ink */
 .t-parquet { --tool-hue: #F7CE46; --glyph: url("/shared/glyphs/parquet.svg"); --glyph-ink: #1A1D23; }
 .t-env   { --tool-hue: #A32972; --glyph: url("/shared/glyphs/env.svg"); }
+.t-har   { --tool-hue: #475569; --glyph: url("/shared/glyphs/har.svg"); }
 
 /* ---------- footer ---------- */
 footer {
@@ -381,7 +382,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <section class="hero">
         <h1>Read your files. Send&nbsp;nothing.</h1>
         <p>
-          JSON, XML, YAML, CSV, logs, PDF, SQLite, Parquet, .env and audio open right in your browser —
+          JSON, XML, YAML, CSV, logs, HAR, PDF, SQLite, Parquet, .env and audio open right in your browser —
           even offline. Nothing leaves your device.
         </p>
         <div class="act">
@@ -437,6 +438,11 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
           <span class="tool-mark" aria-hidden="true"></span>
           <h2>LOG</h2>
           <p>Huge files open fast, filtered by severity, stack traces folded.</p>
+        </a></li>
+        <li><a class="tool t-har" href="/har/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>HAR</h2>
+          <p>Every request a page made, and a copy without your cookies and tokens.</p>
         </a></li>
         <li><a class="tool t-xml" href="/xml/">
           <span class="tool-mark" aria-hidden="true"></span>
@@ -514,7 +520,8 @@ LintTheme.buildMenu(menu, closeMenu);
     db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
     sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite',
     parquet: 'parquet', parq: 'parquet', pqt: 'parquet',
-    env: 'env'
+    env: 'env',
+    har: 'har'
   };
 
   function byName(name) {
@@ -564,8 +571,13 @@ LintTheme.buildMenu(menu, closeMenu);
   var JSON_TOOL_LIMIT = 20 * 1048576;
 
   /* JSON Lines, or what may be: read the head and choose */
+  /* a HAR is JSON that opens {"log": {"version" | "creator" | …: the
+     browser's own export, which HAR reads better than a tree does */
+  var HAR_HEAD = /^\s*\{\s*"log"\s*:\s*\{\s*"(version|creator|browser|pages|entries|comment)"/;
+
   function settle(tool, file, done) {
     file.slice(0, 65536).text().then(function (head) {
+      if (HAR_HEAD.test(head.replace(/^\uFEFF/, ''))) { done('har'); return; }
       var kind = jsonlKind(head);
       if (kind === 'log' || (kind === 'data' && file.size > JSON_TOOL_LIMIT)) done('log');
       else if (kind === 'data') done('json');
