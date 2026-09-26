@@ -1,0 +1,102 @@
+diff -ru a/src/assemble.js b/src/assemble.js
+--- a/src/assemble.js	2026-09-26 11:12:21
++++ b/src/assemble.js	2026-09-26 11:12:02
+@@ -10,9 +10,11 @@
+  * @param {number[]} repetitionLevels
+  * @param {DecodedArray} values
+  * @param {SchemaTree[]} schemaPath
++ * @param {number} [keepFrom] lint.one patch: rows before this are dropped once whole
++ * @param {number} [keepTo] lint.one patch: assembly stops once the row after this has begun
+  * @returns {DecodedArray}
+  */
+-export function assembleLists(output, definitionLevels, repetitionLevels, values, schemaPath) {
++export function assembleLists(output, definitionLevels, repetitionLevels, values, schemaPath, keepFrom = 0, keepTo = Infinity) {
+   const maxDefinitionLevel = getMaxDefinitionLevel(schemaPath)
+   // If no def/rep levels, synthesize def levels at max
+   if (!definitionLevels?.length && !repetitionLevels.length) {
+@@ -48,6 +50,16 @@
+     // assert(currentDefLevel === containerStack.length - 1)
+     const def = definitionLevels?.length ? definitionLevels[i] : maxDefinitionLevel
+     const rep = repetitionLevels[i]
++
++    // lint.one patch: a page can hold hundreds of thousands of rows, and
++    // each nested row becomes its own objects. Rows outside the selection
++    // are let go as soon as they are whole, and assembly stops once the row
++    // after the selection has begun, so reading 200 rows costs 200 rows.
++    // With no repetition levels (a field of a struct) every entry is a row.
++    if (!rep) {
++      if (output.length > keepTo) break
++      if (output.length && output.length - 1 < keepFrom) output[output.length - 1] = null
++    }
+ 
+     // Pop up to start of rep level
+     while (currentDepth && (rep < currentRepLevel || repetitionPath[currentDepth] !== 'REPEATED')) {
+diff -ru a/src/column.js b/src/column.js
+--- a/src/column.js	2026-09-26 11:12:21
++++ b/src/column.js	2026-09-26 11:16:36
+@@ -40,7 +40,10 @@
+     })
+   })
+ 
+-  while (isFlat ? rowCount < selectEnd : reader.offset < reader.view.byteLength - 1) {
++  // lint.one patch: a nested column stops too, once the row after the
++  // selection has begun (so every selected row is whole), instead of
++  // decoding the rest of the chunk
++  while (isFlat ? rowCount < selectEnd : rowCount <= selectEnd && reader.offset < reader.view.byteLength - 1) {
+     if (reader.offset >= reader.view.byteLength - 1) break // end of reader
+ 
+     // read page header
+@@ -50,7 +53,7 @@
+       if (data) dictionary = convert(data, columnDecoder)
+     } else {
+       const lastChunkLength = lastChunk?.length || 0
+-      const result = readPage(reader, header, columnDecoder, dictionary, lastChunk, selectStart - rowCount)
++      const result = readPage(reader, header, columnDecoder, dictionary, lastChunk, selectStart - rowCount, selectEnd - rowCount)
+       if (result.skipped) {
+         // skipped page - just advance row count, don't add to chunks
+         if (!chunks.length) {
+@@ -82,9 +85,10 @@
+  * @param {DecodedArray | undefined} dictionary
+  * @param {DecodedArray | undefined} previousChunk
+  * @param {number} pageStart skip this many rows in the page
++ * @param {number} [pageEnd] lint.one patch: rows past this one are not assembled
+  * @returns {PageResult}
+  */
+-export function readPage(reader, header, columnDecoder, dictionary, previousChunk, pageStart) {
++export function readPage(reader, header, columnDecoder, dictionary, previousChunk, pageStart, pageEnd = Infinity) {
+   const { type, element, schemaPath, codec, compressors } = columnDecoder
+   // read compressed_page_size bytes
+   const compressedBytes = new Uint8Array(
+@@ -109,15 +113,19 @@
+     // convert types, dereference dictionary, and assemble lists
+     const values = convertWithDictionary(dataPage, dictionary, daph.encoding, columnDecoder)
+     const output = Array.isArray(previousChunk) ? previousChunk : []
+-    const assembled = assembleLists(output, definitionLevels, repetitionLevels, values, schemaPath)
++    const assembled = assembleLists(output, definitionLevels, repetitionLevels, values, schemaPath,
++      output.length + pageStart, output.length + pageEnd)
+     return { skipped: 0, data: assembled }
+   } else if (header.type === 'DATA_PAGE_V2') {
+     const daph2 = header.data_page_header_v2
+     if (!daph2) throw new Error('parquet data page header v2 is undefined')
+ 
+     // skip unnecessary pages
+-    if (pageStart > daph2.num_rows) {
+-      return { skipped: daph2.num_values }
++    // lint.one patch: flat columns only, as for v1 pages. A nested column's
++    // rows can continue across pages, and num_values counts its values, not
++    // its rows, so skipping one threw off every row after it.
++    if (pageStart > daph2.num_rows && isFlatColumn(schemaPath)) {
++      return { skipped: daph2.num_rows }
+     }
+ 
+     const { definitionLevels, repetitionLevels, dataPage } =
+@@ -126,7 +134,8 @@
+     // convert types, dereference dictionary, and assemble lists
+     const values = convertWithDictionary(dataPage, dictionary, daph2.encoding, columnDecoder)
+     const output = Array.isArray(previousChunk) ? previousChunk : []
+-    const assembled = assembleLists(output, definitionLevels, repetitionLevels, values, schemaPath)
++    const assembled = assembleLists(output, definitionLevels, repetitionLevels, values, schemaPath,
++      output.length + pageStart, output.length + pageEnd)
+     return { skipped: 0, data: assembled }
+   } else if (header.type === 'DICTIONARY_PAGE') {
+     const diph = header.dictionary_page_header

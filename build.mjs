@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(fileURLToPath(import.meta.url));
 const SHARED = join(root, 'shared');
 const DIST = join(root, 'site', 'dist');
-const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite'];
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet'];
 
 await rm(DIST, { recursive: true, force: true });
 await mkdir(DIST, { recursive: true });
@@ -57,11 +57,20 @@ const files = (await readdir(DIST, { recursive: true, withFileTypes: true }))
      name and icons. Left out of the copy, they always come from the network. */
   .filter((f) => !/^(og|icons)\/|^(robots\.txt|sitemap\.xml|manifest\.webmanifest|apple-touch-icon\.png)$/.test(f))
   .sort();
+/* DuckDB (parquet/vendor/duckdb-*) is 9 MB that only someone sorting or
+   querying a Parquet file needs. It stays out of the copy every visitor
+   downloads; the service worker keeps it the first time it is fetched. Its
+   folder is named for its version, so a new one never mixes with the old. */
+const LAZY = /^parquet\/vendor\/duckdb-/;
+const eager = files.filter((f) => !LAZY.test(f));
+const lazy = files.filter((f) => LAZY.test(f));
 const hash = createHash('sha256');
-for (const f of files) hash.update(f).update(await readFile(join(DIST, f)));
-const urls = files.map((f) => '/' + f.replace(/(^|\/)index\.html$/, '$1'));
+for (const f of eager) hash.update(f).update(await readFile(join(DIST, f)));
+const toUrl = (f) => '/' + f.replace(/(^|\/)index\.html$/, '$1');
+const urls = eager.map(toUrl);
 const sw = (await readFile(join(root, 'site', 'sw.js'), 'utf8'))
   .replace('__VERSION__', hash.digest('hex').slice(0, 12))
-  .replace('__FILES__', JSON.stringify(urls, null, 2));
+  .replace('__FILES__', JSON.stringify(urls, null, 2))
+  .replace('__LAZY__', JSON.stringify(lazy.map(toUrl), null, 2));
 await writeFile(join(DIST, 'sw.js'), sw);
-console.log(`✓ /sw.js  (${urls.length} files offline)`);
+console.log(`✓ /sw.js  (${urls.length} files offline, ${lazy.length} kept on first use)`);

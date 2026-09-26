@@ -10,7 +10,7 @@
    loaded first, so the landing page and the tools share one copy. */
 var THEMES = LintTheme.THEMES;
 
-/* ---------- the eight tools, for the suite switcher ---------- */
+/* ---------- the nine tools, for the suite switcher ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a
    site's authority across its paths, but treats subdomains as separate sites
    and splits it. Relative hrefs also keep local development working. */
@@ -22,7 +22,8 @@ var SUITE = [
   { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
   { id: 'log',  name: 'Logs', host: '/log'  },
   { id: 'audio', name: 'Audio', host: '/audio' },
-  { id: 'sqlite', name: 'SQLite', host: '/sqlite' }
+  { id: 'sqlite', name: 'SQLite', host: '/sqlite' },
+  { id: 'parquet', name: 'Parquet', host: '/parquet' }
 ];
 
 /* ---------- small helpers ---------- */

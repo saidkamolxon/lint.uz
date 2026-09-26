@@ -1,0 +1,1430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parquet Viewer &amp; SQL · lint.one</title>
+<meta name="description" content="A fast, private Parquet viewer. Browse rows, read the schema, row groups and statistics, and run SQL on a .parquet file — all in your browser. Nothing is uploaded.">
+<link rel="canonical" href="https://lint.one/parquet/">
+<!-- one installable app for the whole suite; its file_handlers send each
+     format to its own page, where LintApp.takeHandoff takes the file -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="lint">
+<meta name="theme-color" content="#FBFBFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lint.one">
+<meta property="og:url" content="https://lint.one/parquet/">
+<meta property="og:title" content="Parquet Viewer &amp; SQL · lint.one">
+<meta property="og:description" content="A fast, private Parquet viewer. Browse rows, read the schema, row groups and statistics, and run SQL on a .parquet file — all in your browser. Nothing is uploaded.">
+<meta property="og:image" content="https://lint.one/og/parquet.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<!-- the pages carry their own light and dark themes; Dark Reader would
+     repaint them on top and lose the format colours and glyphs -->
+<meta name="darkreader-lock">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<style>
+/* ==========================================================================
+   Parquet builds its own frame, as SQLite does: a file of rows and columns
+   has no source text to sit beside it. Everything below is scoped to this
+   tool and uses the shared tokens.
+   ========================================================================== */
+.app { overflow: hidden; }
+[hidden] { display: none !important; }
+
+/* Parquet's saffron is the one light hue in the suite: on it, text and
+   glyphs are ink. As a text colour it is too faint on a light page, so
+   there the same hue, darkened, carries it; on a dark page it reads as is. */
+:root { --hue-text: #896B06; }
+:root[data-theme="slate"] { --hue-text: var(--hue); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --hue-text: var(--hue); } }
+button[aria-pressed="true"], #pathBox:hover { color: var(--hue-text); }
+
+.pq-main { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; }
+
+#progress {
+  position: absolute; left: 0; top: 0; height: 2px;
+  background: var(--hue); width: 0;
+  transition: width var(--t-mid); z-index: 40;
+}
+
+/* ---------- the view: rows, the schema, or a query ---------- */
+#view { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); position: relative; }
+
+.viewbar {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s2) var(--s3);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+  min-height: 41px;
+}
+.view-title {
+  display: flex; align-items: baseline; gap: var(--s2); min-width: 0;
+  font-weight: 600; font-size: var(--fs-mid);
+}
+.view-title .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); max-width: 36ch; }
+.view-title .kind { font-weight: 400; font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+
+.filter-wrap { display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 320px; }
+#filter {
+  width: 100%;
+  font-family: var(--mono); font-size: var(--fs-base);
+  color: var(--ink); background: var(--sunken);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px var(--s3);
+}
+#filter::placeholder { color: var(--faint); font-family: var(--ui); }
+#filter:focus { background: var(--raised); border-color: color-mix(in srgb, var(--hue-text) 45%, var(--line)); outline: none; }
+
+.pager { display: flex; align-items: center; gap: 2px; }
+.pager-pos {
+  font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0 var(--s2);
+}
+
+/* a line under the bar while DuckDB loads or works, so a slow sort says why */
+#engineNote {
+  flex: none; padding: var(--s1) var(--s3);
+  font-size: var(--fs-small); color: var(--muted);
+  background: var(--raised); border-bottom: var(--hairline) solid var(--line);
+  display: flex; align-items: center; gap: var(--s2);
+}
+#engineNote .stop-link { color: var(--hue-text); font-weight: 550; padding: 0 var(--s1); }
+
+/* ---------- the grid ---------- */
+#grid { flex: 1; min-height: 0; overflow: auto; position: relative; }
+#grid.stale { opacity: 0.55; transition: opacity var(--t-mid) 150ms; }
+
+.grid-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+/* cells are the document, so they follow the text zoom (--code-size) */
+.grid-table th, .grid-table td {
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base));
+  padding: var(--s1) var(--s3);
+  border-bottom: var(--hairline) solid var(--line);
+  border-right: var(--hairline) solid var(--line);
+  text-align: left; white-space: nowrap;
+  max-width: 360px; overflow: hidden; text-overflow: ellipsis;
+}
+.grid-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--raised);
+  color: var(--t-key); font-weight: 600;
+  border-bottom: var(--hairline) solid var(--line-strong);
+  font-family: var(--ui);
+  user-select: none;
+}
+.grid-table thead th.sortable { cursor: pointer; }
+.grid-table thead th.sortable:hover { background: var(--row-hover); }
+.grid-table thead th .sort { color: var(--hue-text); margin-left: var(--s1); font-size: calc(var(--code-size, var(--fs-base)) * 0.75); }
+.grid-table thead th .coltype {
+  display: block; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.78);
+  font-weight: 400; color: var(--faint); max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+}
+
+.grid-table .rn {
+  position: sticky; left: 0; z-index: 1;
+  background: color-mix(in srgb, var(--hue) var(--gutter-tint), var(--raised));
+  color: color-mix(in srgb, var(--hue-text) var(--gutter-ink), var(--muted));
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-size: calc(var(--code-size, var(--fs-base)) * 0.85); padding: var(--s1) var(--s2);
+  /* a narrow table spreads its spare width over the data, not the numbers */
+  width: 1px;
+}
+.grid-table thead .rn { z-index: 3; }
+.grid-table tbody tr:hover td { background: var(--row-hover); }
+.grid-table tbody tr:hover .rn { background: color-mix(in srgb, var(--hue) 26%, var(--raised)); }
+.grid-table td { cursor: default; }
+.grid-table td.num { color: var(--t-num); text-align: right; font-variant-numeric: tabular-nums; }
+.grid-table td.bool { color: var(--t-bool, var(--t-num)); }
+.grid-table td.nested { color: var(--t-cont); }
+.grid-table td.null { color: var(--faint); font-style: italic; font-family: var(--ui); }
+.grid-table td.blob { color: var(--t-cont); font-family: var(--ui); }
+.grid-table td.empty-cell { color: var(--faint); }
+.grid-table tbody td.sel,
+.grid-table tbody tr:hover td.sel {
+  background: var(--hue-wash);
+  box-shadow: inset 0 0 0 1.5px var(--hue-text);
+}
+
+/* ---------- the SQL editor ---------- */
+#queryBox {
+  flex: none; display: flex; flex-direction: column;
+  border-bottom: var(--hairline) solid var(--line);
+  background: var(--raised);
+}
+#sql {
+  display: block; width: 100%; box-sizing: border-box;
+  min-height: 96px; height: 132px; max-height: 60vh; resize: vertical;
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.55;
+  color: var(--ink); background: var(--sunken);
+  border: none; border-bottom: var(--hairline) solid var(--line);
+  padding: var(--s3); outline: none; tab-size: 2;
+}
+#sql:focus { background: var(--surface); }
+.query-bar { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); }
+#queryMsg { font-size: var(--fs-small); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#queryMsg.err { color: var(--bad); font-weight: 500; white-space: pre-wrap; font-family: var(--mono); }
+#queryMsg code { font-family: var(--mono); color: var(--ink); }
+
+/* ---------- schema ---------- */
+#schemaView { flex: 1; min-height: 0; overflow: auto; padding: var(--s4); }
+.schema-sec { max-width: 1180px; margin: 0 0 var(--s5); }
+.schema-sec h3 {
+  margin: 0 0 var(--s2); font-size: var(--fs-small); font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.schema-sec h3 .n { font-weight: 400; color: var(--faint); text-transform: none; letter-spacing: 0; margin-left: var(--s1); }
+.schema-sec pre {
+  margin: 0; padding: var(--s3);
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.6;
+  background: var(--raised); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+  max-height: 420px; overflow: auto;
+}
+.schema-sec .none { color: var(--faint); font-size: var(--fs-small); margin: 0; }
+.table-scroll { overflow-x: auto; }
+.cols { border-collapse: collapse; width: 100%; font-size: var(--fs-base); }
+.cols th, .cols td {
+  text-align: left; padding: 5px var(--s3) 5px 0;
+  border-bottom: var(--hairline) solid var(--line); vertical-align: baseline;
+  white-space: nowrap;
+}
+.cols th { font-size: var(--fs-small); color: var(--muted); font-weight: 500; }
+.cols th.r, .cols td.r { text-align: right; }
+.cols td { font-family: var(--mono); font-size: var(--fs-small); }
+.cols td.nm { color: var(--t-key); font-weight: 600; }
+.cols td.nm.inner { color: var(--ink); font-weight: 400; }
+.cols td.nm .tree { color: var(--faint); font-weight: 400; white-space: pre; }
+.cols td.mm { max-width: 220px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.cols td.ty { color: var(--t-str); }
+.cols td .flag {
+  display: inline-block; margin-left: 4px; padding: 0 5px;
+  border-radius: var(--radius-sm); font-family: var(--ui); font-size: var(--fs-micro);
+  background: var(--sunken); color: var(--muted); border: var(--hairline) solid var(--line);
+}
+.kv-key { font-family: var(--mono); font-size: var(--fs-small); font-weight: 600; color: var(--t-key); margin: var(--s3) 0 var(--s1); }
+.kv-key:first-of-type { margin-top: 0; }
+.kv-note { font-size: var(--fs-small); color: var(--muted); margin: 0; }
+
+/* ---------- the drawer: a value, or the file ---------- */
+#drawer {
+  width: 360px; flex: none;
+  border-left: var(--hairline) solid var(--line);
+  background: var(--raised);
+  display: none; flex-direction: column; min-height: 0;
+}
+#drawer.open { display: flex; }
+@media (max-width: 760px) {
+  #drawer { position: absolute; inset: 0 0 0 auto; width: min(360px, 90vw); z-index: 30; box-shadow: var(--shadow); }
+}
+.drawer-tabs { display: flex; gap: 2px; flex: none; padding: var(--s2); border-bottom: var(--hairline) solid var(--line); }
+.drawer-tabs button { flex: 1; padding: 5px var(--s2); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-small); }
+.drawer-tabs .drawer-close { flex: none; width: 30px; padding: 0; display: grid; place-items: center; }
+.drawer-tabs .drawer-close:hover { color: var(--ink); background: var(--row-hover); }
+.drawer-tabs .drawer-close svg { width: 16px; height: 16px; }
+.drawer-tabs button[aria-selected="true"] { background: var(--hue-wash); color: var(--hue-text); font-weight: 600; }
+.drawer-body { flex: 1; overflow: auto; padding: var(--s3); }
+.drawer-panel { display: none; }
+.drawer-panel.active { display: block; }
+.hint { color: var(--muted); font-size: var(--fs-small); line-height: 1.55; margin: 0 0 var(--s3); }
+
+.value-head { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s2); }
+.value-head .col { font-family: var(--mono); font-weight: 600; color: var(--t-key); overflow-wrap: anywhere; }
+.value-head .kind {
+  font-size: var(--fs-micro); letter-spacing: 0.02em;
+  color: var(--muted); background: var(--sunken); border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-sm); padding: 0 5px; font-family: var(--mono);
+}
+.value-head .where { font-size: var(--fs-small); color: var(--faint); margin-left: auto; }
+.value-text {
+  margin: 0; padding: var(--s2);
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-small)); line-height: 1.6;
+  background: var(--sunken); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink);
+  max-height: 60vh; overflow: auto;
+}
+.value-text.null { color: var(--faint); font-style: italic; font-family: var(--ui); }
+.value-note { font-size: var(--fs-small); color: var(--muted); margin: var(--s2) 0 0; line-height: 1.5; }
+.value-note b { color: var(--ink); font-weight: 500; font-family: var(--mono); }
+.hexdump { font-size: var(--fs-small); white-space: pre; overflow-x: auto; overflow-wrap: normal; }
+.hexdump .off { color: var(--faint); }
+.hexdump .asc { color: var(--muted); }
+.blob-img {
+  display: block; max-width: 100%; max-height: 240px; margin: 0 0 var(--s3);
+  image-rendering: pixelated; border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  background: repeating-conic-gradient(var(--sunken) 0 25%, var(--raised) 0 50%) 0 0 / 12px 12px;
+}
+.drawer-actions { display: flex; gap: var(--s1); margin-top: var(--s2); flex-wrap: wrap; }
+
+/* metadata rows — a definition list, because that is what this is */
+.meta { margin: 0 0 var(--s3); font-size: var(--fs-base); }
+.meta div {
+  display: grid; grid-template-columns: 112px 1fr; gap: var(--s3);
+  padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
+  align-items: baseline;
+}
+.meta div:last-child { border-bottom: none; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: var(--fs-small); overflow-wrap: anywhere; color: var(--ink); }
+.meta dd small { display: block; font-family: var(--ui); color: var(--muted); margin-top: 2px; }
+
+/* the empty state sits where every other tool's does */
+#view > .empty-state { margin-top: calc(40vh - 37px - var(--s5)); }
+
+/* the shared dragover cue targets #editorPane, which this tool has none of */
+body.dragover .pq-main::after {
+  content: "";
+  position: absolute; inset: var(--s2);
+  border: 2px dashed var(--hue);
+  border-radius: var(--radius-lg);
+  background: var(--hue-wash);
+  pointer-events: none; z-index: 50;
+}
+
+:root[data-contrast="more"] .grid-table tbody td.sel { box-shadow: inset 0 0 0 2px var(--hue-text); }
+:root[data-contrast="more"] .grid-table td.null { color: var(--muted); }
+
+@media (max-width: 620px) {
+  .viewbar { padding: var(--s2); }
+  .filter-wrap { order: 5; max-width: none; flex-basis: 100%; }
+  #schemaView { padding: var(--s3); }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'parquet',
+  name: 'Parquet',
+  host: 'lint.one/parquet',
+  label: 'Parquet',
+  hue: '#F7CE46',
+  hueInk: '#1A1D23',
+  accept: '.parquet,.parq,.pqt,application/vnd.apache.parquet'
+};
+</script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/app.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = LintApp.esc;
+const fmtNum = (n) => LintApp.fmtNum(Number(n));
+const NUMERIC = new Set(['int', 'float', 'decimal']);
+
+/* ==========================================================================
+   Chrome — built here rather than by shared/shell.js, which draws an
+   editor and a tree this tool has no use for. Themes, the suite menu, the
+   toast and the document chip still come from the shared runtime.
+   ========================================================================== */
+const c = window.LINT_CONFIG;
+const MOD = LintApp.isMac ? '⌘' : 'Ctrl+';
+document.documentElement.style.setProperty('--hue', c.hue);
+document.documentElement.style.setProperty('--hue-ink', c.hueInk);
+
+$('app').innerHTML = `
+  <header class="toolbar">
+    <span class="brand">
+      <span class="brand-text"><span class="brand-name">${c.name}</span></span>
+    </span>
+    <button id="btnOpen" class="primary" title="Open a Parquet file, or drop one anywhere">Open</button>
+    <span class="spacer"></span>
+    <button id="btnQuery" class="bordered needs-file" title="Run SQL on this file (${MOD}E)">SQL</button>
+    <button id="btnInfo" class="icon-btn needs-file" title="Details: the chosen value, and the file (${MOD}I)"
+            aria-label="Details" aria-pressed="false"></button>
+    <div class="menu-wrap needs-file">
+      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
+      <div class="menu" id="moreMenu" role="menu">
+        <button class="menu-item" id="btnCsv" role="menuitem">Copy rows as CSV</button>
+        <button class="menu-item" id="btnJson" role="menuitem">Copy rows as JSON</button>
+        <button class="menu-item" id="btnSchemaJson" role="menuitem">Copy the schema as JSON</button>
+      </div>
+    </div>
+    <div class="group" id="chromeSlot"></div>
+    <input type="file" id="fileInput" accept="${c.accept}" hidden>
+  </header>
+
+  <main class="pq-main">
+    <div id="progress"></div>
+
+    <section id="view" aria-label="Contents">
+      <div class="viewbar" id="viewbar" hidden>
+        <span class="view-title"><span class="nm" id="viewName"></span><span class="kind" id="viewKind"></span></span>
+        <div class="seg" id="modeSeg" role="radiogroup" aria-label="Show">
+          <button data-mode="data" role="radio" aria-checked="true">Data</button>
+          <button data-mode="schema" role="radio" aria-checked="false">Schema</button>
+        </div>
+        <label class="filter-wrap" id="filterWrap">
+          <input id="filter" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="Filter rows, or column:text" aria-label="Filter rows"
+                 title="Finds text in every column, and numbers or dates when you type one. column:text looks in one column only (city:khiva, address.city:khiva), which on a large file is much faster.">
+        </label>
+        <span class="spacer"></span>
+        <span class="pager" id="pager">
+          <button id="btnPrev" class="icon-btn" title="Previous rows (Page Up)" aria-label="Previous rows"></button>
+          <span class="pager-pos" id="pagerPos"></span>
+          <button id="btnNext" class="icon-btn" title="Next rows (Page Down)" aria-label="Next rows"></button>
+        </span>
+      </div>
+      <div id="engineNote" role="status" hidden><span id="engineMsg"></span>
+        <button class="stop-link" id="btnStopNote" title="Stop (Esc)">Stop</button></div>
+
+      <div id="queryBox" hidden>
+        <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off"
+                  autocorrect="off" aria-label="SQL"></textarea>
+        <div class="query-bar">
+          <button id="btnRun" class="primary" title="Run (${MOD}Enter)">Run</button>
+          <button id="btnStop" class="bordered" title="Stop the running query (Esc)" hidden>Stop</button>
+          <span id="queryMsg"></span>
+        </div>
+      </div>
+
+      <div id="grid" hidden></div>
+      <div id="schemaView" hidden></div>
+    </section>
+
+    <aside id="drawer" aria-label="Details">
+      <div class="drawer-tabs" role="tablist">
+        <button id="tabValue" role="tab" aria-selected="true">Value</button>
+        <button id="tabFile" role="tab" aria-selected="false">File</button>
+        <button id="btnCloseDrawer" class="drawer-close" title="Close the panel (Esc)" aria-label="Close the panel"></button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-panel active" id="panelValue"></div>
+        <div class="drawer-panel" id="panelFile"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="status" id="statusBar" hidden>
+    <span class="dot"></span>
+    <span id="statusMsg"></span>
+    <span id="pathBox"></span>
+  </footer>
+`;
+
+LintApp.mountChrome($('chromeSlot'), 'parquet');
+LintApp.wireMenu($('btnMore'), $('moreMenu'));
+
+const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const ICON = {
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
+  more: '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
+        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
+        '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
+  prev: '<path d="M15 6l-6 6 6 6"/>',
+  next: '<path d="M9 6l6 6-6 6"/>'
+};
+$('btnInfo').innerHTML = I(ICON.info);
+$('btnCloseDrawer').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
+$('btnMore').innerHTML = I(ICON.more);
+$('btnPrev').innerHTML = I(ICON.prev);
+$('btnNext').innerHTML = I(ICON.next);
+
+/* ==========================================================================
+   Two workers. The reader (worker.js) opens the file and pages through it
+   in the file's own order, and starts at once. The SQL engine (sql.js) sorts,
+   filters and runs queries; it is started the first time one of those is
+   asked for. Each call is a promise; Stop ends the worker doing the work.
+   ========================================================================== */
+const STOPPED = 'stopped';
+
+function makeWorker(url, onProgress, failMsg) {
+  const w = { worker: null, calls: new Map(), nextId: 1 };
+  w.start = () => {
+    w.worker = new Worker(url, { type: 'module' });
+    w.worker.onmessage = (e) => {
+      const m = e.data;
+      if (m.type === 'progress') { if (onProgress) onProgress(m); return; }
+      const call = w.calls.get(m.id);
+      if (!call) return;
+      w.calls.delete(m.id);
+      if (m.ok) call.resolve(m); else call.reject(new Error(m.error));
+    };
+    w.worker.onerror = (e) => {
+      /* the module itself failed to load: nothing will ever answer */
+      e.preventDefault();
+      w.calls.forEach((call) => call.reject(new Error(failMsg)));
+      w.calls.clear();
+    };
+  };
+  w.rpc = (type, data) => {
+    if (!w.worker) w.start();
+    const id = w.nextId++;
+    return new Promise((resolve, reject) => {
+      w.calls.set(id, { resolve, reject });
+      w.worker.postMessage({ id, type, ...data });
+    });
+  };
+  /* end whatever the worker is doing, and everything queued behind it */
+  w.halt = () => {
+    if (w.worker) w.worker.terminate();
+    w.worker = null;
+    w.calls.forEach((call) => call.reject(new Error(STOPPED)));
+    w.calls.clear();
+  };
+  return w;
+}
+
+const reader = makeWorker('./worker.js', null, 'The Parquet reader could not start in this browser.');
+let engineStarted = 0;    // when DuckDB was last asked to start
+const engine = makeWorker('./sql.js', (m) => {
+  /* from the offline copy the 8 MB arrive at once; the download is only
+     worth describing when it is one */
+  if (performance.now() - engineStarted < 300) return;
+  const pct = m.done / m.total;
+  setBusy(4 + 70 * pct);
+  engineNote('Loading the SQL engine — ' + LintApp.fmtBytes(m.done) + ' of ' + LintApp.fmtBytes(m.total));
+}, 'The SQL engine could not start in this browser.');
+
+let engineReady = null;   // a promise once DuckDB is starting or started, with this file open in it
+
+/* DuckDB, with the open file registered as the table `data` */
+function ensureEngine() {
+  if (engineReady) return engineReady;
+  const file = source && source.file;
+  engineStarted = performance.now();
+  engineNote('Starting the SQL engine…');
+  const t0 = performance.now();
+  engineReady = engine.rpc('open', { file }).then((d) => {
+    info.engine = d.engine;
+    info.engineMs = performance.now() - t0;
+    buildFilePanel();
+    return d;
+  }, (err) => {
+    engineReady = null;
+    throw err;
+  });
+  return engineReady;
+}
+
+function engineNote(msg) {
+  $('engineNote').hidden = !msg;
+  $('engineMsg').textContent = msg || '';
+}
+
+/* ==========================================================================
+   State
+   ========================================================================== */
+const PAGE = 200;
+let source = null;        // {file} — what to reopen after a Stop
+let info = null;          // what the reader said about the file
+let state = { mode: 'data', offset: 0, order: null, filter: '' };
+let grid = null;          // what the grid shows: {view, src, columns, rows, offset, total}
+let sel = null;           // {r, c} of the selected cell, within the shown rows
+let query = { sql: '', total: 0, offset: 0, columns: null, ran: false };
+let viewSeq = 0;          // a newer request makes an older answer irrelevant
+let viaEngine = false;    // the reader could not decode this file; DuckDB reads its rows
+
+function setBusy(pct) {
+  $('progress').style.width = pct === null ? '0' : pct + '%';
+}
+
+function setStatus(kind, msg) {
+  $('statusBar').className = 'status' + (kind ? ' ' + kind : '');
+  $('statusBar').hidden = false;
+  $('statusMsg').textContent = msg;
+}
+
+/* ==========================================================================
+   Opening
+   ========================================================================== */
+async function openFile(file) {
+  if (!file) return;
+  /* whatever the last file was doing no longer matters */
+  reader.halt();
+  engine.halt();
+  engineReady = null;
+  engineNote(null);
+  setStatus('', 'Reading ' + file.name + '…');
+  setBusy(6);
+  try {
+    const d = await reader.rpc('open', { file });
+    source = { file };
+    show(d, file.name, file.size);
+  } catch (err) {
+    setBusy(null);
+    if (err.message === STOPPED) return;
+    if (!info) reset();
+    setStatus('err', err.message);
+    LintApp.toast(err.message);
+  }
+}
+
+async function openSample() {
+  try {
+    const res = await fetch('./sample.parquet');
+    if (!res.ok) throw new Error('The sample could not be loaded.');
+    openFile(new File([await res.blob()], 'sample.parquet'));
+  } catch (err) {
+    LintApp.toast(err.message);
+  }
+}
+
+function show(d, name, size) {
+  info = d;
+  info.name = name;
+  info.size = size;
+  viaEngine = false;
+  setBusy(100);
+  setTimeout(() => setBusy(null), 300);
+
+  document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = false; });
+  LintApp.setDocument(name, reset);
+  $('pathBox').textContent = name;
+
+  const facts = [
+    fmtNum(d.rows) + (d.rows === 1 ? ' row' : ' rows'),
+    fmtNum(d.columns.length) + (d.columns.length === 1 ? ' column' : ' columns'),
+    LintApp.fmtBytes(size),
+    d.codecs.filter((x) => x !== 'UNCOMPRESSED').join(', ') || 'uncompressed'
+  ];
+  setStatus('ok', facts.join(', '));
+  buildFilePanel();
+
+  query = { sql: 'SELECT *\nFROM data\nLIMIT 100;', total: 0, offset: 0, columns: null, ran: false };
+  $('sql').value = query.sql;
+  $('queryMsg').textContent = '';
+  state = { mode: state.mode === 'schema' ? 'schema' : 'data', offset: 0, order: null, filter: '' };
+  $('filter').value = '';
+  sel = null;
+  valueHint();
+  showMode();
+}
+
+function reset() {
+  reader.halt();
+  engine.halt();
+  engineReady = null;
+  source = null;
+  info = null;
+  grid = null;
+  sel = null;
+  viaEngine = false;
+  state = { mode: 'data', offset: 0, order: null, filter: '' };
+  LintApp.setDocument(null);
+  document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = true; });
+  $('viewbar').hidden = true;
+  $('queryBox').hidden = true;
+  $('grid').hidden = true;
+  $('schemaView').hidden = true;
+  engineNote(null);
+  $('drawer').classList.remove('open');
+  $('btnInfo').setAttribute('aria-pressed', 'false');
+  $('statusBar').hidden = true;
+  $('pathBox').textContent = '';
+  showEmpty();
+}
+
+const EMPTY = LintApp.emptyState({
+  title: 'Open a Parquet file or drop it here',
+  body: 'Rows, schema, statistics and SQL all run in this tab. The file never leaves it.',
+  extra: '<div class="empty-actions">' +
+    '<button class="primary" data-empty="open">Open a file</button>' +
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+});
+
+function showEmpty() {
+  const view = $('view');
+  view.querySelectorAll(':scope > .empty-state').forEach((el) => el.remove());
+  view.insertAdjacentHTML('beforeend', EMPTY);
+}
+
+$('view').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-empty]');
+  if (!b) return;
+  if (b.dataset.empty === 'open') $('fileInput').click();
+  else openSample();
+});
+
+/* ==========================================================================
+   The view
+   ========================================================================== */
+function showMode() {
+  const q = state.mode === 'query';
+  $('view').querySelectorAll(':scope > .empty-state').forEach((el) => el.remove());
+  $('viewbar').hidden = false;
+  $('queryBox').hidden = !q;
+  $('modeSeg').hidden = q;
+  $('filterWrap').hidden = q || state.mode === 'schema';
+  $('pager').hidden = state.mode === 'schema';
+  $('grid').hidden = state.mode === 'schema';
+  $('schemaView').hidden = state.mode !== 'schema';
+  $('modeSeg').querySelectorAll('button').forEach((b) =>
+    b.setAttribute('aria-checked', String(b.dataset.mode === state.mode)));
+  $('btnQuery').textContent = q ? 'Rows' : 'SQL';
+  $('btnQuery').title = q ? `Back to the rows (${MOD}E)` : `Run SQL on this file (${MOD}E)`;
+
+  if (q) {
+    $('viewName').textContent = 'SQL';
+    $('viewKind').textContent = 'the file is the table data';
+  } else {
+    $('viewName').textContent = info.name;
+    $('viewKind').textContent = fmtNum(info.rows) + ' × ' + fmtNum(info.columns.length);
+  }
+
+  if (q) { showQueryResult(); $('sql').focus(); prepareEngine(); }
+  else if (state.mode === 'schema') renderSchema();
+  else loadRows();
+}
+
+$('modeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-mode]');
+  if (!b || state.mode === b.dataset.mode) return;
+  state.mode = b.dataset.mode;
+  showMode();
+});
+
+/* the reader pages in the file's own order; a sort, a filter, or a file the
+   reader cannot decode goes to DuckDB */
+const needsEngine = () => viaEngine || !!state.order || !!state.filter;
+
+/* Pages through DuckDB run one at a time, since its worker does one thing at
+   a time. While one runs, a newer request waits and only the newest is run;
+   one that has run for more than half a second is ended instead (typing a
+   filter on a large file should not queue up full scans), at the cost of
+   starting DuckDB again, about a second. */
+let gridJob = null;       // {start} while DuckDB works for the grid
+let gridAgain = false;    // a newer request is waiting
+
+async function loadRows() {
+  if (!needsEngine()) { readerRows(); return; }
+  if (gridJob) {
+    gridAgain = true;
+    if (performance.now() - gridJob.start > 500 && !running) {
+      engine.halt();
+      engineReady = null;
+    }
+    return;
+  }
+  do {
+    gridAgain = false;
+    if (!needsEngine()) { readerRows(); break; }
+    await engineRows();
+  } while (gridAgain);
+}
+
+async function readerRows() {
+  const seq = ++viewSeq;
+  $('grid').classList.add('stale');
+  try {
+    const d = await reader.rpc('rows', { offset: state.offset, limit: PAGE });
+    if (seq !== viewSeq) return;
+    grid = { view: 'grid', src: 'reader', columns: info.columns, rows: d.rows,
+             offset: state.offset, total: d.total, more: false };
+    renderGrid();
+  } catch (err) {
+    if (seq !== viewSeq || err.message === STOPPED) return;
+    /* hyparquet cannot decode every file (a few nested layouts in v2 pages);
+       DuckDB reads those, so the grid goes on through it */
+    if (!viaEngine) {
+      viaEngine = true;
+      LintApp.toast('The quick reader could not decode this file, so DuckDB reads its rows');
+      loadRows();
+      return;
+    }
+    showGridError(err);
+  }
+}
+
+async function engineRows() {
+  const seq = ++viewSeq;
+  const want = { offset: state.offset, order: state.order, filter: state.filter };
+  $('grid').classList.add('stale');
+  gridJob = { start: performance.now() };
+  try {
+    const first = !engineReady;
+    await ensureEngine();
+    if (gridAgain) return;
+    engineNote(want.filter
+      ? (want.order ? 'Filtering and sorting ' : 'Filtering ') + fmtNum(info.rows) + ' rows…'
+      : want.order ? 'Sorting ' + fmtNum(info.rows) + ' rows…' : 'Reading with DuckDB…');
+    if (first) setBusy(80);
+    gridJob.start = performance.now();
+    const d = await engine.rpc('rows', { offset: want.offset, limit: PAGE, order: want.order, filter: want.filter });
+    setBusy(null);
+    engineNote(null);
+    if (gridAgain || seq !== viewSeq) return;
+    grid = { view: 'grid', src: 'engine', columns: info.columns, rows: d.rows,
+             offset: want.offset, total: d.total, more: false };
+    renderGrid();
+
+    /* the count, after the page is up: on a large file with nested columns
+       it can take seconds, and nothing waits for it */
+    if (d.total === null) {
+      gridJob.start = performance.now();
+      const c = await engine.rpc('count', { filter: want.filter });
+      if (!gridAgain && seq === viewSeq && grid && grid.view === 'grid') { grid.total = c.n; syncPager(); }
+    }
+  } catch (err) {
+    setBusy(null);
+    engineNote(null);
+    if (err.message === STOPPED || gridAgain || seq !== viewSeq) return;
+    showGridError(err);
+  } finally {
+    gridJob = null;
+  }
+}
+
+function showGridError(err) {
+  grid = null;
+  $('grid').classList.remove('stale');
+  $('grid').innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+  $('pagerPos').textContent = '';
+}
+
+/* ---------- the grid, for the file and for a query alike ---------- */
+function renderGrid() {
+  const el = $('grid');
+  el.classList.remove('stale');
+  el.hidden = false;
+  if (!grid) { el.innerHTML = ''; return; }
+
+  const sortable = grid.view === 'grid';
+  let html = '<table class="grid-table"><thead><tr><th class="rn"></th>';
+  grid.columns.forEach((col, i) => {
+    const arrow = sortable && state.order && state.order.col === col.name
+      ? `<span class="sort">${state.order.dir < 0 ? '▼' : '▲'}</span>` : '';
+    html += `<th data-col="${i}"${sortable ? ' class="sortable" title="Sort by this column"' : ''}>` +
+      esc(col.name) + arrow + `<span class="coltype" title="${esc(col.type)}">${esc(col.type)}</span></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  grid.rows.forEach((row, r) => {
+    html += `<tr><td class="rn">${fmtNum(grid.offset + r + 1)}</td>`;
+    row.forEach((v, ci) => {
+      const selected = sel && sel.r === r && sel.c === ci ? ' sel' : '';
+      html += `<td data-r="${r}" data-c="${ci}" class="${cellClass(v, grid.columns[ci])}${selected}">${cellText(v)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  if (!grid.rows.length) {
+    html += `<div class="empty">${state.filter && grid.view === 'grid'
+      ? 'No rows match “' + esc(state.filter) + '”.' : 'No rows.'}</div>`;
+  }
+  el.innerHTML = html;
+  syncPager();
+}
+
+function cellClass(v, col) {
+  if (v === null) return 'null';
+  if (typeof v === 'object' && 'b' in v) return 'blob';
+  if (NUMERIC.has(col.kind)) return 'num';
+  if (col.kind === 'bool') return 'bool';
+  if (col.kind === 'nested') return 'nested';
+  if (v === '') return 'empty-cell';
+  return '';
+}
+
+function cellText(v) {
+  if (v === null) return 'NULL';
+  if (typeof v === 'object' && 'b' in v) return 'BINARY · ' + LintApp.fmtBytes(v.b);
+  if (typeof v === 'object' && 't' in v) return esc(v.t.slice(0, 200)) + '…';
+  const s = String(v);
+  /* one line per cell; the full value is a click away */
+  return esc(s.length > 200 ? s.slice(0, 200) + '…' : s).replace(/\n/g, '<span class="empty-cell">↵</span>');
+}
+
+function syncPager() {
+  if (!grid) { $('pagerPos').textContent = ''; return; }
+  const to = grid.offset + grid.rows.length;
+  /* a filter's page arrives before its count: "1–200 of …" until it does */
+  const counting = grid.total === null;
+  $('pagerPos').textContent = counting
+    ? `${fmtNum(grid.offset + 1)}–${fmtNum(to)} of …`
+    : grid.total
+      ? `${fmtNum(grid.offset + 1)}–${fmtNum(to)} of ${fmtNum(grid.total)}${grid.more ? '+' : ''}`
+      : '0 rows';
+  $('pagerPos').title = counting ? 'Counting the matching rows' : '';
+  $('btnPrev').disabled = grid.offset === 0;
+  $('btnNext').disabled = counting ? grid.rows.length < PAGE : to >= grid.total;
+}
+
+function turn(dir) {
+  if (!grid || $('grid').hidden) return;
+  const next = grid.offset + dir * PAGE;
+  if (next < 0 || (grid.total !== null && next >= grid.total) || (grid.total === null && grid.rows.length < PAGE && dir > 0)) return;
+  sel = null;
+  if (grid.view === 'query') loadQueryPage(next);
+  else { state.offset = next; loadRows(); }
+  $('grid').scrollTop = 0;
+}
+$('btnPrev').addEventListener('click', () => turn(-1));
+$('btnNext').addEventListener('click', () => turn(1));
+
+/* sorting and selecting */
+$('grid').addEventListener('click', (e) => {
+  const th = e.target.closest('th.sortable[data-col]');
+  if (th) {
+    const col = grid.columns[+th.dataset.col].name;
+    /* ascending, descending, then back to the file's own order */
+    if (!state.order || state.order.col !== col) state.order = { col, dir: 1 };
+    else if (state.order.dir === 1) state.order.dir = -1;
+    else state.order = null;
+    state.offset = 0;
+    sel = null;
+    loadRows();
+    return;
+  }
+  const td = e.target.closest('td[data-c]');
+  if (td) selectCell(+td.dataset.r, +td.dataset.c);
+});
+
+let filterTimer;
+$('filter').addEventListener('input', () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => {
+    state.filter = $('filter').value.trim();
+    state.offset = 0;
+    sel = null;
+    loadRows();
+  }, 300);
+});
+$('filter').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('filter').value) {
+    e.preventDefault();
+    $('filter').value = '';
+    $('filter').dispatchEvent(new Event('input'));
+  }
+});
+
+/* ==========================================================================
+   Stop — ends the worker that is busy. A stopped sort or filter leaves the
+   file in its own order; a stopped reader opens the file again.
+   ========================================================================== */
+async function stop() {
+  const busyEngine = engine.calls.size > 0;
+  const busyReader = reader.calls.size > 0;
+  if (!busyEngine && !busyReader) return;
+  viewSeq++;
+  engineNote(null);
+  setBusy(null);
+  if (busyEngine) {
+    engine.halt();
+    engineReady = null;
+    LintApp.toast('Stopped');
+    if (state.mode === 'data' && (state.order || state.filter)) {
+      state.order = null;
+      state.filter = '';
+      state.offset = 0;
+      $('filter').value = '';
+      loadRows();
+    }
+  }
+  if (busyReader) {
+    reader.halt();
+    if (!busyEngine) LintApp.toast('Stopped');
+    try {
+      await reader.rpc('open', { file: source.file });
+      if (state.mode === 'data') loadRows();
+    } catch (err) {
+      if (err.message !== STOPPED) { reset(); LintApp.toast(err.message); }
+    }
+  }
+}
+$('btnStopNote').addEventListener('click', stop);
+
+/* ==========================================================================
+   A cell's whole value
+   ========================================================================== */
+let cellSeq = 0;
+let blobUrl = null;
+
+function fetchCell(r, ci) {
+  if (grid.view === 'query') return engine.rpc('cell', { view: 'query', r: grid.offset + r, c: ci });
+  if (grid.src === 'engine') return engine.rpc('cell', { view: 'grid', r, c: ci });
+  return reader.rpc('cell', { r, c: ci });
+}
+
+/* Choosing a cell fills the details panel, and shows it there if the panel
+   is open. It never opens the panel: that is the person's to switch on. */
+async function selectCell(r, ci) {
+  if (!grid || !grid.rows[r]) return;
+  sel = { r, c: ci };
+  $('grid').querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
+  const td = $('grid').querySelector(`td[data-r="${r}"][data-c="${ci}"]`);
+  if (td) {
+    td.classList.add('sel');
+    td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  if ($('drawer').classList.contains('open')) openDrawer('value');
+
+  const seq = ++cellSeq;
+  const v = grid.rows[r][ci];
+  const col = grid.columns[ci];
+  const where = 'row ' + fmtNum(grid.offset + r + 1);
+  /* short values are already here; long text, nested values and bytes are fetched */
+  if (col.kind !== 'nested' && (v === null || typeof v !== 'object')) { paintValue(col, where, v === null ? null : { value: v }); return; }
+  try {
+    const d = await fetchCell(r, ci);
+    if (seq !== cellSeq) return;
+    paintValue(col, where, d.blob ? { blob: d.blob } : d.value === null ? null : d);
+  } catch (err) {
+    if (seq === cellSeq && err.message !== STOPPED) $('panelValue').innerHTML = `<p class="hint">${esc(err.message)}</p>`;
+  }
+}
+
+let shownValue = null;     // what Copy copies
+
+function paintValue(col, where, d) {
+  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  const head = `<div class="value-head"><span class="col">${esc(col.name)}</span>` +
+    `<span class="kind">${esc(col.type)}</span><span class="where">${where}</span></div>`;
+  const p = $('panelValue');
+
+  if (d === null) {
+    shownValue = null;
+    p.innerHTML = head + '<pre class="value-text null">NULL</pre>';
+    return;
+  }
+
+  if (d.blob) {
+    const b = d.blob;
+    shownValue = { hex: b.hex };
+    let html = head;
+    if (b.bytes) {
+      blobUrl = URL.createObjectURL(new Blob([b.bytes], { type: b.image }));
+      html += `<img class="blob-img" src="${blobUrl}" alt="The stored image">`;
+    }
+    html += `<pre class="value-text hexdump">${hexdump(b.hex)}</pre>` +
+      `<p class="value-note"><b>${LintApp.fmtBytes(b.size)}</b>` +
+      (b.image ? ', an image (' + b.image.slice(6).toUpperCase() + ')' : '') +
+      (b.size > b.hex.length ? '. The first ' + LintApp.fmtBytes(b.hex.length) + ' are shown.' : '.') + '</p>' +
+      '<div class="drawer-actions"><button class="bordered" id="btnCopyValue">Copy as hex</button></div>';
+    p.innerHTML = html;
+    /* an icon-sized image is scaled up by whole steps, so it stays crisp */
+    const img = p.querySelector('.blob-img');
+    if (img) img.onload = () => {
+      const k = Math.floor(96 / Math.max(img.naturalWidth, img.naturalHeight));
+      if (k > 1) img.style.width = img.naturalWidth * k + 'px';
+    };
+    return;
+  }
+
+  const v = d.value;
+  if (typeof v === 'number' || typeof v === 'bigint' || NUMERIC.has(col.kind)) {
+    shownValue = String(v);
+    const when = col.kind === 'int' ? asTime(v) : null;
+    p.innerHTML = head + `<pre class="value-text">${esc(String(v))}</pre>` +
+      (when ? `<p class="value-note">As a Unix time: <b>${esc(when)}</b></p>` : '') +
+      '<div class="drawer-actions"><button class="bordered" id="btnCopyValue">Copy</button></div>';
+    return;
+  }
+
+  const text = String(v);
+  shownValue = text;
+  const json = d.nested ? text : asJSON(text);
+  p.innerHTML = head +
+    `<pre class="value-text">${esc(json !== null ? json : text)}</pre>` +
+    (d.nested ? '' : `<p class="value-note">${fmtNum(text.length)} character${text.length === 1 ? '' : 's'}` +
+      (json !== null ? ', valid JSON — shown formatted' : '') + '</p>') +
+    '<div class="drawer-actions"><button class="bordered" id="btnCopyValue">Copy</button>' +
+    (json !== null ? '<button class="bordered" id="btnToJson">Open in JSON viewer</button>' : '') + '</div>';
+}
+
+$('panelValue').addEventListener('click', (e) => {
+  if (e.target.id === 'btnCopyValue') copyValue();
+  else if (e.target.id === 'btnToJson') LintApp.copyAndOffer(shownValue, 'JSON', 'parquet', 'json');
+});
+
+function copyValue() {
+  if (shownValue === null) { LintApp.copy('NULL', 'NULL'); return; }
+  if (typeof shownValue === 'object') {
+    LintApp.copy(Array.from(shownValue.hex, (x) => x.toString(16).padStart(2, '0')).join(''), 'Hex');
+  } else LintApp.copy(shownValue, 'Value');
+}
+
+/* JSON kept in a string column is the most common thing to squint at */
+function asJSON(s) {
+  const t = s.trim();
+  if (!/^[[{]/.test(t)) return null;
+  try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) { return null; }
+}
+
+/* seconds or milliseconds since 1970, within a plausible span (2001–2100) */
+function asTime(v) {
+  const n = Number(v);
+  if (!Number.isInteger(n)) return null;
+  let ms = null;
+  if (n >= 978307200 && n < 4102444800) ms = n * 1000;
+  else if (n >= 978307200000 && n < 4102444800000) ms = n;
+  if (ms === null) return null;
+  return new Date(ms).toISOString().replace('T', ' ').replace(/\.000Z$|Z$/, ' UTC');
+}
+
+function hexdump(bytes) {
+  const lines = [];
+  /* eight bytes a line: sixteen does not fit the drawer's width */
+  for (let o = 0; o < bytes.length; o += 8) {
+    const row = bytes.subarray(o, o + 8);
+    const hx = Array.from(row, (x) => x.toString(16).padStart(2, '0')).join(' ').padEnd(23, ' ');
+    const as = Array.from(row, (x) => x >= 32 && x < 127 ? String.fromCharCode(x) : '·').join('');
+    lines.push(`<span class="off">${o.toString(16).padStart(6, '0')}</span>  ${hx}  <span class="asc">${esc(as)}</span>`);
+  }
+  return lines.join('\n');
+}
+
+/* ==========================================================================
+   Schema — the columns with their storage and statistics, the row groups,
+   and whatever the writer kept in the footer
+   ========================================================================== */
+const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '';
+
+function renderSchema() {
+  const d = info;
+  let html = `<section class="schema-sec"><h3>Columns<span class="n">${fmtNum(d.columns.length)}` +
+    (d.schema.length > d.columns.length ? `, ${fmtNum(d.schema.filter((s) => s.leaf).length)} stored` : '') +
+    `</span></h3><div class="table-scroll"><table class="cols"><thead><tr>
+      <th>Name</th><th>Type</th><th>Stored as</th><th>Codec</th><th class="r">Size</th>
+      <th class="r">Ratio</th><th class="r">Nulls</th><th>Min</th><th>Max</th></tr></thead><tbody>`;
+  for (const s of d.schema) {
+    const tree = s.depth ? '<span class="tree">' + '  '.repeat(s.depth - 1) + '└ </span>' : '';
+    const flags = (s.repetition === 'required' ? '<span class="flag">required</span>' : '') +
+      (s.repetition === 'repeated' ? '<span class="flag">repeated</span>' : '') +
+      (s.approx ? '<span class="flag" title="More digits than a double holds: the grid shows it approximately, SQL exactly">approx. in grid</span>' : '');
+    html += `<tr><td class="nm${s.depth ? ' inner' : ''}">${tree}${esc(s.name)}${flags}</td>` +
+      `<td class="ty">${esc(s.type)}</td><td>${s.physical ? esc(s.physical) : ''}</td>` +
+      (s.leaf
+        ? `<td>${esc(s.codec.toLowerCase())}</td><td class="r">${LintApp.fmtBytes(s.compressed)}</td>` +
+          `<td class="r">${s.compressed && s.uncompressed ? (s.uncompressed / s.compressed).toFixed(1) + '×' : ''}</td>` +
+          `<td class="r">${s.nulls === null ? '' : fmtNum(s.nulls)}</td>` +
+          `<td class="mm" title="${esc(s.min || '')}">${s.min === null ? '' : esc(s.min)}</td>` +
+          `<td class="mm" title="${esc(s.max || '')}">${s.max === null ? '' : esc(s.max)}</td>`
+        : '<td></td><td></td><td></td><td></td><td></td><td></td>') + '</tr>';
+  }
+  html += '</tbody></table></div></section>';
+
+  html += `<section class="schema-sec"><h3>Row groups<span class="n">${fmtNum(d.groups.length)}</span></h3>` +
+    (d.groups.length
+      ? '<div class="table-scroll"><table class="cols"><thead><tr><th>#</th><th class="r">Rows</th>' +
+        '<th class="r">Size</th><th class="r">Unpacked</th><th class="r">Share of rows</th></tr></thead><tbody>' +
+        d.groups.map((g, i) => `<tr><td>${i + 1}</td><td class="r">${fmtNum(g.rows)}</td>` +
+          `<td class="r">${LintApp.fmtBytes(g.bytes)}</td><td class="r">${g.raw ? LintApp.fmtBytes(g.raw) : ''}</td>` +
+          `<td class="r">${pct(g.rows, d.rows)}</td></tr>`).join('') + '</tbody></table></div>'
+      : '<p class="none">No row groups: the file has a schema and no rows.</p>') + '</section>';
+
+  html += '<section class="schema-sec"><h3>Key-value metadata</h3>' + (d.kv.length
+    ? d.kv.map((k) => `<div class="kv-key">${esc(k.key)}</div>` +
+        (k.note ? `<p class="kv-note">${esc(k.note)}</p>` : `<pre>${esc(k.value)}</pre>`)).join('')
+    : '<p class="none">The writer kept nothing here.</p>') + '</section>';
+  $('schemaView').innerHTML = html;
+}
+
+/* ==========================================================================
+   SQL
+   ========================================================================== */
+function openQuery() {
+  state.mode = 'query';
+  sel = null;
+  valueHint();
+  showMode();
+}
+
+/* start DuckDB while the query is being written, so Run is quick */
+function prepareEngine() {
+  if (engineReady) return;
+  ensureEngine().then(() => { if (!running) engineNote(null); setBusy(null); },
+    (err) => {
+      engineNote(null);
+      setBusy(null);
+      if (err.message !== STOPPED) { $('queryMsg').className = 'err'; $('queryMsg').textContent = err.message; }
+    });
+}
+
+function showQueryResult() {
+  if (query.columns) {
+    grid = { view: 'query', src: 'engine', columns: query.columns, rows: query.rows, offset: query.offset,
+             total: query.total, more: query.more };
+    renderGrid();
+  } else {
+    grid = null;
+    $('grid').hidden = false;
+    $('grid').innerHTML = query.ran
+      ? '<div class="empty">The statement ran and returned no rows.</div>'
+      : `<div class="empty">Write a query and press ${LintApp.kbd('mod+enter')}. ` +
+        'The file is the table <code>data</code>; DuckDB runs it in this tab.</div>';
+    $('pagerPos').textContent = '';
+    $('btnPrev').disabled = $('btnNext').disabled = true;
+  }
+}
+
+let runStart = 0, stopTimer, running = false;
+
+async function runQuery() {
+  if (!info) return;
+  const sql = $('sql').value;
+  if (!sql.trim() || running) return;
+  running = true;
+  query.sql = sql;
+  const msg = $('queryMsg');
+  msg.className = '';
+  msg.textContent = engineReady ? 'Running…' : 'Starting the SQL engine…';
+  $('grid').classList.add('stale');
+  runStart = performance.now();
+  /* a quick query never flashes a Stop button */
+  stopTimer = setTimeout(() => { $('btnStop').hidden = false; $('btnRun').hidden = true; }, 400);
+  sel = null;
+  try {
+    await ensureEngine();
+    engineNote(null);
+    setBusy(null);
+    msg.textContent = 'Running…';
+    const t = performance.now();
+    const d = await engine.rpc('query', { sql });
+    query.ran = true;
+    if (d.columns) {
+      Object.assign(query, { columns: d.columns, rows: d.rows, offset: 0, total: d.total, more: d.more });
+      msg.textContent = fmtNum(d.total) + (d.more ? '+' : '') + (d.total === 1 ? ' row' : ' rows') +
+        (d.more ? ' (the first ' + fmtNum(d.total) + ' are kept)' : '') + ' in ' + ms(performance.now() - t);
+    } else {
+      Object.assign(query, { columns: null, rows: [], total: 0, offset: 0, more: false });
+      msg.textContent = (d.ran === 1 ? 'Ran' : 'Ran ' + d.ran + ' statements') + ' in ' + ms(d.ms);
+    }
+    if (state.mode === 'query') showQueryResult();
+  } catch (err) {
+    $('grid').classList.remove('stale');
+    engineNote(null);
+    setBusy(null);
+    if (err.message === STOPPED) { msg.textContent = 'Stopped after ' + ms(performance.now() - runStart); return; }
+    msg.className = 'err';
+    msg.textContent = err.message;
+  } finally {
+    running = false;
+    clearTimeout(stopTimer);
+    $('btnStop').hidden = true;
+    $('btnRun').hidden = false;
+  }
+}
+
+function ms(t) {
+  return t < 1 ? '<1 ms' : t < 1000 ? Math.round(t) + ' ms' : (t / 1000).toFixed(1) + ' s';
+}
+
+async function loadQueryPage(from) {
+  const seq = ++viewSeq;
+  try {
+    const d = await engine.rpc('page', { from, limit: PAGE });
+    if (seq !== viewSeq) return;
+    query.rows = d.rows;
+    query.offset = from;
+    showQueryResult();
+  } catch (err) {
+    if (err.message !== STOPPED) LintApp.toast(err.message);
+  }
+}
+
+$('btnRun').addEventListener('click', runQuery);
+$('btnStop').addEventListener('click', stop);
+$('btnQuery').addEventListener('click', () => {
+  if (state.mode === 'query') { state.mode = 'data'; showMode(); } else openQuery();
+});
+
+$('sql').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); return; }
+  /* Tab indents, as in every SQL editor; Esc then Tab still leaves */
+  if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !tabEscaped) {
+    e.preventDefault();
+    document.execCommand('insertText', false, '  ');
+  }
+  tabEscaped = e.key === 'Escape';
+});
+let tabEscaped = false;
+
+/* ==========================================================================
+   Copying out — the rows as they are shown: the file's order from the top,
+   or sorted and filtered, or a query's result
+   ========================================================================== */
+async function copyRows(format) {
+  if (!info) return;
+  if (state.mode === 'query' && !query.columns) { LintApp.toast('Run a query that returns rows first'); return; }
+  setBusy(40);
+  try {
+    let d;
+    if (state.mode === 'query') d = await engine.rpc('export', { view: 'query', format });
+    else if (needsEngine()) {
+      await ensureEngine();
+      d = await engine.rpc('export', { view: 'grid', order: state.order, filter: state.filter, format });
+    } else d = await reader.rpc('export', { format });
+    setBusy(null);
+    engineNote(null);
+    const label = format === 'json' ? 'JSON' : 'CSV';
+    LintApp.copyAndOffer(d.text, label, 'parquet', format === 'json' ? 'json' : 'csv');
+    if (d.clipped) setTimeout(() => LintApp.toast('Copied the first ' + fmtNum(d.rows) + ' rows'), 1800);
+  } catch (err) {
+    setBusy(null);
+    engineNote(null);
+    if (err.message !== STOPPED) LintApp.toast(err.message);
+  }
+}
+
+$('btnCsv').addEventListener('click', () => { LintApp.closeMenus(); copyRows('csv'); });
+$('btnJson').addEventListener('click', () => { LintApp.closeMenus(); copyRows('json'); });
+$('btnSchemaJson').addEventListener('click', () => {
+  LintApp.closeMenus();
+  if (!info) return;
+  const cols = info.schema.map((s) => ({
+    name: s.name, depth: s.depth, type: s.type, physical: s.physical, repetition: s.repetition,
+    codec: s.codec, nulls: s.nulls, min: s.min, max: s.max
+  }));
+  LintApp.copyAndOffer(JSON.stringify({ rows: info.rows, columns: cols }, null, 2), 'Schema', 'parquet', 'json');
+});
+
+/* ==========================================================================
+   The drawer
+   ========================================================================== */
+function openDrawer(tab) {
+  $('drawer').classList.add('open');
+  $('btnInfo').setAttribute('aria-pressed', 'true');
+  [['tabValue', 'panelValue', 'value'], ['tabFile', 'panelFile', 'file']].forEach(([t, p, id]) => {
+    $(t).setAttribute('aria-selected', String(id === tab));
+    $(p).classList.toggle('active', id === tab);
+  });
+  if (tab === 'value' && !sel) valueHint();
+}
+
+function valueHint() {
+  shownValue = null;
+  $('panelValue').innerHTML = '<p class="hint">Click a cell to see its whole value here: long text, a struct or a list as formatted JSON, or bytes as hex.</p>';
+}
+
+function closeDrawer() {
+  $('drawer').classList.remove('open');
+  $('btnInfo').setAttribute('aria-pressed', 'false');
+}
+
+$('tabValue').addEventListener('click', () => openDrawer('value'));
+$('tabFile').addEventListener('click', () => openDrawer('file'));
+$('btnInfo').addEventListener('click', () => {
+  if ($('drawer').classList.contains('open')) closeDrawer();
+  else openDrawer(sel ? 'value' : 'file');
+});
+$('btnCloseDrawer').addEventListener('click', closeDrawer);
+
+/* who wrote it, in words: "parquet-cpp-arrow version 21.0.0" is pyarrow */
+function writer(s) {
+  if (!s) return null;
+  if (/parquet-cpp-arrow/.test(s)) return 'Apache Arrow (pyarrow, pandas, Polars and others)';
+  if (/parquet-mr/.test(s)) return 'parquet-mr (Spark, Hive, Flink and other JVM tools)';
+  if (/^DuckDB/i.test(s)) return 'DuckDB';
+  if (/parquet-rs/.test(s)) return 'parquet-rs (Polars, DataFusion, Rust tools)';
+  if (/impala/i.test(s)) return 'Impala';
+  return null;
+}
+
+function buildFilePanel() {
+  if (!info) return;
+  const d = info;
+  const row = (k, v, note) => `<div><dt>${k}</dt><dd>${v}${note ? '<small>' + note + '</small>' : ''}</dd></div>`;
+  const ratio = d.compressed && d.uncompressed ? (d.uncompressed / d.compressed).toFixed(1) + '× smaller than its data unpacked' : null;
+  let html = '<dl class="meta">' + row('File', esc(d.name)) +
+    (d.size !== null ? row('Size', LintApp.fmtBytes(d.size)) : '') +
+    row('Rows', fmtNum(d.rows)) +
+    row('Columns', fmtNum(d.columns.length),
+      d.schema.length > d.columns.length ? fmtNum(d.schema.filter((s) => s.leaf).length) + ' stored, counting the fields of nested ones' : null) +
+    row('Row groups', fmtNum(d.groups.length),
+      d.groups.length ? 'About ' + fmtNum(Math.round(d.rows / d.groups.length)) + ' rows each' : null) +
+    row('Compression', esc(d.codecs.map((x) => x.toLowerCase()).join(', ') || 'none'), ratio) +
+    row('Encodings', esc(d.encodings.map((x) => x.toLowerCase().replace(/_/g, ' ')).join(', '))) +
+    (d.createdBy ? row('Written by', esc(d.createdBy), writer(d.createdBy)) : '') +
+    row('Format', 'Parquet ' + (d.version === 2 ? '2' : '1'), 'The footer is ' + LintApp.fmtBytes(d.metaBytes)) +
+    row('Read with', esc(d.reader), 'Reads only the pages a screen of rows needs') +
+    row('SQL', info.engine ? esc(info.engine) : 'DuckDB 1.5.4, not loaded yet',
+      info.engine ? 'Started in ' + ms(info.engineMs) + '. Sorting, filtering and SQL run here.'
+        : 'Loads the first time you sort, filter or open SQL: 9 MB once, then kept offline') +
+    '</dl>';
+  $('panelFile').innerHTML = html;
+}
+
+/* ==========================================================================
+   Files, keys
+   ========================================================================== */
+$('btnOpen').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => {
+  if (e.target.files[0]) openFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+['dragover', 'dragenter'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dragover');
+  }));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+  if (mod && k === 'o') { e.preventDefault(); $('fileInput').click(); return; }
+  if (!info) return;
+  if (e.key === 'Escape' && (running ? !$('btnStop').hidden : !$('engineNote').hidden) &&
+      (engine.calls.size || reader.calls.size)) { e.preventDefault(); stop(); return; }
+  if (mod && k === 'e') { e.preventDefault(); $('btnQuery').click(); return; }
+  if (mod && k === 'i') { e.preventDefault(); $('btnInfo').click(); return; }
+  if (mod && k === 'f' && state.mode === 'data') { e.preventDefault(); $('filter').focus(); $('filter').select(); return; }
+  if (typing()) return;
+  if (e.key === 'PageDown') { e.preventDefault(); turn(1); return; }
+  if (e.key === 'PageUp') { e.preventDefault(); turn(-1); return; }
+  if (e.key === 'Escape' && !sel && $('drawer').classList.contains('open')) { e.preventDefault(); closeDrawer(); return; }
+  if (!sel || !grid || $('grid').hidden) return;
+
+  /* the arrows walk the grid once a cell is chosen */
+  const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  if (moves[e.key] && !mod && !e.altKey) {
+    e.preventDefault();
+    const r = Math.min(grid.rows.length - 1, Math.max(0, sel.r + moves[e.key][0]));
+    const ci = Math.min(grid.columns.length - 1, Math.max(0, sel.c + moves[e.key][1]));
+    selectCell(r, ci);
+  } else if (mod && k === 'c' && !String(window.getSelection())) {
+    e.preventDefault();
+    const v = grid.rows[sel.r][sel.c];
+    const col = grid.columns[sel.c];
+    if ((v !== null && typeof v === 'object') || (v !== null && col.kind === 'nested')) {
+      /* long text, nested values and bytes are copied whole, from the worker */
+      fetchCell(sel.r, sel.c).then((d) => {
+        if (d.blob) LintApp.copy(Array.from(d.blob.hex, (x) => x.toString(16).padStart(2, '0')).join(''), 'Hex');
+        else LintApp.copy(String(d.value), 'Value');
+      }, (err) => LintApp.toast(err.message));
+    } else LintApp.copy(v === null ? 'NULL' : String(v), 'Value');
+  } else if (e.key === 'Escape') {
+    sel = null;
+    $('grid').querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
+    closeDrawer();
+  }
+});
+
+LintApp.textZoom();
+LintApp.shortcuts([{ title: 'Parquet', items: [
+  { keys: ['mod+e'], label: 'SQL, or back to the rows' },
+  { keys: ['mod+enter'], label: 'Run the query' },
+  { keys: ['esc'], label: 'Stop a running query or sort' },
+  { keys: ['mod+f'], label: 'Filter rows' },
+  { keys: ['pagedown'], label: 'Next rows' },
+  { keys: ['pageup'], label: 'Previous rows' },
+  { keys: ['up', 'down', 'left', 'right'], label: 'Move between cells' },
+  { keys: ['mod+c'], label: 'Copy the chosen cell' },
+  { keys: ['mod+i'], label: 'Details panel: open or close' }
+] }]);
+
+reset();
+LintApp.takeHandoff('parquet', openFile);
+</script>
+</body>
+</html>

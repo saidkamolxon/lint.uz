@@ -37,6 +37,7 @@ jobs:
               - 'log/**'
               - 'audio/**'
               - 'sqlite/**'
+              - 'parquet/**'
             redirect:
               - 'redirect/**'
               - '.github/workflows/deploy.yml'

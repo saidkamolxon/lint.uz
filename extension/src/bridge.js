@@ -31,7 +31,7 @@
 
   /* ---------- file handoff ---------- */
   var tool = location.pathname.split('/')[1];
-  var TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite'];
+  var TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet'];
   if (TOOLS.indexOf(tool) < 0) return;
 
   var started = false;
