@@ -220,6 +220,7 @@ kbd {
 .dot-sqlite { background: #7C3AED; --tile-glyph: url("/shared/glyphs/sqlite.svg"); }
 /* saffron is the one light hue: its glyph is ink */
 .dot-parquet { background: #F7CE46; --tile-glyph: url("/shared/glyphs/parquet.svg"); --tile-ink: #1A1D23; }
+.dot-env   { background: #A32972; --tile-glyph: url("/shared/glyphs/env.svg"); }
 .tool-tile { width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none; }
 .tool-tile::before {
   content: ""; display: block; width: 100%; height: 100%;
@@ -284,12 +285,32 @@ kbd {
 .gutter-inner { will-change: transform; }
 /* one number per line of text, so its height follows the text's size */
 .gutter .ln { display: block; height: calc(var(--code-size, var(--fs-base)) * 1.6); }
+/* a number with a message on it can be pointed at or tapped */
+.gutter .ln[data-tip] { cursor: help; }
 /* the current line is marked by its number alone; an error stays a filled
    block, because an error should be loud */
 .gutter .ln.cur {
   color: var(--gutter-cur);
   font-weight: 600;
 }
+.gutter .ln.warn {
+  color: var(--warn);
+  font-weight: 700;
+  box-shadow: inset -3px 0 0 var(--warn);
+  margin-right: calc(var(--s2) * -1);
+  padding-right: var(--s2);
+}
+/* a marked line's message, shown beside its number on hover */
+.gutter-tip {
+  position: fixed; z-index: 60; max-width: min(56ch, 70vw);
+  padding: var(--s1) var(--s2);
+  background: var(--raised); color: var(--ink);
+  border: var(--hairline) solid var(--line-strong); border-left: 3px solid var(--warn);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  font: 500 var(--fs-small)/1.45 var(--ui); white-space: pre-line;
+  pointer-events: none;
+}
+.gutter-tip.err { border-left-color: var(--bad); }
 .gutter .ln.err {
   color: var(--hue-ink);
   background: var(--bad);
@@ -428,7 +449,7 @@ kbd {
 }
 
 /* A heading, one sentence and at most a row of buttons. Built by
-   LintApp.emptyState for the tools without an editor (Logs, PDF, Audio) and
+   LintApp.emptyState for the tools without an editor (LOG, PDF, Audio) and
    for later messages in the tree. It matches the editor tools' prompt below
    in type and in height (measured against it, for a container that starts
    under the toolbar), so moving between tools the first screen does not

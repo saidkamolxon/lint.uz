@@ -24,7 +24,8 @@
     "pdf",
     "log",
     "sqlite",
-    "parquet"
+    "parquet",
+    "dotenv"
   ],
   "author": "saidkamolxon",
   "license": "MIT"

@@ -9,14 +9,15 @@
   /* the suite's names and hues, as shared/app.js and the README have them */
   var TOOLS = [
     { id: 'json',   name: 'JSON',   hue: '#4F46E5', ext: 'json' },
-    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
     { id: 'yaml',   name: 'YAML',   hue: '#B45309', ext: 'yaml' },
     { id: 'csv',    name: 'CSV',    hue: '#4D7C0F', ext: 'csv' },
-    { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
-    { id: 'log',    name: 'Logs',   hue: '#0369A1', ext: 'log' },
-    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' },
+    { id: 'env', name: 'ENV', hue: '#A32972', ext: 'env' },
+    { id: 'log',    name: 'LOG',    hue: '#0369A1', ext: 'log' },
+    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
     { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' },
-    { id: 'parquet', name: 'Parquet', hue: '#F7CE46', ext: 'parquet' }
+    { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
+    { id: 'parquet', name: 'Parquet', hue: '#F7CE46', ext: 'parquet' },
+    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' }
   ];
   var BY_ID = {};
   TOOLS.forEach(function (t) { BY_ID[t.id] = t; });
@@ -36,7 +37,8 @@
     aif: 'audio', aiff: 'audio',
     db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
     sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite',
-    parquet: 'parquet', parq: 'parquet', pqt: 'parquet'
+    parquet: 'parquet', parq: 'parquet', pqt: 'parquet',
+    env: 'env'
   };
 
   function extOf(name) {
@@ -45,6 +47,8 @@
   }
 
   function byName(name) {
+    /* .env, .env.local, .env.production: the name is the format */
+    if (/(^|[\/\\])\.env(\.[\w-]+)?$/i.test(name || '')) return 'env';
     var e = extOf(name);
     return e && Object.prototype.hasOwnProperty.call(BY_EXT, e) ? BY_EXT[e] : null;
   }
@@ -98,6 +102,11 @@
       return 'json';
     }
     if (c === '<') return 'xml';
+
+    /* KEY=value on every line that is not a comment: a .env file */
+    var assigns = lines.filter(function (l) { return /^\s*(export\s+)?[A-Za-z_][A-Za-z0-9_.-]*=/.test(l); }).length;
+    var comments = lines.filter(function (l) { return /^\s*#/.test(l); }).length;
+    if (assigns >= 2 && assigns + comments === lines.length) return 'env';
 
     var logLike = lines.filter(function (l) { return TIMESTAMP.test(l) || LEVEL.test(l); }).length;
     if (logLike >= Math.max(1, lines.length * 0.5)) return 'log';

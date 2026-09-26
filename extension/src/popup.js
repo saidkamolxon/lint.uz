@@ -5,7 +5,7 @@
   var F = self.LintFormats;
   var BASE = self.LINT_BASE;
   var ALL_SITES = ['http://*/*', 'https://*/*'];
-  var TEXT_TOOLS = ['json', 'xml', 'yaml', 'csv', 'log'];
+  var TEXT_TOOLS = ['json', 'xml', 'yaml', 'csv', 'log', 'env'];
   var $ = function (id) { return document.getElementById(id); };
   var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 

@@ -10,20 +10,21 @@
    loaded first, so the landing page and the tools share one copy. */
 var THEMES = LintTheme.THEMES;
 
-/* ---------- the nine tools, for the suite switcher ---------- */
+/* ---------- the ten tools, for the suite switcher, most used first ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a
    site's authority across its paths, but treats subdomains as separate sites
    and splits it. Relative hrefs also keep local development working. */
 var SUITE = [
   { id: 'json', name: 'JSON', host: '/json' },
-  { id: 'xml',  name: 'XML',  host: '/xml'  },
   { id: 'yaml', name: 'YAML', host: '/yaml' },
   { id: 'csv',  name: 'CSV',  host: '/csv'  },
-  { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
-  { id: 'log',  name: 'Logs', host: '/log'  },
-  { id: 'audio', name: 'Audio', host: '/audio' },
+  { id: 'env', name: 'ENV', host: '/env' },
+  { id: 'log',  name: 'LOG',  host: '/log'  },
+  { id: 'xml',  name: 'XML',  host: '/xml'  },
   { id: 'sqlite', name: 'SQLite', host: '/sqlite' },
-  { id: 'parquet', name: 'Parquet', host: '/parquet' }
+  { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
+  { id: 'parquet', name: 'Parquet', host: '/parquet' },
+  { id: 'audio', name: 'Audio', host: '/audio' }
 ];
 
 /* ---------- small helpers ---------- */
@@ -711,6 +712,8 @@ function Editor(opts) {
   this.onChange = opts.onChange;
   this.highlighter = opts.highlighter;
   this._errLine = null;
+  this._marks = {};       // line -> { kind: 'err' | 'warn', title }, from tools that find more than one
+  this._errTitle = '';
   this._lineCount = 0;
   this._curLine = 1;
 
@@ -740,22 +743,69 @@ function Editor(opts) {
 
   this.paintGutter = function (count) {
     if (count === self._lineCount && self._paintedErr === self._errLine &&
-        self._paintedCur === self._curLine) return;
+        self._paintedCur === self._curLine && self._paintedMarks === self._marks) return;
     self._lineCount = count;
     self._paintedErr = self._errLine;
     self._paintedCur = self._curLine;
+    self._paintedMarks = self._marks;
     var out = '';
     for (var i = 1; i <= count; i++) {
-      var cls = 'ln';
-      if (i === self._errLine) cls += ' err';
+      var cls = 'ln', mark = self._marks[i];
+      /* the message rides on the line number, where a pointer finds it as
+         it would in any code editor */
+      var title = i === self._errLine ? self._errTitle : mark ? mark.title : '';
+      if (i === self._errLine || (mark && mark.kind === 'err')) cls += ' err';
+      else if (mark && mark.kind === 'warn') cls += ' warn' + (i === self._curLine ? ' cur' : '');
       else if (i === self._curLine) cls += ' cur';
-      out += '<span class="' + cls + '">' + i + '</span>';
+      out += '<span class="' + cls + '"' + (title ? ' data-tip="' + esc(title) + '"' : '') + '>' + i + '</span>';
     }
     gutter.innerHTML = out;
   };
 
-  this.setErrorLine = function (line) {
+  /* several lines at once, for a tool whose findings are not one error */
+  this.setMarks = function (marks) {
+    self._marks = marks || {};
+    self.paintGutter(self._lineCount);
+  };
+
+  /* The message of a marked line shows the moment the pointer is on its
+     number, beside it, as a code editor's does: a browser's own tooltip
+     waits a second first, which here reads as nothing happening. */
+  var tip = null;
+  function hideTip() { if (tip) tip.hidden = true; }
+  function showTip(e) {
+    var ln = e.target.closest ? e.target.closest('.ln[data-tip]') : null;
+    if (!ln) { hideTip(); return; }
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'gutter-tip';
+      tip.setAttribute('role', 'tooltip');
+      document.body.appendChild(tip);
+    }
+    tip.textContent = ln.dataset.tip;
+    tip.className = 'gutter-tip' + (ln.classList.contains('err') ? ' err' : ' warn');
+    tip.hidden = false;
+    var r = ln.getBoundingClientRect();
+    var g = gutter.parentElement.getBoundingClientRect();
+    tip.style.left = Math.round(g.right + 6) + 'px';
+    tip.style.top = Math.round(r.top - 2) + 'px';
+    /* kept on screen when the line is near the bottom */
+    var over = tip.getBoundingClientRect().bottom - window.innerHeight + 8;
+    if (over > 0) tip.style.top = Math.round(r.top - 2 - over) + 'px';
+  }
+  gutter.addEventListener('mouseover', showTip);
+  /* a tap shows it too, where there is no pointer to hover */
+  gutter.addEventListener('click', showTip);
+  gutter.addEventListener('mouseleave', hideTip);
+  document.addEventListener('pointerdown', function (e) {
+    if (tip && !tip.hidden && !gutter.contains(e.target)) hideTip();
+  });
+  input.addEventListener('scroll', hideTip, { passive: true });
+
+  this.setErrorLine = function (line, title) {
     self._errLine = line;
+    self._errTitle = title || '';
+    self._paintedErr = undefined;
     self.paintGutter(self._lineCount);
   };
 
@@ -1370,11 +1420,12 @@ function init(config) {
       /* a tool's stats come as one "a · b" string; each part becomes its
          own item so the status bar can space them */
       var st = String(config.stats(res.value) || '').split(' · ');
-      setStatus('ok', ['Valid', fmtBytes(size)].concat(st.filter(Boolean)));
+      /* okLabel: a tool whose documents are never simply valid names it, or leaves it out with null */
+      setStatus('ok', [config.okLabel === undefined ? 'Valid' : config.okLabel, fmtBytes(size)].concat(st).filter(Boolean));
       config.onParsed && config.onParsed(res.value, true);
     } else {
       errorPos = res.pos != null ? res.pos : null;
-      editor.setErrorLine(res.line || null);
+      editor.setErrorLine(res.line || null, res.message);
       errorMsg.textContent = res.message;
       errorLoc.textContent = res.line ? 'line ' + res.line + ':' + (res.col || 1) : '';
       errorBar.classList.add('show');
@@ -1788,7 +1839,7 @@ function emptyState(o) {
 
 /* The chrome every page shares: the lint.one menu in front of the tool's
    brand, and the theme menu in `slot`. init() calls it for the editor
-   tools; Logs, PDF and Audio build their own frame and call it directly. */
+   tools; LOG, PDF and Audio build their own frame and call it directly. */
 function mountChrome(slot, activeId) {
   buildSuiteMark(activeId);
   buildThemeMenu(slot);

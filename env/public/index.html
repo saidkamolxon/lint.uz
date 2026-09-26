@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ENV File Checker (.env) · lint.one</title>
+<meta name="description" content="A private .env linter. See how Node, Python, Docker Compose, docker run and the shell read each value, find trailing spaces, duplicate keys and bad formats, compare with .env.example, and export to Compose or Kubernetes. Nothing is uploaded.">
+<link rel="canonical" href="https://lint.one/env/">
+<!-- one installable app for the whole suite; its file_handlers send each
+     format to its own page, where LintApp.takeHandoff takes the file -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="lint">
+<meta name="theme-color" content="#FBFBFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lint.one">
+<meta property="og:url" content="https://lint.one/env/">
+<meta property="og:title" content="ENV File Checker (.env) · lint.one">
+<meta property="og:description" content="A private .env linter. See how Node, Python, Docker Compose, docker run and the shell read each value, find trailing spaces, duplicate keys and bad formats, compare with .env.example, and export to Compose or Kubernetes. Nothing is uploaded.">
+<meta property="og:image" content="https://lint.one/og/env.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<!-- the pages carry their own light and dark themes; Dark Reader would
+     repaint them on top and lose the format colours and glyphs -->
+<meta name="darkreader-lock">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<style>
+/* .env shows a report instead of a tree: what each program makes of the
+   file, and what to fix. It reuses the shared tokens throughout. */
+#tree.env-mode { padding: 0; font-family: var(--ui); }
+
+/* what the editor would otherwise hide: trailing spaces and invisible
+   characters get a tinted box, the same width as the text they stand for */
+.ws-bad { background: color-mix(in srgb, var(--warn) 32%, transparent); border-radius: 2px; }
+.hl-var { color: var(--t-cont); }
+/* the text a finding is about: wavy, in the colour of how much it matters */
+.squig { text-decoration: underline wavy var(--warn); text-underline-offset: 3px; text-decoration-skip-ink: none; }
+.squig-bad { text-decoration: underline wavy var(--bad); text-underline-offset: 3px; text-decoration-skip-ink: none; }
+
+.env-sec { padding: var(--s3) var(--s3) var(--s2); }
+.env-sec + .env-sec { border-top: var(--hairline) solid var(--line); }
+.env-sec h3 {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  margin: 0 0 var(--s2); font-size: var(--fs-small); font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.env-sec h3 .n { font-weight: 400; color: var(--faint); text-transform: none; letter-spacing: 0; }
+.reader { margin-left: auto; display: flex; align-items: center; gap: var(--s2); text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+#readSel {
+  font: inherit; font-size: var(--fs-small); color: var(--ink);
+  background: var(--raised); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: 3px var(--s2);
+}
+.none { color: var(--faint); font-size: var(--fs-small); margin: 0 0 var(--s2); }
+
+/* findings: in the file above the table, and under a variable once opened */
+.finds { list-style: none; margin: 0 0 var(--s1); padding: 0; }
+.find {
+  display: flex; gap: var(--s2); align-items: baseline;
+  padding: 3px var(--s2); margin: 0 calc(var(--s2) * -1);
+  border-radius: var(--radius); font-size: var(--fs-base); line-height: 1.45; color: var(--ink);
+}
+.find[data-line] { cursor: pointer; }
+.find[data-line]:hover { background: var(--row-hover); }
+.find .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; background: var(--faint); }
+.find.risk .dot { background: var(--warn); }
+.find.break .dot { background: var(--bad); }
+.find.fyi { color: var(--muted); }
+.find .msg { flex: 1; min-width: 0; }
+.find .fix { flex: none; padding: 1px var(--s2); font-size: var(--fs-small); background: var(--raised); }
+
+/* the answer to "will this file work?", first */
+.verdict { margin: 0; padding: var(--s3) var(--s3) var(--s2); font-size: var(--fs-mid); font-weight: 600; color: var(--ink); line-height: 1.4; }
+.verdict::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: var(--s2); vertical-align: 1px; background: var(--ok); }
+.verdict.risk::before { background: var(--warn); }
+.verdict.break::before { background: var(--bad); }
+.verdict .hint { font-weight: 400; font-size: var(--fs-small); color: var(--muted); }
+.find .ln { margin-left: auto; font-family: var(--mono); font-size: var(--fs-small); color: var(--faint); white-space: nowrap; }
+
+/* the variables, one row each */
+.vars { border-collapse: collapse; width: 100%; font-size: var(--fs-base); table-layout: fixed; }
+.vars td { padding: 5px var(--s2) 5px 0; border-bottom: var(--hairline) solid var(--line); vertical-align: top; }
+.vars tr.var-row { cursor: pointer; }
+.vars tr.var-row:hover td { background: var(--row-hover); }
+.vars td.vk { font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); color: var(--t-key); font-weight: 600; overflow-wrap: anywhere; }
+.vars td.vv { font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); color: var(--ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+.vars td.vv .none-v { color: var(--faint); font-style: italic; font-family: var(--ui); }
+.vars td.vv .vis { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); border-radius: 2px; }
+.vars td.vv .vis.esc { color: var(--t-cont); background: none; }
+.vars td.vn { font-size: var(--fs-small); color: var(--muted); text-align: right; padding-right: 0; overflow-wrap: anywhere; }
+.vars td.vn.risk { color: var(--warn); }
+.vars td.vn.break { color: var(--bad); font-weight: 500; }
+/* a row opens: the chevron says so, and turns when it has */
+.vars td.vk .chev { display: inline-block; width: 1.1em; margin-left: -2px; color: var(--faint); font-family: var(--ui); transition: transform var(--t-fast); }
+.vars tr.var-row.open td.vk .chev { transform: rotate(90deg); }
+.vars tr.var-detail td { padding: var(--s1) 0 var(--s2) var(--s3); background: var(--sunken); }
+.same { margin: 0; padding: 2px 0; font-size: var(--fs-small); color: var(--muted); }
+.readers { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+.readers td { padding: 3px var(--s2) 3px 0; vertical-align: top; }
+.readers td.who { width: 34%; color: var(--muted); }
+.readers td.val { font-family: var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.readers tr.odd td.val { color: var(--warn); }
+.readers tr.cur td.who { color: var(--ink); font-weight: 600; }
+
+/* compared with .env.example: shown once there is one */
+.keys { display: flex; flex-wrap: wrap; gap: 4px; margin: var(--s1) 0 var(--s2); }
+.keys span { font-family: var(--mono); font-size: var(--fs-small); padding: 1px 7px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--line); }
+.keys.missing span { color: var(--bad); }
+.keys.extra span { color: var(--muted); }
+.cmp-line { display: flex; align-items: baseline; gap: var(--s2); font-size: var(--fs-small); color: var(--ink); margin: var(--s2) 0 0; }
+.cmp-line .hint { color: var(--muted); }
+.cmp-line button { margin-left: auto; }
+#exampleText {
+  display: block; width: 100%; box-sizing: border-box;
+  min-height: 110px; resize: vertical;
+  font-family: var(--mono); font-size: var(--fs-small); line-height: 1.5;
+  background: var(--sunken); color: var(--ink);
+  border: var(--hairline) solid var(--line); border-radius: var(--radius); padding: var(--s2);
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'env',
+  name: 'ENV',
+  host: 'lint.one/env',
+  label: '.env',
+  emptyLine: 'You\'ll see how Node, Python, Docker and the shell each read it, and what to fix.',
+  hue: '#A32972',
+  hueInk: '#FFFFFF',
+  accept: '.env,.example,.local,.development,.production,.staging,.test,.txt,text/plain',
+  placeholder: 'Paste a .env file or drop one…',
+  searchPlaceholder: 'Filter variables…',
+  actions: [
+    { id: 'btnToJson', label: 'To JSON', primary: true, key: 'mod+shift+j', title: 'Convert the variables to a JSON object and open it in the JSON viewer (also copied)' },
+    { id: 'btnCompare', label: 'Compare with example', title: 'Choose .env.example: see which keys are missing here, and which it does not have' },
+    { id: 'btnFix', label: 'Fix whitespace', key: 'shift+alt+f', title: 'Remove trailing spaces, invisible characters, a byte-order mark and Windows line endings' }
+  ],
+  /* the other ways out, in the ⋮ menu ahead of Copy */
+  more: [
+    { id: 'btnMakeExample', label: 'Copy as .env.example', title: 'The same file with every value that could be a secret left empty, safe to commit' },
+    { id: 'btnPasteExample', label: 'Compare with pasted text', title: 'Paste the contents of .env.example instead of choosing the file' },
+    { id: 'btnCompose', label: 'Copy as Compose environment', title: 'An environment: block for docker-compose.yml, every $ doubled' },
+    { id: 'btnConfigMap', label: 'Copy as Kubernetes ConfigMap' },
+    { id: 'btnSecret', label: 'Copy as Kubernetes Secret' },
+    { id: 'btnShell', label: 'Copy as shell exports', title: 'export KEY=\'value\' lines, safe to source' }
+  ]
+};
+</script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/shell.js"></script>
+<script src="/shared/app.js"></script>
+<script src="parsers.js"></script>
+<script src="checks.js"></script>
+<script>
+(function () {
+'use strict';
+
+var esc = LintApp.esc;
+var P = window.EnvParsers, C = window.EnvChecks;
+var NAMES = {};
+P.PARSERS.forEach(function (p) { NAMES[p.id] = p; });
+
+/* 'any' until the person names the program their app uses */
+var readAs = 'any';
+try { readAs = localStorage.getItem('lintone-env-reader') || 'any'; } catch (e) {}
+if (readAs !== 'any' && !NAMES[readAs]) readAs = 'any';
+
+/* ==========================================================================
+   Highlighting — keys, values, comments and ${VARS}, with trailing spaces
+   and invisible characters boxed so they can be seen at all
+   ========================================================================== */
+var INVIS = /[\u00A0\u1680\u180E\u2000-\u200D\u2028\u2029\u202F\u205F\u2060\u3000\uFEFF]/;
+
+/* where the last analysis found something, by line: [{from, to, impact}],
+   for the wavy underline under exactly the text at fault */
+var squiggles = {};
+
+/* Each character gets its classes (key, string, comment, a boxed invisible
+   character, a wavy underline); runs of the same classes become one span. */
+function highlight(text) {
+  var lines = text.split('\n');
+  var out = [];
+  var open = null;               // the quote a multi-line value is still inside
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i], n = line.length;
+    var cls = new Array(n).fill('');
+    var paint = function (from, to, c) { for (var j = Math.max(0, from); j < Math.min(n, to); j++) cls[j] = cls[j] ? cls[j] + ' ' + c : c; };
+    if (open) {
+      var close = line.indexOf(open);
+      paint(0, close === -1 ? n : close + 1, 'hl-str');
+      if (close !== -1) { tail(line, close + 1, paint); open = null; }
+    } else if (/^\s*#/.test(line)) {
+      paint(0, n, 'hl-cmt');
+    } else if (line.trim()) {
+      var m = /^(\s*)(export\s+)?([^=\s#]+)(\s*=\s*)?([\s\S]*)$/.exec(line);
+      if (!m || m[4] === undefined) paint(0, n, 'hl-err');
+      else {
+        var at = m[1].length;
+        if (m[2]) { paint(at, at + m[2].length, 'hl-punct'); at += m[2].length; }
+        paint(at, at + m[3].length, 'hl-key'); at += m[3].length;
+        paint(at, at + m[4].length, 'hl-punct'); at += m[4].length;
+        var v = m[5], q = /^["'`]/.test(v) ? v[0] : null;
+        if (q) {
+          var end = findClose(v, q);
+          paint(at, end === -1 ? n : at + end + 1, 'hl-str');
+          if (q !== "'") vars(v.slice(0, end === -1 ? v.length : end + 1), at, paint);
+          if (end === -1) open = q; else tail(line, at + end + 1, paint);
+        } else {
+          var c = v.search(/\s#/);
+          var val = c === -1 ? v : v.slice(0, c);
+          vars(val, at, paint);
+          if (c !== -1) paint(at + c, n, 'hl-cmt');
+          else { var trail = /[ \t]+$/.exec(val); if (trail && val.trim()) paint(at + trail.index, n, 'ws-bad'); }
+        }
+      }
+    } else if (line) {
+      paint(0, n, 'ws-bad');
+    }
+    for (var k = 0; k < n; k++) if (INVIS.test(line[k])) paint(k, k + 1, 'ws-bad');
+    (squiggles[i + 1] || []).forEach(function (s) { paint(s.from, s.to, s.impact === 'break' ? 'squig-bad' : 'squig'); });
+    /* the runs */
+    var html = '', run = '', runCls = null;
+    for (var x = 0; x <= n; x++) {
+      if (x === n || cls[x] !== runCls) {
+        if (run) html += runCls ? '<span class="' + runCls + '">' + esc(run) + '</span>' : esc(run);
+        if (x === n) break;
+        run = ''; runCls = cls[x];
+      }
+      run += line[x];
+    }
+    out.push(html);
+  }
+  return out.join('\n');
+}
+
+function vars(s, at, paint) {
+  var re = /\$(\{[^}]*\}|[A-Za-z_][A-Za-z0-9_]*)/g, m;
+  while ((m = re.exec(s)) !== null) paint(at + m.index, at + m.index + m[0].length, 'hl-var');
+}
+
+function findClose(v, q) {
+  for (var i = 1; i < v.length; i++) {
+    if (v[i] === '\\' && q !== "'") { i++; continue; }
+    if (v[i] === q) return i;
+  }
+  return -1;
+}
+
+/* what follows a closing quote: a comment, spaces (docker run keeps them),
+   or something out of place */
+function tail(line, from, paint) {
+  var s = line.slice(from);
+  if (!s) return;
+  var m = /^(\s*)(#.*)?$/.exec(s);
+  if (!m) paint(from, line.length, 'hl-err');
+  else if (m[2]) paint(from + m[1].length, line.length, 'hl-cmt');
+  else paint(from, line.length, 'ws-bad');
+}
+
+/* ==========================================================================
+   The report
+   ========================================================================== */
+var current = null;          // the last analysis
+var exampleText = null, exampleName = null;
+var open = {};               // variables whose readers are shown
+
+function parse(text) {
+  return { ok: true, value: C.analyze(text, readAs) };
+}
+
+function stats(a) {
+  var n = a.vars.length;
+  var facts = [LintApp.fmtNum(n) + (n === 1 ? ' variable' : ' variables')];
+  if (a.lines.break.length) facts.push(a.lines.break.length + ' breaking');
+  if (a.lines.risk.length) facts.push(a.lines.risk.length + ' to check');
+  if (!a.lines.break.length && !a.lines.risk.length) facts.push('nothing to fix');
+  return facts.join(' · ');
+}
+
+/* a value as text, with what cannot be seen made visible */
+function showValue(v) {
+  if (v === undefined) return '<span class="none-v">not set</span>';
+  if (v === null) return '<span class="none-v">no value</span>';
+  if (v === '') return '<span class="none-v">empty</span>';
+  var out = '';
+  for (var i = 0; i < v.length; i++) {
+    var c = v[i];
+    if (c === '\n') out += '<span class="vis esc">\\n</span>';
+    else if (c === '\r') out += '<span class="vis">\\r</span>';
+    else if (c === '\t') out += '<span class="vis esc">\\t</span>';
+    else if (INVIS.test(c)) out += '<span class="vis" title="U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0') + '">␣</span>';
+    else if (c === ' ' && (i === 0 || i === v.length - 1 || v[i + 1] === ' ' && /^ *$/.test(v.slice(i)))) out += '<span class="vis" title="A space">·</span>';
+    else out += esc(c);
+  }
+  return out;
+}
+
+function lineOffset(text, line) {
+  var pos = 0;
+  for (var n = 1; n < line; n++) {
+    var nl = text.indexOf('\n', pos);
+    if (nl === -1) return pos;
+    pos = nl + 1;
+  }
+  return pos;
+}
+
+var SEV = { error: 0, warn: 1, info: 2 };
+
+/* the choices, by what people know their app as */
+var READERS = [
+  { items: [['any', 'Any program']] },
+  { label: 'Node.js', items: [['node', 'dotenv']] },
+  { label: 'Python', items: [['python', 'python-dotenv']] },
+  { label: 'Docker', items: [['compose', 'Docker Compose (env_file)'], ['docker', 'docker run --env-file']] },
+  { label: 'Shell', items: [['shell', 'source .env']] }
+];
+function opt(it) { return '<option value="' + it[0] + '"' + (it[0] === readAs ? ' selected' : '') + '>' + esc(it[1]) + '</option>'; }
+
+/* what each choice means, for someone who has not met the names */
+var TIP = {
+  node: 'A Node.js app that loads the file with dotenv: Express, NestJS, Next.js…',
+  python: 'A Python app that loads the file with python-dotenv: Django, FastAPI, Flask…',
+  compose: 'docker-compose.yml with env_file: .env',
+  docker: 'docker run --env-file .env',
+  shell: 'source .env in a terminal or a script'
+};
+
+var FIX_LABEL = {
+  quote: 'Quote it', single: 'Use single quotes', trailing: 'Remove the spaces', equals: 'Remove the spaces',
+  invisible: 'Remove it', comment: 'Move the comment up', unquote: 'Remove the quotes', dedupe: 'Keep the last one',
+  encode: 'Encode the @', host: 'Keep the host only', bom: 'Remove it', crlf: 'Use Unix line endings'
+};
+
+function findItem(p, i) {
+  return '<li class="find ' + p.impact + '"' + (p.line ? ' data-line="' + p.line + '"' : '') + (p.col ? ' data-col="' + p.col + '"' : '') + '>' +
+    '<span class="dot"></span><span class="msg">' + esc(p.message) + '</span>' +
+    (p.fix && FIX_LABEL[p.fix] ? '<button class="bordered fix" data-fix="' + i + '">' + FIX_LABEL[p.fix] + '</button>' : '') +
+    (p.line ? '<span class="ln">line ' + p.line + '</span>' : '') + '</li>';
+}
+
+var IMPACT = { break: 0, risk: 1, fyi: 2 };
+
+/* How the programs read a value, grouped by what they get: nothing when
+   they all agree, else one line per distinct value, naming who gets it.
+   The chosen program's line comes first. */
+function readings(v, val, a) {
+  if (!v.differs) return '<p class="same">Every program reads it the same way.</p>';
+  var groups = [];
+  P.PARSERS.forEach(function (p) {
+    var has = Object.prototype.hasOwnProperty.call(v.values, p.id);
+    var pv = has ? v.values[p.id] : undefined;
+    var shown = a.results[p.id].stopped && !has ? '<span class="none-v">cannot read the file</span>' : showValue(pv);
+    var g = groups.filter(function (x) { return x.shown === shown; })[0];
+    if (g) g.ids.push(p.id); else groups.push({ shown: shown, ids: [p.id], value: pv });
+  });
+  if (readAs !== 'any') groups.sort(function (x, y) { return (y.ids.indexOf(readAs) !== -1) - (x.ids.indexOf(readAs) !== -1); });
+  return '<table class="readers"><tbody>' + groups.map(function (g) {
+    var names = g.ids.map(function (id) { return NAMES[id].short; });
+    var who = names.length === P.PARSERS.length - 1 && groups.length === 2 && groups.indexOf(g) === 1 && readAs === 'any'
+      ? 'Everything else' : names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+    var mine = readAs !== 'any' && g.ids.indexOf(readAs) !== -1;
+    return '<tr class="' + (mine ? 'cur' : '') + (g.value !== val ? ' odd' : '') + '"><td class="who">' + (mine ? 'Your app (' + esc(who) + ')' : esc(who)) +
+      (mine || who === 'Everything else' || g.ids.length === 1 ? ' reads' : ' read') + '</td><td class="val">' + g.shown + '</td></tr>';
+  }).join('') + '</tbody></table>';
+}
+
+function render() {
+  var el = document.getElementById('tree');
+  el.classList.add('env-mode');
+  var a = current;
+  if (!a) { el.innerHTML = EMPTY; document.getElementById('matchCount').textContent = ''; return; }
+  var q = document.getElementById('search').value.trim().toLowerCase();
+
+  /* findings about the file, not one variable */
+  var byKey = {}, loose = [];
+  a.problems.forEach(function (p, i) {
+    p.index = i;
+    if (p.key && a.vars.some(function (v) { return v.key === p.key; })) (byKey[p.key] = byKey[p.key] || []).push(p);
+    else loose.push(p);
+  });
+  Object.keys(byKey).forEach(function (k) { byKey[k].sort(function (x, y) { return IMPACT[x.impact] - IMPACT[y.impact]; }); });
+
+  /* the answer first: will this file work? */
+  var nb = a.lines.break.length, nr = a.lines.risk.length;
+  var html = '<p class="verdict ' + (nb ? 'break' : nr ? 'risk' : 'ok') + '">' + (nb
+    ? (nb === 1 ? '1 line breaks' : nb + ' lines break') + ' your app' + (nr ? ', and ' + nr + ' more might' : '') + '.'
+    : nr ? (nr === 1 ? '1 line might break' : nr + ' lines might break') + ' your app, depending on what reads it.'
+      : 'Nothing here breaks. ' + (readAs === 'any' ? 'Every program reads this file the same way.' : NAMES[readAs].name + ' reads every value as written.')) +
+    (nb || nr ? ' <span class="hint">Click a variable for the fix.</span>' : '') + '</p>';
+  if (loose.length && !q) {
+    html += '<section class="env-sec"><h3>The file</h3><ul class="finds">' + loose.map(function (p) { return findItem(p, p.index); }).join('') + '</ul></section>';
+  }
+
+  /* the variables: key, value as the chosen program reads it, and what is wrong */
+  var list = a.vars.filter(function (v) { return !q || v.key.toLowerCase().indexOf(q) !== -1; });
+  /* The same line can mean different values to different programs, so the
+     values shown are the ones the reader's own app will get */
+  html += '<section class="env-sec"><h3>Variables<span class="n">' + a.vars.length + '</span>' +
+    '<label class="reader" title="' + esc(readAs === 'any' ? 'The value most programs read, and a note where they differ' : TIP[readAs]) + '">Checking for' +
+    '<select id="readSel">' + READERS.map(function (g) {
+      return g.label ? '<optgroup label="' + esc(g.label) + '">' + g.items.map(opt).join('') + '</optgroup>' : g.items.map(opt).join('');
+    }).join('') + '</select></label></h3>';
+  if (!list.length) {
+    html += '<p class="none">' + (q ? 'No variable matches “' + esc(q) + '”.' : 'No variables.') + '</p>';
+  } else {
+    html += '<table class="vars"><colgroup><col style="width:32%"><col><col style="width:26%"></colgroup><tbody>' + list.map(function (v) {
+      var val = v.value;
+      var finds = byKey[v.key] || [];
+      var top = finds[0];
+      var note = top ? top.short + (finds.length > 1 ? ' +' + (finds.length - 1) : '') : v.differs ? 'programs differ' : '';
+      var row = '<tr class="var-row' + (open[v.key] ? ' open' : '') + '" data-key="' + esc(v.key) + '" data-line="' + v.line + '" title="' + (open[v.key] ? 'Hide' : 'Show') + ' the details">' +
+        '<td class="vk"><span class="chev" aria-hidden="true">›</span>' + esc(v.key) + '</td><td class="vv">' + showValue(val) + '</td>' +
+        '<td class="vn ' + (top ? top.impact : '') + '">' + esc(note) + '</td></tr>';
+      if (open[v.key]) {
+        row += '<tr class="var-detail"><td colspan="3">' + (finds.length ? '<ul class="finds">' + finds.map(function (p) { return findItem(p, p.index); }).join('') + '</ul>' : '') +
+          readings(v, val, a) + '</td></tr>';
+      }
+      return row;
+    }).join('') + '</tbody></table>';
+  }
+  html += '</section>';
+
+  /* compared with .env.example, once there is one */
+  if (exampleText !== null) {
+    var cmp = C.compare(a, exampleText);
+    html += '<section class="env-sec" id="cmpSec"><h3>Compared with ' + esc(exampleName && exampleName !== 'pasted' ? exampleName : '.env.example') + '</h3>' +
+      (cmp.missing.length
+        ? '<div class="cmp-line"><span>Missing here</span><span class="hint">' + cmp.missing.length + ' in the example, not in this file</span>' +
+          '<button class="bordered" id="btnAddMissing">Add them</button></div>' +
+          '<div class="keys missing">' + cmp.missing.map(function (m) { return '<span title="' + esc(m.example ? 'Example value: ' + m.example : 'No example value') + '">' + esc(m.key) + '</span>'; }).join('') + '</div>'
+        : '<p class="cmp-line">Every key in the example is here.</p>') +
+      (cmp.extra.length
+        ? '<div class="cmp-line"><span>Not in the example</span><span class="hint">' + cmp.extra.length + ' left over, or missing from the example</span></div>' +
+          '<div class="keys extra">' + cmp.extra.map(function (k) { return '<span>' + esc(k) + '</span>'; }).join('') + '</div>'
+        : '') +
+      '<div class="cmp-line"><span class="hint">' + cmp.both + ' of ' + cmp.exampleCount + ' example keys are set here</span><button class="bordered" id="btnClearExample">Clear</button></div>' +
+      '</section>';
+  } else if (pasting) {
+    html += '<section class="env-sec" id="cmpSec"><h3>Compare with .env.example</h3>' +
+      '<textarea id="exampleText" spellcheck="false" placeholder="Paste .env.example here"></textarea></section>';
+  }
+
+  var keepScroll = el.scrollTop;
+  el.innerHTML = html;
+  el.scrollTop = keepScroll;
+  document.getElementById('matchCount').textContent = q ? list.length + (list.length === 1 ? ' variable' : ' variables') : '';
+  var ex = document.getElementById('exampleText');
+  if (ex && pasteDraft) ex.value = pasteDraft;
+}
+
+var pasting = false, pasteDraft = '';
+
+var EMPTY = LintApp.emptyState({
+  title: 'Paste a .env file to check it',
+  body: 'You will see how five programs read each value, and every trailing space, repeated key and malformed port or URL.',
+  extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
+});
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+var SAMPLE = [
+  '# Shop API: local development',
+  'NODE_ENV=development',
+  'PORT=3000',
+  'API_PORT=eighty',
+  'DEBUG=yes',
+  '',
+  'DATABASE_URL=postgres://shop:p@ss#2024@localhost:5432/shop',
+  'REDIS_URL=redis://localhost:6379',
+  'STRIPE_SECRET_KEY=sk_test_51Hx9f2   ',
+  'SESSION_SECRET="k3y#with$ymbols"',
+  'JWT_SECRET=changeme',
+  'SMTP_HOST=https://smtp.example.com',
+  'ADMIN_EMAIL=ops@example',
+  '',
+  'LOG_FORMAT=pretty # human-readable in dev',
+  'GREETING="Hello\\tworld"',
+  'CACHE_DIR=${HOME}/.cache/shop',
+  'FEATURE_CHECKOUT_ENABLED=true',
+  'CDN_URL=https://cdn.example.com\u00A0',
+  'PORT=8080'
+].join('\n');
+
+var app = LintApp.init({
+  id: 'env',
+  label: '.env',
+  parse: parse,
+  stats: stats,
+  highlighter: highlight,
+  autoDepth: 1,
+  ownsPane: true,
+  /* a file with warnings is still read; the status bar counts them instead */
+  okLabel: null,
+  emptyHTML: EMPTY,
+  /* the shared tree is unused here — a minimal adapter keeps its wiring
+     inert while the report owns the right-hand pane */
+  adapter: {
+    pathLabel: 'Variable',
+    rootEntry: function () { return { key: undefined, value: null, path: [] }; },
+    children: function () { return []; },
+    childCount: function () { return 0; },
+    matches: function () { return false; },
+    path: function () { return ''; },
+    decorate: function () {},
+    actions: function () { return []; }
+  },
+  onParsed: function (a) {
+    current = a;
+    var marks = {}, sq = {};
+    if (a) a.problems.forEach(function (p) {
+      if (!p.line || p.impact === 'fyi') return;
+      var m = marks[p.line] || (marks[p.line] = { kind: 'warn', title: '' });
+      if (p.impact === 'break') m.kind = 'err';
+      m.title += (m.title ? '\n' : '') + (p.key ? p.key + ': ' : '') + p.message;
+      if (p.col) (sq[p.line] = sq[p.line] || []).push({ from: p.col - 1, to: p.col - 1 + (p.len || 1), impact: p.impact });
+    });
+    /* the first visit after a deploy can still run the previous shared
+       runtime from the offline copy; the marks then wait for the next */
+    if (app.editor.setMarks) app.editor.setMarks(marks);
+    /* the underlines follow the analysis, one step behind the typing */
+    if (JSON.stringify(sq) !== JSON.stringify(squiggles)) { squiggles = sq; app.editor.paint(); }
+    render();
+  },
+  sample: SAMPLE
+});
+
+/* this tool owns the right-hand pane, so it paints its own empty state */
+render();
+
+var searchTimer;
+document.getElementById('search').addEventListener('input', function () {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(render, 150);
+});
+
+/* Expand / collapse show and hide how every program reads each value */
+/* the rows open one at a time; the tree's expand, collapse and wrap have
+   nothing to do here */
+['btnExpand', 'btnCollapse', 'btnWrap'].forEach(function (id) { document.getElementById(id).style.display = 'none'; });
+
+function jump(line, col) {
+  var text = app.editor.getValue();
+  var pos = lineOffset(text, line) + (col ? col - 1 : 0);
+  app.editor.jumpTo(Math.min(pos, text.length));
+  if (window.matchMedia('(max-width: 760px)').matches) document.getElementById('tabText').click();
+}
+
+document.getElementById('tree').addEventListener('click', function (e) {
+  var t = e.target;
+  var fixBtn = t.closest('[data-fix]');
+  if (fixBtn) { applyFix(current && current.problems[+fixBtn.dataset.fix]); return; }
+  var find = t.closest('.find[data-line]');
+  if (find) { jump(+find.dataset.line, +find.dataset.col || 0); return; }
+  var row = t.closest('tr.var-row');
+  if (row) {
+    var k = row.dataset.key;
+    if (open[k]) delete open[k]; else open[k] = true;
+    render();
+    return;
+  }
+  if (t.id === 'btnClearExample') { exampleText = null; exampleName = null; pasting = false; pasteDraft = ''; render(); return; }
+  if (t.id === 'btnAddMissing') { addMissing(); return; }
+});
+
+/* a double click on a variable goes to its line */
+document.getElementById('tree').addEventListener('dblclick', function (e) {
+  var row = e.target.closest('tr.var-row');
+  if (row) jump(+row.dataset.line);
+});
+
+document.getElementById('tree').addEventListener('change', function (e) {
+  if (e.target.id !== 'readSel') return;
+  readAs = e.target.value;
+  try { localStorage.setItem('lintone-env-reader', readAs); } catch (err) {}
+  app.run();
+});
+
+document.getElementById('tree').addEventListener('input', function (e) {
+  if (e.target.id !== 'exampleText') return;
+  pasteDraft = e.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function () {
+    if (!pasteDraft.trim()) return;
+    exampleText = pasteDraft;
+    exampleName = 'pasted';
+    pasting = false;
+    render();
+  }, 700);
+});
+
+/* ---------- .env.example ---------- */
+var exampleInput = document.createElement('input');
+exampleInput.type = 'file';
+exampleInput.hidden = true;
+document.body.appendChild(exampleInput);
+exampleInput.addEventListener('change', function () {
+  var f = exampleInput.files[0];
+  exampleInput.value = '';
+  if (!f) return;
+  f.text().then(function (t) {
+    exampleText = t;
+    exampleName = f.name;
+    render();
+    document.getElementById('cmpSec').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, function () { LintApp.toast('Could not read that file'); });
+});
+
+document.getElementById('btnCompare').addEventListener('click', function () {
+  if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
+  exampleInput.click();
+});
+
+function addMissing() {
+  var cmp = C.compare(current, exampleText);
+  if (!cmp.missing.length) return;
+  var text = app.editor.getValue().replace(/\s*$/, '');
+  var add = '\n\n# From ' + (exampleName && exampleName !== 'pasted' ? exampleName : '.env.example') + '\n' +
+    cmp.missing.map(function (m) { return m.key + '=' + (m.example || ''); }).join('\n') + '\n';
+  replaceText(0, app.editor.getValue().length, text + add);
+  LintApp.toast('Added ' + cmp.missing.length + (cmp.missing.length === 1 ? ' key' : ' keys') + ' at the end. ' + UNDO + ' undoes it');
+}
+
+/* ---------- fixing a finding where it is ----------
+   Every edit goes through the browser's own editing (insertText), so
+   Ctrl/⌘+Z undoes it as it would a keystroke. */
+var UNDO = (LintApp.isMac ? '⌘' : 'Ctrl+') + 'Z';
+
+function replaceText(from, to, text) {
+  var el = app.editor.input;
+  el.focus();
+  el.setSelectionRange(from, to);
+  if (!document.execCommand('insertText', false, text)) {
+    el.setRangeText(text, from, to, 'end');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+function editLine(line, fn) {
+  var text = app.editor.getValue();
+  var from = lineOffset(text, line);
+  var end = text.indexOf('\n', from);
+  if (end === -1) end = text.length;
+  var old = text.slice(from, end).replace(/\r$/, '');
+  var next = fn(old);
+  if (next === null || next === old) return false;
+  replaceText(from, from + old.length, next);
+  return true;
+}
+
+/* KEY= and whatever sits before the value, and the value's own text */
+function splitLine(l) {
+  var m = /^(\s*(?:export\s+)?[^=\s#]+\s*=\s*)([\s\S]*)$/.exec(l);
+  return m ? { head: m[1], value: m[2] } : null;
+}
+
+var FIXES = {
+  quote: function (l) { var p = splitLine(l); if (!p) return null; var v = p.value.replace(/[ \t]+$/, ''); return v.indexOf("'") !== -1 ? null : p.head + "'" + v + "'"; },
+  single: function (l) { var p = splitLine(l); if (!p) return null; var m = /^"([^"\\']*)"(.*)$/.exec(p.value); return m ? p.head + "'" + m[1] + "'" + m[2] : null; },
+  trailing: function (l) { return l.replace(/[ \t]+$/, ''); },
+  equals: function (l) { return l.replace(/^(\s*(?:export\s+)?[^=\s#]+)\s*=\s*/, '$1='); },
+  invisible: function (l) { return l.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ').replace(/[ \t]+$/, ''); },
+  unquote: function (l) { var p = splitLine(l); if (!p) return null; var m = /^(["'`])([\s\S]*)\1(\s*(?:#.*)?)$/.exec(p.value); return m ? p.head + m[2] + m[3] : null; },
+  host: function (l) { var p = splitLine(l); if (!p) return null; try { return p.head + new URL(p.value.trim()).host; } catch (e) { return null; } },
+  encode: function (l) {
+    var p = splitLine(l); if (!p) return null;
+    var m = /^([a-z][a-z0-9+.\-]*:\/\/)([^/?#]*)([\s\S]*)$/i.exec(p.value);
+    if (!m) return null;
+    var at = m[2].lastIndexOf('@');
+    return p.head + m[1] + m[2].slice(0, at).replace(/@/g, '%40') + m[2].slice(at) + m[3];
+  }
+};
+
+function applyFix(p) {
+  if (!p || !p.fix) return;
+  var done = false, what = '';
+  if (FIXES[p.fix]) {
+    done = editLine(p.line, FIXES[p.fix]);
+    what = { quote: 'quoted', single: 'now in single quotes', trailing: 'spaces removed', equals: 'spaces removed',
+      invisible: 'invisible character removed', unquote: 'quotes removed', host: 'only the host kept', encode: '@ encoded as %40' }[p.fix];
+  } else if (p.fix === 'comment') {
+    done = editLine(p.line, function (l) {
+      var m = /^(.*?\S)(\s+)(#.*)$/.exec(l);
+      return m ? m[3] + '\n' + m[1] : null;
+    });
+    what = 'comment moved to its own line';
+  } else if (p.fix === 'dedupe') {
+    var text = app.editor.getValue().split('\n');
+    var drop = p.lines.slice(0, -1);
+    var next = text.filter(function (l, i) { return drop.indexOf(i + 1) === -1; }).join('\n');
+    replaceText(0, app.editor.getValue().length, next);
+    done = true;
+    what = 'only the last one kept';
+  } else if (p.fix === 'bom' || p.fix === 'crlf') {
+    var t = app.editor.getValue();
+    var f = p.fix === 'bom' ? t.replace(/^\uFEFF/, '') : t.replace(/\r\n?/g, '\n');
+    if (f !== t) { replaceText(0, t.length, f); done = true; }
+    what = p.fix === 'bom' ? 'Byte-order mark removed' : 'Line endings fixed';
+  }
+  if (done) LintApp.toast((p.key ? p.key + ': ' + what : what) + '. ' + UNDO + ' undoes it');
+  else LintApp.toast('That line has changed; nothing was edited');
+}
+
+/* ---------- writing it out ---------- */
+function pairs() {
+  return current.vars.filter(function (v) { return v.value !== undefined; })
+    .map(function (v) { return { key: v.key, value: v.value }; });
+}
+
+function k8sName() {
+  var chip = document.querySelector('.doc-name');
+  var n = chip ? chip.textContent.trim() : '';
+  n = n.replace(/^\.?env\.?/, '').replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  return (n ? n + '-' : '') + 'env';
+}
+
+function exportAs(kind) {
+  if (!current) return;
+  var text = C.exports[kind](pairs(), k8sName());
+  LintApp.copyAndOffer(text, { compose: 'Compose environment', configmap: 'ConfigMap', secret: 'Secret', shell: 'Shell exports' }[kind],
+    'env', kind === 'shell' ? null : 'yaml');
+}
+
+['compose', 'configmap', 'secret', 'shell'].forEach(function (kind) {
+  var id = { compose: 'btnCompose', configmap: 'btnConfigMap', secret: 'btnSecret', shell: 'btnShell' }[kind];
+  document.getElementById(id).addEventListener('click', function () {
+    if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
+    exportAs(kind);
+  });
+});
+
+document.getElementById('btnMakeExample').addEventListener('click', function () {
+  if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
+  LintApp.copyAndOffer(C.toExample(app.editor.getValue()), '.env.example', 'env', null);
+});
+
+document.getElementById('btnPasteExample').addEventListener('click', function () {
+  if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
+  exampleText = null; pasting = true; render();
+  var ex = document.getElementById('exampleText');
+  if (ex) { ex.scrollIntoView({ block: 'nearest' }); ex.focus(); }
+});
+
+document.getElementById('btnToJson').addEventListener('click', function () {
+  if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
+  LintApp.copyAndOffer(C.exports.json(pairs()), 'JSON', 'env', 'json');
+});
+
+/* ---------- the whitespace nobody meant ---------- */
+document.getElementById('btnFix').addEventListener('click', function () {
+  var before = app.editor.getValue();
+  var lines = before.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
+  var inQuote = null;
+  var fixed = lines.map(function (line) {
+    var clean = line.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
+    if (inQuote) { if (clean.indexOf(inQuote) !== -1) inQuote = null; return clean; }
+    var m = /^\s*(?:export\s+)?[^=\s#]+\s*=\s*(["'`])/.exec(clean);
+    if (m && findClose(clean.slice(clean.indexOf(m[1])), m[1]) === -1) { inQuote = m[1]; return clean.replace(/^\s+/, ''); }
+    return clean.replace(/^\s+/, '').replace(/[ \t]+$/, '');
+  }).join('\n');
+  if (fixed === before) { LintApp.toast('No stray whitespace found'); return; }
+  replaceText(0, before.length, fixed);
+  LintApp.toast('Whitespace fixed. ' + UNDO + ' undoes it');
+});
+})();
+</script>
+</body>
+</html>
