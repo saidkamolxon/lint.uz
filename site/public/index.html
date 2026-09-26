@@ -682,7 +682,27 @@ LintTheme.buildMenu(menu, closeMenu);
     } catch (e) {
       stateEl.textContent = 'typing…';
       stateEl.classList.add('typing');
+      /* the tree keeps pace with the typing: the lines typed so far, closed
+         the way they were opened, are parsed and drawn */
+      var whole = closeUp(text.slice(0, text.lastIndexOf('\n') + 1));
+      if (whole === null) treeEl.innerHTML = '';
+      else try { drawTree(JSON.parse(whole)); } catch (e2) { /* keep the last tree */ }
     }
+  }
+
+  /* the complete lines of a half-typed document, with its trailing comma
+     dropped and its open brackets closed; null before the first line ends */
+  function closeUp(part) {
+    if (!part.trim()) return null;
+    var stack = [], inStr = false;
+    for (var i = 0; i < part.length; i++) {
+      var c = part[i];
+      if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+      else if (c === '}' || c === ']') stack.pop();
+    }
+    return part.replace(/,\s*$/, '') + stack.reverse().join('');
   }
 
   var ICON = {
@@ -733,6 +753,9 @@ LintTheme.buildMenu(menu, closeMenu);
   var body = srcEl.parentNode;
   paint(SRC.length, true);
   body.style.minHeight = body.offsetHeight + 'px';
+  /* then emptied, so the tree is built as the text is, not shown ahead of it */
+  srcEl.innerHTML = '';
+  treeEl.innerHTML = '';
 
   var i = 0;
   function step() {
