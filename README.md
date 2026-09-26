@@ -15,15 +15,16 @@
 | `♪` | **[audio.lint.one](https://audio.lint.one)** | Plays a file or another tab's sound with a live spectrum; waveform seek, tags, levels |
 | `⛁` | **[lint.one/sqlite](https://lint.one/sqlite)** | Tables, schema and read-only SQL on a `.db` file; JSON cells formatted, blobs as hex or images |
 | `⫼` | **[lint.one/parquet](https://lint.one/parquet)** | Rows, schema, row groups and column statistics of a `.parquet` file; sorting, filtering and SQL by DuckDB |
+| `⚿` | **[lint.one/env](https://lint.one/env)** | How Node, Python, Compose, `docker run` and the shell each read a `.env` file; trailing spaces, duplicates, bad ports and URLs; diff against `.env.example`; export to Compose or Kubernetes |
 
-The landing page at **[lint.one](https://lint.one)** links all nine, and opens
+The landing page at **[lint.one](https://lint.one)** links all ten, and opens
 any file dropped on it in the tool that reads it.
 
 The original domain, `lint.uz`, redirects here: every path and subdomain is
 preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
 
 Other names for a format lead to its tool: `/yml` opens YAML, `/db` and
-`/sql` open SQLite, `/parq` opens Parquet, `/tsv` opens CSV, `/mp3` opens Audio, and so on. The
+`/sql` open SQLite, `/parq` opens Parquet, `/dotenv` opens .env, `/tsv` opens CSV, `/mp3` opens Audio, and so on. The
 aliases are the same extensions the landing page routes a dropped file by,
 and they work as subdomains too, so `yml.lint.one` lands on `lint.one/yaml/`.
 
@@ -122,9 +123,9 @@ Every page shares one system in [`shared/`](shared/):
 gutter, the logo mark, the suite menu and the favicon — so a tab is identifiable at a glance while the suite
 still reads as one product:
 
-| JSON | XML | YAML | CSV | PDF | Logs | Audio | SQLite | Parquet |
-| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#4D7C0F` green | `#BE123C` crimson | `#0369A1` blue | `#C026D3` magenta | `#7C3AED` violet | `#F7CE46` saffron |
+| JSON | XML | YAML | CSV | PDF | Logs | Audio | SQLite | Parquet | ENV |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `#4F46E5` indigo | `#0F766E` teal | `#B45309` ochre | `#4D7C0F` green | `#BE123C` crimson | `#0369A1` blue | `#C026D3` magenta | `#7C3AED` violet | `#F7CE46` saffron | `#A32972` raspberry |
 
 **Themes:** System, Light and Dark, each with an **Increase contrast** switch
 (WCAG AAA palettes) that starts from the OS setting. To add a theme, copy a
@@ -184,6 +185,30 @@ for the same reason. A database saved in WAL mode opens without whatever its
   `4306` finds 4306.84 and `2025-09` finds that month. `column:text` looks
   in one column only (`city:khiva`, `address.city:khiva`). The page appears
   as soon as its rows are found; the count follows.
+
+**.env has no specification**, so the tool reads a file the way five
+programs do and shows where they part:
+- **By default no program is chosen.** Each value is what most of them
+  read, and a note marks the lines they read differently. Choosing a
+  program shows its values instead.
+- **It answers whether the file works.** The panel opens with how many lines break the app and how many
+  might. The editor underlines the exact text at fault. Each finding has a one-click fix that Ctrl/⌘+Z undoes.
+- **The programs:** dotenv for Node, python-dotenv, Docker Compose's
+  `env_file`, `docker run --env-file` and a shell that sources the file.
+- **How the emulations are checked.** Each one lives in
+  `env/public/parsers.js` and was run against the real program on the
+  same files: 30 hand-written edge cases, plus several thousand generated
+  ones across three runs. They matched every time except one case, a `\0`
+  escape in Compose.
+  - `docker run` could not be run, so it follows docker/cli's source.
+- **The checks** (`checks.js`) explain each difference:
+  - a # that Node cuts a value at;
+  - a $ that Compose and the shell expand;
+  - trailing spaces that only `docker run` keeps.
+
+  They also flag duplicate keys, invisible characters, and values that do
+  not fit their name (`*_PORT`, `*_URL`, flags, hosts, e-mails,
+  placeholders).
 
 ---
 

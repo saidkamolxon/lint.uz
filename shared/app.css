@@ -220,6 +220,7 @@ kbd {
 .dot-sqlite { background: #7C3AED; --tile-glyph: url("/shared/glyphs/sqlite.svg"); }
 /* saffron is the one light hue: its glyph is ink */
 .dot-parquet { background: #F7CE46; --tile-glyph: url("/shared/glyphs/parquet.svg"); --tile-ink: #1A1D23; }
+.dot-env   { background: #A32972; --tile-glyph: url("/shared/glyphs/env.svg"); }
 .tool-tile { width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none; }
 .tool-tile::before {
   content: ""; display: block; width: 100%; height: 100%;

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>lint.one — file viewers that never send your data anywhere</title>
-<meta name="description" content="JSON, XML, YAML, CSV, PDF, log, SQLite and Parquet viewers, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
+<meta name="description" content="JSON, XML, YAML, CSV, PDF, log, SQLite and Parquet viewers, a .env checker, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
 <link rel="canonical" href="https://lint.one/">
 <!-- one installable app for the whole suite; its file_handlers send each
      format to its own page, where LintApp.takeHandoff takes the file -->
@@ -17,7 +17,7 @@
 <meta property="og:site_name" content="lint.one">
 <meta property="og:url" content="https://lint.one/">
 <meta property="og:title" content="lint.one — file viewers that never send your data anywhere">
-<meta property="og:description" content="JSON, XML, YAML, CSV, PDF, log, SQLite and Parquet viewers, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
+<meta property="og:description" content="JSON, XML, YAML, CSV, PDF, log, SQLite and Parquet viewers, a .env checker, and an audio player with a live spectrum. Everything runs in your browser, and after the first visit it works offline.">
 <meta property="og:image" content="https://lint.one/og/home.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -256,7 +256,7 @@ h1, h2 { text-wrap: balance; }
    list rather than a centred picture. */
 .tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   margin: 80px 0 0; padding: 0; list-style: none;
 }
@@ -304,6 +304,7 @@ h1, h2 { text-wrap: balance; }
 .t-sqlite { --tool-hue: #7C3AED; --glyph: url("/shared/glyphs/sqlite.svg"); }
 /* saffron is the one light hue: its glyph is ink */
 .t-parquet { --tool-hue: #F7CE46; --glyph: url("/shared/glyphs/parquet.svg"); --glyph-ink: #1A1D23; }
+.t-env   { --tool-hue: #A32972; --glyph: url("/shared/glyphs/env.svg"); }
 
 /* ---------- footer ---------- */
 footer {
@@ -380,7 +381,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
       <section class="hero">
         <h1>Read your files. Send&nbsp;nothing.</h1>
         <p>
-          JSON, XML, YAML, CSV, logs, PDF, SQLite, Parquet and audio open right in your browser —
+          JSON, XML, YAML, CSV, logs, PDF, SQLite, Parquet, .env and audio open right in your browser —
           even offline. Nothing leaves your device.
         </p>
         <div class="act">
@@ -457,6 +458,11 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
           <h2>Parquet</h2>
           <p>Rows, schema, statistics and SQL, read straight from the file.</p>
         </a></li>
+        <li><a class="tool t-env" href="/env/">
+          <span class="tool-mark" aria-hidden="true"></span>
+          <h2>ENV</h2>
+          <p>Find the .env mistakes that break your app, and fix them.</p>
+        </a></li>
       </ul>
     </nav>
 
@@ -507,10 +513,13 @@ LintTheme.buildMenu(menu, closeMenu);
     aiff: 'audio',
     db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
     sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite',
-    parquet: 'parquet', parq: 'parquet', pqt: 'parquet'
+    parquet: 'parquet', parq: 'parquet', pqt: 'parquet',
+    env: 'env'
   };
 
   function byName(name) {
+    /* .env, .env.local, .env.production: the name is the format */
+    if (/^\.env(\.[\w-]+)?$/i.test(name)) return 'env';
     var m = /\.([^.]+)$/.exec(name);
     return m ? BY_EXT[m[1].toLowerCase()] : undefined;
   }

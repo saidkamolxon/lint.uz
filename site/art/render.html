@@ -37,10 +37,11 @@ const TOOLS = {
   audio:   { name: 'Audio',   hue: '#C026D3' },
   sqlite:  { name: 'SQLite',  hue: '#7C3AED', lines: ['Tables, schema and your own', 'SQL, on a .db file that stays put.'] },
   /* the one light hue: its glyph and mark are ink, not white */
-  parquet: { name: 'Parquet', hue: '#F7CE46', ink: INK, lines: ['Rows, schema, statistics and SQL', 'on a .parquet file that stays put.'] }
+  parquet: { name: 'Parquet', hue: '#F7CE46', ink: INK, lines: ['Rows, schema, statistics and SQL', 'on a .parquet file that stays put.'] },
+  env:     { name: 'ENV',     hue: '#A32972', lines: ['Find the .env mistakes that break', 'your app, and fix them.'] }
 };
 /* the home card's row of tiles, in the suite's order */
-const SUITE = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet'];
+const SUITE = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet', 'env'];
 
 const font = new FontFace('Plex', 'url(/shared/fonts/plex-sans-var.woff2)', { weight: '100 700' });
 document.fonts.add(await font.load());
@@ -115,12 +116,14 @@ async function drawHome() {
   ctx.fillText('Read your files.', 96, 182);
   ctx.fillText('Send nothing.', 96, 291);
   ctx.letterSpacing = '0px';
-  /* the tiles span the same width as the footer, whatever their number */
-  const n = SUITE.length, size = 96, step = (1104 - 96 - size) / (n - 1);
+  /* the tiles span the same width as the footer, whatever their number,
+     shrinking below 96 px only when they would stand closer than 16 */
+  const n = SUITE.length, span = 1104 - 96;
+  const size = Math.min(96, Math.floor((span - 16 * (n - 1)) / n)), step = (span - size) / (n - 1);
   for (let i = 0; i < n; i++) {
     const id = SUITE[i], x = Math.round(96 + i * step);
-    tile(ctx, x, 364, size, TOOLS[id].hue);
-    ctx.drawImage(await glyph(TOOLS[id].glyph || id, TOOLS[id].ink), x, 364, size, size);
+    tile(ctx, x, 364 + (96 - size) / 2, size, TOOLS[id].hue);
+    ctx.drawImage(await glyph(TOOLS[id].glyph || id, TOOLS[id].ink), x, 364 + (96 - size) / 2, size, size);
   }
   footer(ctx, await mark());
   return c;
