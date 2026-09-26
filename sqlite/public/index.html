@@ -251,6 +251,9 @@
 }
 .drawer-tabs { display: flex; gap: 2px; flex: none; padding: var(--s2); border-bottom: var(--hairline) solid var(--line); }
 .drawer-tabs button { flex: 1; padding: 5px var(--s2); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-small); }
+.drawer-tabs .drawer-close { flex: none; width: 30px; padding: 0; display: grid; place-items: center; }
+.drawer-tabs .drawer-close:hover { color: var(--ink); background: var(--row-hover); }
+.drawer-tabs .drawer-close svg { width: 16px; height: 16px; }
 .drawer-tabs button[aria-selected="true"] { background: var(--hue-wash); color: var(--hue); font-weight: 600; }
 .drawer-body { flex: 1; overflow: auto; padding: var(--s3); }
 .drawer-panel { display: none; }
@@ -370,8 +373,8 @@ $('app').innerHTML = `
     <button id="btnRail" class="icon-btn needs-db" title="Tables" aria-label="Tables" aria-pressed="false"></button>
     <span class="spacer"></span>
     <button id="btnQuery" class="bordered needs-db" title="Run SQL on this database (${MOD}E)">SQL</button>
-    <button id="btnInfo" class="icon-btn needs-db" title="About this file (${MOD}I)"
-            aria-label="About this file" aria-pressed="false"></button>
+    <button id="btnInfo" class="icon-btn needs-db" title="Details: the chosen value, and the file (${MOD}I)"
+            aria-label="Details" aria-pressed="false"></button>
     <div class="menu-wrap needs-db">
       <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
       <div class="menu" id="moreMenu" role="menu">
@@ -425,6 +428,7 @@ $('app').innerHTML = `
       <div class="drawer-tabs" role="tablist">
         <button id="tabValue" role="tab" aria-selected="true">Value</button>
         <button id="tabFile" role="tab" aria-selected="false">File</button>
+        <button id="btnCloseDrawer" class="drawer-close" title="Close the panel (Esc)" aria-label="Close the panel"></button>
       </div>
       <div class="drawer-body">
         <div class="drawer-panel active" id="panelValue"></div>
@@ -457,6 +461,7 @@ const ICON = {
 };
 $('btnRail').innerHTML = I(ICON.rail);
 $('btnInfo').innerHTML = I(ICON.info);
+$('btnCloseDrawer').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
 $('btnMore').innerHTML = I(ICON.more);
 $('btnPrev').innerHTML = I(ICON.prev);
 $('btnNext').innerHTML = I(ICON.next);
@@ -929,7 +934,9 @@ $('filter').addEventListener('keydown', (e) => {
 let cellSeq = 0;
 let blobUrl = null;
 
-async function selectCell(r, ci, keepDrawer) {
+/* Choosing a cell fills the details panel, and shows it there if the panel
+   is open. It never opens the panel: that is the person's to switch on. */
+async function selectCell(r, ci) {
   if (!grid || !grid.rows[r]) return;
   sel = { r, c: ci };
   $('grid').querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
@@ -938,7 +945,7 @@ async function selectCell(r, ci, keepDrawer) {
     td.classList.add('sel');
     td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
-  if (!keepDrawer) openDrawer('value');
+  if ($('drawer').classList.contains('open')) openDrawer('value');
 
   const seq = ++cellSeq;
   const v = grid.rows[r][ci];
@@ -1273,7 +1280,7 @@ $('btnCreate').addEventListener('click', async () => {
    ========================================================================== */
 function openDrawer(tab) {
   $('drawer').classList.add('open');
-  $('btnInfo').setAttribute('aria-pressed', String(tab === 'file'));
+  $('btnInfo').setAttribute('aria-pressed', 'true');
   [['tabValue', 'panelValue', 'value'], ['tabFile', 'panelFile', 'file']].forEach(([t, p, id]) => {
     $(t).setAttribute('aria-selected', String(id === tab));
     $(p).classList.toggle('active', id === tab);
@@ -1294,9 +1301,10 @@ function closeDrawer() {
 $('tabValue').addEventListener('click', () => openDrawer('value'));
 $('tabFile').addEventListener('click', () => openDrawer('file'));
 $('btnInfo').addEventListener('click', () => {
-  const on = $('drawer').classList.contains('open') && $('tabFile').getAttribute('aria-selected') === 'true';
-  if (on) closeDrawer(); else openDrawer('file');
+  if ($('drawer').classList.contains('open')) closeDrawer();
+  else openDrawer(sel ? 'value' : 'file');
 });
+$('btnCloseDrawer').addEventListener('click', closeDrawer);
 
 /* application_id values that name the format a file really is */
 const APPS = {
@@ -1394,6 +1402,7 @@ document.addEventListener('keydown', (e) => {
   if (typing()) return;
   if (e.key === 'PageDown') { e.preventDefault(); turn(1); return; }
   if (e.key === 'PageUp') { e.preventDefault(); turn(-1); return; }
+  if (e.key === 'Escape' && !sel && $('drawer').classList.contains('open')) { e.preventDefault(); closeDrawer(); return; }
   if (!sel || !grid || $('grid').hidden) return;
 
   /* the arrows walk the grid once a cell is chosen */
@@ -1402,7 +1411,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const r = Math.min(grid.rows.length - 1, Math.max(0, sel.r + moves[e.key][0]));
     const ci = Math.min(grid.columns.length - 1, Math.max(0, sel.c + moves[e.key][1]));
-    selectCell(r, ci, !$('drawer').classList.contains('open'));
+    selectCell(r, ci);
   } else if (mod && k === 'c' && !String(window.getSelection())) {
     e.preventDefault();
     const v = grid.rows[sel.r][sel.c];
@@ -1430,7 +1439,7 @@ LintApp.shortcuts([{ title: 'SQLite', items: [
   { keys: ['pageup'], label: 'Previous rows' },
   { keys: ['up', 'down', 'left', 'right'], label: 'Move between cells' },
   { keys: ['mod+c'], label: 'Copy the chosen cell' },
-  { keys: ['mod+i'], label: 'About this file' }
+  { keys: ['mod+i'], label: 'Details panel: open or close' }
 ] }]);
 
 function ident(name) {
