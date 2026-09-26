@@ -10,21 +10,21 @@
    loaded first, so the landing page and the tools share one copy. */
 var THEMES = LintTheme.THEMES;
 
-/* ---------- the ten tools, for the suite switcher ---------- */
+/* ---------- the ten tools, for the suite switcher, most used first ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a
    site's authority across its paths, but treats subdomains as separate sites
    and splits it. Relative hrefs also keep local development working. */
 var SUITE = [
   { id: 'json', name: 'JSON', host: '/json' },
-  { id: 'xml',  name: 'XML',  host: '/xml'  },
   { id: 'yaml', name: 'YAML', host: '/yaml' },
   { id: 'csv',  name: 'CSV',  host: '/csv'  },
-  { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
-  { id: 'log',  name: 'Logs', host: '/log'  },
-  { id: 'audio', name: 'Audio', host: '/audio' },
+  { id: 'env', name: 'ENV', host: '/env' },
+  { id: 'log',  name: 'LOG',  host: '/log'  },
+  { id: 'xml',  name: 'XML',  host: '/xml'  },
   { id: 'sqlite', name: 'SQLite', host: '/sqlite' },
+  { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
   { id: 'parquet', name: 'Parquet', host: '/parquet' },
-  { id: 'env', name: 'ENV', host: '/env' }
+  { id: 'audio', name: 'Audio', host: '/audio' }
 ];
 
 /* ---------- small helpers ---------- */
@@ -1839,7 +1839,7 @@ function emptyState(o) {
 
 /* The chrome every page shares: the lint.one menu in front of the tool's
    brand, and the theme menu in `slot`. init() calls it for the editor
-   tools; Logs, PDF and Audio build their own frame and call it directly. */
+   tools; LOG, PDF and Audio build their own frame and call it directly. */
 function mountChrome(slot, activeId) {
   buildSuiteMark(activeId);
   buildThemeMenu(slot);

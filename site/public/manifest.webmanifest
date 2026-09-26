@@ -15,15 +15,15 @@
   ],
   "shortcuts": [
     { "name": "JSON", "url": "/json/", "icons": [{ "src": "/icons/file-json.png", "sizes": "256x256", "type": "image/png" }] },
-    { "name": "XML", "url": "/xml/", "icons": [{ "src": "/icons/file-xml.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "YAML", "url": "/yaml/", "icons": [{ "src": "/icons/file-yaml.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "CSV", "url": "/csv/", "icons": [{ "src": "/icons/file-csv.png", "sizes": "256x256", "type": "image/png" }] },
-    { "name": "PDF", "url": "/pdf/", "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
-    { "name": "Logs", "url": "/log/", "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
-    { "name": "Audio", "url": "/audio/", "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "ENV", "url": "/env/", "icons": [{ "src": "/icons/file-env.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "LOG", "url": "/log/", "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "XML", "url": "/xml/", "icons": [{ "src": "/icons/file-xml.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "SQLite", "url": "/sqlite/", "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "PDF", "url": "/pdf/", "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "Parquet", "url": "/parquet/", "icons": [{ "src": "/icons/file-parquet.png", "sizes": "256x256", "type": "image/png" }] },
-    { "name": "ENV", "url": "/env/", "icons": [{ "src": "/icons/file-env.png", "sizes": "256x256", "type": "image/png" }] }
+    { "name": "Audio", "url": "/audio/", "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] }
   ],
   "file_handlers": [
     { "action": "/json/", "accept": { "application/json": [".json", ".jsonc", ".geojson"] }, "icons": [{ "src": "/icons/file-json.png", "sizes": "256x256", "type": "image/png" }] },

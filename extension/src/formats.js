@@ -9,15 +9,15 @@
   /* the suite's names and hues, as shared/app.js and the README have them */
   var TOOLS = [
     { id: 'json',   name: 'JSON',   hue: '#4F46E5', ext: 'json' },
-    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
     { id: 'yaml',   name: 'YAML',   hue: '#B45309', ext: 'yaml' },
     { id: 'csv',    name: 'CSV',    hue: '#4D7C0F', ext: 'csv' },
-    { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
-    { id: 'log',    name: 'Logs',   hue: '#0369A1', ext: 'log' },
-    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' },
+    { id: 'env', name: 'ENV', hue: '#A32972', ext: 'env' },
+    { id: 'log',    name: 'LOG',    hue: '#0369A1', ext: 'log' },
+    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
     { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' },
+    { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
     { id: 'parquet', name: 'Parquet', hue: '#F7CE46', ext: 'parquet' },
-    { id: 'env', name: 'ENV', hue: '#A32972', ext: 'env' }
+    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' }
   ];
   var BY_ID = {};
   TOOLS.forEach(function (t) { BY_ID[t.id] = t; });

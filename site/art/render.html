@@ -33,15 +33,15 @@ const TOOLS = {
   yaml:    { name: 'YAML',    hue: '#B45309' },
   csv:     { name: 'CSV',     hue: '#4D7C0F', lines: ['A sortable table that finds the', 'delimiter and flags broken rows.'] },
   pdf:     { name: 'PDF',     hue: '#BE123C' },
-  log:     { name: 'Logs',    hue: '#0369A1', glyph: 'log' },
+  log:     { name: 'LOG',     hue: '#0369A1', glyph: 'log', lines: ['Huge files open fast, filtered by', 'severity, stack traces folded.'] },
   audio:   { name: 'Audio',   hue: '#C026D3' },
   sqlite:  { name: 'SQLite',  hue: '#7C3AED', lines: ['Tables, schema and your own', 'SQL, on a .db file that stays put.'] },
   /* the one light hue: its glyph and mark are ink, not white */
   parquet: { name: 'Parquet', hue: '#F7CE46', ink: INK, lines: ['Rows, schema, statistics and SQL', 'on a .parquet file that stays put.'] },
   env:     { name: 'ENV',     hue: '#A32972', lines: ['Find the .env mistakes that break', 'your app, and fix them.'] }
 };
-/* the home card's row of tiles, in the suite's order */
-const SUITE = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet', 'env'];
+/* the home card's row of tiles, in the suite's order: most used first */
+const SUITE = ['json', 'yaml', 'csv', 'env', 'log', 'xml', 'sqlite', 'pdf', 'parquet', 'audio'];
 
 const font = new FontFace('Plex', 'url(/shared/fonts/plex-sans-var.woff2)', { weight: '100 700' });
 document.fonts.add(await font.load());
