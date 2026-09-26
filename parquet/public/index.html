@@ -89,15 +89,6 @@ button[aria-pressed="true"], #pathBox:hover { color: var(--hue-text); }
   font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0 var(--s2);
 }
 
-/* a line under the bar while DuckDB loads or works, so a slow sort says why */
-#engineNote {
-  flex: none; padding: var(--s1) var(--s3);
-  font-size: var(--fs-small); color: var(--muted);
-  background: var(--raised); border-bottom: var(--hairline) solid var(--line);
-  display: flex; align-items: center; gap: var(--s2);
-}
-#engineNote .stop-link { color: var(--hue-text); font-weight: 550; padding: 0 var(--s1); }
-
 /* ---------- the grid ---------- */
 #grid { flex: 1; min-height: 0; overflow: auto; position: relative; }
 #grid.stale { opacity: 0.55; transition: opacity var(--t-mid) 150ms; }
@@ -365,18 +356,17 @@ $('app').innerHTML = `
         </div>
         <label class="filter-wrap" id="filterWrap">
           <input id="filter" type="text" spellcheck="false" autocomplete="off"
-                 placeholder="Filter rows, or column:text" aria-label="Filter rows"
+                 placeholder="Filter rows" aria-label="Filter rows"
                  title="Finds text in every column, and numbers or dates when you type one. column:text looks in one column only (city:khiva, address.city:khiva), which on a large file is much faster.">
         </label>
         <span class="spacer"></span>
+        <button id="btnStopNote" class="bordered" title="Stop (Esc)" hidden>Stop</button>
         <span class="pager" id="pager">
           <button id="btnPrev" class="icon-btn" title="Previous rows (Page Up)" aria-label="Previous rows"></button>
           <span class="pager-pos" id="pagerPos"></span>
           <button id="btnNext" class="icon-btn" title="Next rows (Page Down)" aria-label="Next rows"></button>
         </span>
       </div>
-      <div id="engineNote" role="status" hidden><span id="engineMsg"></span>
-        <button class="stop-link" id="btnStopNote" title="Stop (Esc)">Stop</button></div>
 
       <div id="queryBox" hidden>
         <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off"
@@ -484,7 +474,7 @@ const engine = makeWorker('./sql.js', (m) => {
   if (performance.now() - engineStarted < 300) return;
   const pct = m.done / m.total;
   setBusy(4 + 70 * pct);
-  engineNote('Loading the SQL engine — ' + LintApp.fmtBytes(m.done) + ' of ' + LintApp.fmtBytes(m.total));
+  engineNote('Getting ready: ' + LintApp.fmtBytes(m.done) + ' of ' + LintApp.fmtBytes(m.total) + ', only the first time');
 }, 'The SQL engine could not start in this browser.');
 
 let engineReady = null;   // a promise once DuckDB is starting or started, with this file open in it
@@ -494,7 +484,7 @@ function ensureEngine() {
   if (engineReady) return engineReady;
   const file = source && source.file;
   engineStarted = performance.now();
-  engineNote('Starting the SQL engine…');
+  engineNote('Getting ready…');
   const t0 = performance.now();
   engineReady = engine.rpc('open', { file }).then((d) => {
     info.engine = d.engine;
@@ -508,9 +498,13 @@ function ensureEngine() {
   return engineReady;
 }
 
+/* What DuckDB is doing shows in the status bar, as the SQLite tool's work
+   does, with a Stop beside the pager; then the bar goes back to the file */
+let facts = '';           // the status bar's resting message
 function engineNote(msg) {
-  $('engineNote').hidden = !msg;
-  $('engineMsg').textContent = msg || '';
+  $('btnStopNote').hidden = !msg || running;
+  if (msg) setStatus('', msg);
+  else if (info) setStatus('ok', facts);
 }
 
 /* ==========================================================================
@@ -583,13 +577,14 @@ function show(d, name, size) {
   LintApp.setDocument(name, reset);
   $('pathBox').textContent = name;
 
-  const facts = [
+  const facts_ = [
     fmtNum(d.rows) + (d.rows === 1 ? ' row' : ' rows'),
     fmtNum(d.columns.length) + (d.columns.length === 1 ? ' column' : ' columns'),
     LintApp.fmtBytes(size),
     d.codecs.filter((x) => x !== 'UNCOMPRESSED').join(', ') || 'uncompressed'
   ];
-  setStatus('ok', facts.join(', '));
+  facts = facts_.join(', ');
+  setStatus('ok', facts);
   buildFilePanel();
 
   query = { sql: 'SELECT *\nFROM data\nLIMIT 100;', total: 0, offset: 0, columns: null, ran: false };
@@ -665,13 +660,10 @@ function showMode() {
   $('btnQuery').textContent = q ? 'Rows' : 'SQL';
   $('btnQuery').title = q ? `Back to the rows (${MOD}E)` : `Run SQL on this file (${MOD}E)`;
 
-  if (q) {
-    $('viewName').textContent = 'SQL';
-    $('viewKind').textContent = 'the file is the table data';
-  } else {
-    $('viewName').textContent = info.name;
-    $('viewKind').textContent = fmtNum(info.rows) + ' × ' + fmtNum(info.columns.length);
-  }
+  /* the file's name is in the chip and the status bar already */
+  $('viewName').parentElement.hidden = !q;
+  $('viewName').textContent = q ? 'SQL' : '';
+  $('viewKind').textContent = '';
 
   if (q) { showQueryResult(); $('sql').focus(); prepareEngine(); }
   else if (state.mode === 'schema') renderSchema();
@@ -729,7 +721,6 @@ async function readerRows() {
        DuckDB reads those, so the grid goes on through it */
     if (!viaEngine) {
       viaEngine = true;
-      LintApp.toast('The quick reader could not decode this file, so DuckDB reads its rows');
       loadRows();
       return;
     }
@@ -1083,25 +1074,24 @@ const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '';
 
 function renderSchema() {
   const d = info;
-  let html = `<section class="schema-sec"><h3>Columns<span class="n">${fmtNum(d.columns.length)}` +
-    (d.schema.length > d.columns.length ? `, ${fmtNum(d.schema.filter((s) => s.leaf).length)} stored` : '') +
-    `</span></h3><div class="table-scroll"><table class="cols"><thead><tr>
-      <th>Name</th><th>Type</th><th>Stored as</th><th>Codec</th><th class="r">Size</th>
-      <th class="r">Ratio</th><th class="r">Nulls</th><th>Min</th><th>Max</th></tr></thead><tbody>`;
+  let html = `<section class="schema-sec"><h3>Columns<span class="n">${fmtNum(d.columns.length)}</span></h3>` +
+    `<div class="table-scroll"><table class="cols"><thead><tr>
+      <th>Name</th><th>Type</th><th>Codec</th><th class="r">Size</th>
+      <th class="r">Nulls</th><th>Min</th><th>Max</th></tr></thead><tbody>`;
   for (const s of d.schema) {
     const tree = s.depth ? '<span class="tree">' + '  '.repeat(s.depth - 1) + '└ </span>' : '';
     const flags = (s.repetition === 'required' ? '<span class="flag">required</span>' : '') +
       (s.repetition === 'repeated' ? '<span class="flag">repeated</span>' : '') +
       (s.approx ? '<span class="flag" title="More digits than a double holds: the grid shows it approximately, SQL exactly">approx. in grid</span>' : '');
     html += `<tr><td class="nm${s.depth ? ' inner' : ''}">${tree}${esc(s.name)}${flags}</td>` +
-      `<td class="ty">${esc(s.type)}</td><td>${s.physical ? esc(s.physical) : ''}</td>` +
+      `<td class="ty"${s.physical ? ` title="Stored as ${esc(s.physical)}"` : ''}>${esc(s.type)}</td>` +
       (s.leaf
-        ? `<td>${esc(s.codec.toLowerCase())}</td><td class="r">${LintApp.fmtBytes(s.compressed)}</td>` +
-          `<td class="r">${s.compressed && s.uncompressed ? (s.uncompressed / s.compressed).toFixed(1) + '×' : ''}</td>` +
+        ? `<td>${esc(s.codec.toLowerCase())}</td>` +
+          `<td class="r" title="${LintApp.fmtBytes(s.uncompressed)} unpacked">${LintApp.fmtBytes(s.compressed)}</td>` +
           `<td class="r">${s.nulls === null ? '' : fmtNum(s.nulls)}</td>` +
           `<td class="mm" title="${esc(s.min || '')}">${s.min === null ? '' : esc(s.min)}</td>` +
           `<td class="mm" title="${esc(s.max || '')}">${s.max === null ? '' : esc(s.max)}</td>`
-        : '<td></td><td></td><td></td><td></td><td></td><td></td>') + '</tr>';
+        : '<td></td><td></td><td></td><td></td><td></td>') + '</tr>';
   }
   html += '</tbody></table></div></section>';
 
@@ -1169,7 +1159,7 @@ async function runQuery() {
   query.sql = sql;
   const msg = $('queryMsg');
   msg.className = '';
-  msg.textContent = engineReady ? 'Running…' : 'Starting the SQL engine…';
+  msg.textContent = engineReady ? 'Running…' : 'Getting ready…';
   $('grid').classList.add('stale');
   runStart = performance.now();
   /* a quick query never flashes a Stop button */
@@ -1314,10 +1304,10 @@ $('btnCloseDrawer').addEventListener('click', closeDrawer);
 /* who wrote it, in words: "parquet-cpp-arrow version 21.0.0" is pyarrow */
 function writer(s) {
   if (!s) return null;
-  if (/parquet-cpp-arrow/.test(s)) return 'Apache Arrow (pyarrow, pandas, Polars and others)';
-  if (/parquet-mr/.test(s)) return 'parquet-mr (Spark, Hive, Flink and other JVM tools)';
+  if (/parquet-cpp-arrow/.test(s)) return 'Apache Arrow: pyarrow, pandas, Polars';
+  if (/parquet-mr/.test(s)) return 'parquet-mr: Spark, Hive, Flink';
   if (/^DuckDB/i.test(s)) return 'DuckDB';
-  if (/parquet-rs/.test(s)) return 'parquet-rs (Polars, DataFusion, Rust tools)';
+  if (/parquet-rs/.test(s)) return 'parquet-rs: Polars, DataFusion';
   if (/impala/i.test(s)) return 'Impala';
   return null;
 }
@@ -1329,19 +1319,12 @@ function buildFilePanel() {
   const ratio = d.compressed && d.uncompressed ? (d.uncompressed / d.compressed).toFixed(1) + '× smaller than its data unpacked' : null;
   let html = '<dl class="meta">' + row('File', esc(d.name)) +
     (d.size !== null ? row('Size', LintApp.fmtBytes(d.size)) : '') +
-    row('Rows', fmtNum(d.rows)) +
-    row('Columns', fmtNum(d.columns.length),
-      d.schema.length > d.columns.length ? fmtNum(d.schema.filter((s) => s.leaf).length) + ' stored, counting the fields of nested ones' : null) +
-    row('Row groups', fmtNum(d.groups.length),
-      d.groups.length ? 'About ' + fmtNum(Math.round(d.rows / d.groups.length)) + ' rows each' : null) +
-    row('Compression', esc(d.codecs.map((x) => x.toLowerCase()).join(', ') || 'none'), ratio) +
-    row('Encodings', esc(d.encodings.map((x) => x.toLowerCase().replace(/_/g, ' ')).join(', '))) +
-    (d.createdBy ? row('Written by', esc(d.createdBy), writer(d.createdBy)) : '') +
-    row('Format', 'Parquet ' + (d.version === 2 ? '2' : '1'), 'The footer is ' + LintApp.fmtBytes(d.metaBytes)) +
-    row('Read with', esc(d.reader), 'Reads only the pages a screen of rows needs') +
-    row('SQL', info.engine ? esc(info.engine) : 'DuckDB 1.5.4, not loaded yet',
-      info.engine ? 'Started in ' + ms(info.engineMs) + '. Sorting, filtering and SQL run here.'
-        : 'Loads the first time you sort, filter or open SQL: 9 MB once, then kept offline') +
+    row('Contents', fmtNum(d.rows) + ' rows, ' + fmtNum(d.columns.length) + ' columns, ' +
+      fmtNum(d.groups.length) + (d.groups.length === 1 ? ' row group' : ' row groups')) +
+    row('Compression', esc(d.codecs.map((x) => x.toLowerCase()).join(', ') || 'none'),
+      d.compressed && d.uncompressed ? (d.uncompressed / d.compressed).toFixed(1) + '× smaller than unpacked' : null) +
+    (d.createdBy ? row('Written by', esc(writer(d.createdBy) || d.createdBy), writer(d.createdBy) ? esc(d.createdBy) : null) : '') +
+    row('Read with', esc(d.reader), 'Sorting, filtering and SQL use ' + (info.engine ? esc(info.engine) : 'DuckDB, loaded the first time') ) +
     '</dl>';
   $('panelFile').innerHTML = html;
 }
@@ -1374,7 +1357,7 @@ document.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (mod && k === 'o') { e.preventDefault(); $('fileInput').click(); return; }
   if (!info) return;
-  if (e.key === 'Escape' && (running ? !$('btnStop').hidden : !$('engineNote').hidden) &&
+  if (e.key === 'Escape' && (running ? !$('btnStop').hidden : !$('btnStopNote').hidden) &&
       (engine.calls.size || reader.calls.size)) { e.preventDefault(); stop(); return; }
   if (mod && k === 'e') { e.preventDefault(); $('btnQuery').click(); return; }
   if (mod && k === 'i') { e.preventDefault(); $('btnInfo').click(); return; }

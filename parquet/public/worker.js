@@ -152,25 +152,43 @@ function columnOf(node) {
 function describe(tree) {
   const groups = meta.row_groups;
   const leaves = [];
-  const walk = (node, depth, parent) => {
+  /* The schema as a person reads it: a list shows the fields of what it
+     holds, a map its key and value. The groups the format wraps them in
+     (list, element, key_value) are plumbing, and are not rows of their own;
+     a list of plain values takes that value's storage facts itself. */
+  const walk = (node, depth) => {
     const el = node.element;
-    /* the repeated group inside a list or a map is plumbing, not a type
-       anyone chose; it is named for what it is */
-    const t = parent && node.children.length && (isList(parent.element) || isMap(parent.element))
-      ? { type: 'repeated group', kind: 'nested' }
-      : node.children.length ? typeOf(node) : leafType(el);
+    const leaf = !node.children.length;
+    const t = leaf ? leafType(el) : typeOf(node);
     const entry = {
       name: el.name, depth, type: t.type, kind: t.kind,
-      physical: node.children.length ? null : String(el.type || '').toLowerCase(),
+      physical: leaf ? String(el.type || '').toLowerCase() : null,
       repetition: (el.repetition_type || '').toLowerCase(),
       approx: t.kind === 'decimal' && t.precision > 15,
-      leaf: !node.children.length
+      leaf
     };
-    if (entry.leaf) Object.assign(entry, chunkFacts(node.path, t));
     leaves.push(entry);
-    node.children.forEach((c) => walk(c, depth + 1, node));
+    if (leaf) { Object.assign(entry, chunkFacts(node.path, t)); return; }
+    let inner = node.children;
+    if (isList(el)) {
+      /* a list of lists is unwrapped to what the innermost one holds */
+      let item = node;
+      do {
+        const rep = item.children[0];
+        item = rep.children.length === 1 ? rep.children[0] : rep;
+      } while (item.children.length && isList(item.element));
+      if (!item.children.length) {
+        const it = leafType(item.element);
+        Object.assign(entry, chunkFacts(item.path, it), { leaf: true, physical: String(item.element.type || '').toLowerCase() });
+        return;
+      }
+      inner = item.children;
+    } else if (isMap(el)) {
+      inner = node.children[0].children;
+    }
+    inner.forEach((c) => walk(c, depth + 1));
   };
-  tree.children.forEach((c) => walk(c, 0, null));
+  tree.children.forEach((c) => walk(c, 0));
 
   const codecs = new Set(), encodings = new Set();
   let compressed = 0, uncompressed = 0;
