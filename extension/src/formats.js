@@ -25,7 +25,7 @@
   /* site/public/index.html's BY_EXT */
   var BY_EXT = {
     json: 'json', geojson: 'json', jsonc: 'json',
-    jsonl: 'log', ndjson: 'log',
+    jsonl: 'log', ndjson: 'log',   // until settle() reads what is in them
     xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
     rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
     yaml: 'yaml', yml: 'yaml',
@@ -40,6 +40,41 @@
     parquet: 'parquet', parq: 'parquet', pqt: 'parquet',
     env: 'env'
   };
+
+  /* JSON Lines: a log, or data? The rule shared/app.js keeps as jsonlKind:
+     'log' when most of the first 30 records carry a level, or a time and a
+     message; 'data' otherwise; null when this is not JSON Lines. */
+  var LOG_LEVEL = ['level', 'severity', 'lvl', 'levelname', 'log.level', '@l', 'loglevel'];
+  var LOG_TIME = ['time', 'timestamp', 'ts', '@timestamp', '@t', 'date', 'datetime', 'asctime'];
+  var LOG_MSG = ['msg', 'message', '@m', '@mt', 'event', 'log'];
+  function jsonlKind(text) {
+    var lines = String(text).split('\n'), seen = 0, logs = 0, recs = 0;
+    for (var i = 0; i < lines.length && seen < 30; i++) {
+      var l = lines[i].trim();
+      if (!l) continue;
+      seen++;
+      var v;
+      try { v = JSON.parse(l); } catch (e) { if (seen === 1) return null; continue; }
+      if (!v || typeof v !== 'object') continue;
+      recs++;
+      var has = function (keys) { for (var k = 0; k < keys.length; k++) if (keys[k] in v) return true; return false; };
+      if (has(LOG_LEVEL) || (has(LOG_TIME) && has(LOG_MSG))) logs++;
+    }
+    if (seen < 2 || recs < 2) return null;
+    return logs >= recs * 0.6 ? 'log' : 'data';
+  }
+  /* data goes to JSON only while the JSON viewer can hold it */
+  var JSON_TOOL_LIMIT = 20 * 1048576;
+
+  /* A choice made by name or type, looked at again with the file's start:
+     JSON Lines that are data go to JSON, a log to LOG */
+  function settle(tool, head, size) {
+    if ((tool !== 'log' && tool !== 'json') || head == null) return tool;
+    var kind = jsonlKind(head);
+    if (kind === 'log') return 'log';
+    if (kind === 'data') return size > JSON_TOOL_LIMIT ? 'log' : 'json';
+    return tool;
+  }
 
   function extOf(name) {
     var m = /\.([a-z0-9]{1,8})$/i.exec(name || '');
@@ -93,13 +128,8 @@
     /* "[2024-05-01 10:00] GET /" and "[INFO] ..." open with a bracket too */
     if (c === '[' && (TIMESTAMP.test(lines[0]) || LEVEL.test(lines[0]))) return 'log';
     if (c === '{' || c === '[') {
-      /* one object per line is a log to read, not one document to parse */
-      if (lines.length > 1 && lines.every(function (l) {
-        var t = l.trim();
-        if (t.charAt(0) !== '{' || t.charAt(t.length - 1) !== '}') return false;
-        try { JSON.parse(t); return true; } catch (e) { return false; }
-      })) return 'log';
-      return 'json';
+      /* one record per line: a log to read, or data to see as records */
+      return jsonlKind(s) === 'log' ? 'log' : 'json';
     }
     if (c === '<') return 'xml';
 
@@ -179,6 +209,8 @@
     sniffText: sniffText,
     sniffHead: sniffHead,
     pick: pick,
+    settle: settle,
+    jsonlKind: jsonlKind,
     nameFor: nameFor,
     toolFromWord: toolFromWord
   };

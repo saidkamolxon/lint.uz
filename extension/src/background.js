@@ -270,6 +270,7 @@ function decide(meta) {
     return { error: 'That is a web page, not a file lint.one reads.' };
   }
   if (!tool) tool = F.sniffHead(meta.head || '');
+  tool = F.settle(tool, meta.head, meta.size);
   return { tool: tool, name: F.nameFor(meta.name, tool, meta.head) };
 }
 
