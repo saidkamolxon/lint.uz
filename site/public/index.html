@@ -500,8 +500,8 @@ LintTheme.buildMenu(menu, closeMenu);
 (function () {
   var BY_EXT = {
     json: 'json', geojson: 'json',
-    /* one record per line is a log to read, not one document to parse */
-    jsonl: 'log', ndjson: 'log',
+    /* one record per line: a log, or data, decided by what is in it */
+    jsonl: 'jsonl', ndjson: 'jsonl',
     xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
     rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
     yaml: 'yaml', yml: 'yaml',
@@ -538,6 +538,41 @@ LintTheme.buildMenu(menu, closeMenu);
      itself in its first sixteen bytes, which matters because browsers keep
      theirs (History, Cookies) with no extension at all. Parquet starts with
      PAR1, which Spark's part-00000 files, named without one, rely on. */
+  /* JSON Lines: a log, or data? The rule shared/app.js keeps as jsonlKind:
+     'log' when most of the first 30 records carry a level, or a time and a
+     message; 'data' otherwise; null when this is not JSON Lines. */
+  var LOG_LEVEL = ['level', 'severity', 'lvl', 'levelname', 'log.level', '@l', 'loglevel'];
+  var LOG_TIME = ['time', 'timestamp', 'ts', '@timestamp', '@t', 'date', 'datetime', 'asctime'];
+  var LOG_MSG = ['msg', 'message', '@m', '@mt', 'event', 'log'];
+  function jsonlKind(text) {
+    var lines = String(text).split('\n'), seen = 0, logs = 0, recs = 0;
+    for (var i = 0; i < lines.length && seen < 30; i++) {
+      var l = lines[i].trim();
+      if (!l) continue;
+      seen++;
+      var v;
+      try { v = JSON.parse(l); } catch (e) { if (seen === 1) return null; continue; }
+      if (!v || typeof v !== 'object') continue;
+      recs++;
+      var has = function (keys) { for (var k = 0; k < keys.length; k++) if (keys[k] in v) return true; return false; };
+      if (has(LOG_LEVEL) || (has(LOG_TIME) && has(LOG_MSG))) logs++;
+    }
+    if (seen < 2 || recs < 2) return null;
+    return logs >= recs * 0.6 ? 'log' : 'data';
+  }
+  /* data goes to JSON only while the JSON viewer can hold it */
+  var JSON_TOOL_LIMIT = 20 * 1048576;
+
+  /* JSON Lines, or what may be: read the head and choose */
+  function settle(tool, file, done) {
+    file.slice(0, 65536).text().then(function (head) {
+      var kind = jsonlKind(head);
+      if (kind === 'log' || (kind === 'data' && file.size > JSON_TOOL_LIMIT)) done('log');
+      else if (kind === 'data') done('json');
+      else done(tool === 'jsonl' ? 'log' : tool);
+    }, function () { done(tool === 'jsonl' ? 'log' : tool); });
+  }
+
   function sniff(file, done) {
     file.slice(0, 4096).text().then(function (s) {
       if (s.slice(0, 16) === 'SQLite format 3\u0000') { done('sqlite'); return; }
@@ -577,8 +612,12 @@ LintTheme.buildMenu(menu, closeMenu);
   function open(file) {
     if (!file) return;
     var tool = byName(file.name) || byType(file.type);
-    if (tool) handOff(tool, file);
-    else sniff(file, function (t) { handOff(t, file); });
+    var go = function (t) {
+      if (t === 'jsonl' || t === 'json') settle(t, file, function (u) { handOff(u, file); });
+      else handOff(t, file);
+    };
+    if (tool) go(tool);
+    else sniff(file, go);
   }
 
   var input = document.getElementById('fileIn');

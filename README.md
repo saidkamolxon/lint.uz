@@ -6,7 +6,7 @@
 
 | | Subdomain | What it does |
 | :-- | :-- | :-- |
-| `{}` | **[json.lint.one](https://json.lint.one)** | Collapsible tree, path copying, minify, unescape, errors pinned to the line |
+| `{}` | **[json.lint.one](https://json.lint.one)** | Collapsible tree, path copying, minify, unescape, errors pinned to the line; JSON Lines (`.jsonl`, `.ndjson`) as records, to an array or CSV. JSON Lines that read as a log (a level, or a time and a message) open in LOG instead, and so does data over 20 MB |
 | `—` | **[yaml.lint.one](https://yaml.lint.one)** | Indentation validation, multi-document manifests, YAML ↔ JSON |
 | `⌸` | **[csv.lint.one](https://csv.lint.one)** | Sortable table, delimiter sniffing, ragged-row flagging, CSV → JSON |
 | `⚿` | **[lint.one/env](https://lint.one/env)** | How Node, Python, Compose, `docker run` and the shell each read a `.env` file; trailing spaces, duplicates, bad ports and URLs; diff against `.env.example`; export to Compose or Kubernetes |

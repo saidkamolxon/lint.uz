@@ -1825,6 +1825,50 @@ function openConverted(text, label, from, dest) {
   });
 }
 
+/* The same document, opened in another tool now: for a file that belongs
+   in the other one (JSON Lines that are a log, or a log that is data).
+   It travels as a converted document does, with its own name. */
+function openIn(text, name, to) {
+  var dest = null;
+  for (var i = 0; i < SUITE.length; i++) if (SUITE[i].id === to) dest = SUITE[i];
+  if (!dest) return;
+  var w = window.open('', '_blank');
+  if (w) try { w.opener = null; } catch (e) {}
+  parkHandoff(dest.id, new File([text], name, { type: 'text/plain' }), function () {
+    if (w) w.location.replace(dest.host + '/');
+    else location.href = dest.host + '/';
+  });
+}
+
+/* ---------- JSON Lines: a log, or data? ----------
+   One JSON value per line is two different things in practice: a structured
+   log (pino, zap, structlog, Docker's json-file) or data (a fine-tuning set,
+   an export, a batch of records). The first 30 lines decide: 'log' when most
+   records carry a level, or a time and a message; 'data' otherwise; null
+   when the text is not JSON Lines at all. The landing page and the extension
+   keep a copy of this rule, so a file lands in the same tool whichever way
+   it arrives. */
+var LOG_LEVEL = ['level', 'severity', 'lvl', 'levelname', 'log.level', '@l', 'loglevel'];
+var LOG_TIME = ['time', 'timestamp', 'ts', '@timestamp', '@t', 'date', 'datetime', 'asctime'];
+var LOG_MSG = ['msg', 'message', '@m', '@mt', 'event', 'log'];
+
+function jsonlKind(text) {
+  var lines = String(text).split('\n'), seen = 0, logs = 0, recs = 0;
+  for (var i = 0; i < lines.length && seen < 30; i++) {
+    var l = lines[i].trim();
+    if (!l) continue;
+    seen++;
+    var v;
+    try { v = JSON.parse(l); } catch (e) { if (seen === 1) return null; continue; }
+    if (!v || typeof v !== 'object') continue;
+    recs++;
+    var has = function (keys) { for (var k = 0; k < keys.length; k++) if (keys[k] in v) return true; return false; };
+    if (has(LOG_LEVEL) || (has(LOG_TIME) && has(LOG_MSG))) logs++;
+  }
+  if (seen < 2 || recs < 2) return null;
+  return logs >= recs * 0.6 ? 'log' : 'data';
+}
+
 /* The empty state every tool opens on: a heading saying what to do, one
    sentence on what happens, optional buttons, and the keys. `extra` is raw
    HTML placed between the sentence and the keys (a tool's own choices). */
@@ -1857,6 +1901,8 @@ global.LintApp = {
   setDocument: setDocument,
   keyText: keyText,
   copyAndOffer: copyAndOffer,
+  openIn: openIn,
+  jsonlKind: jsonlKind,
   takeHandoff: takeHandoff,
   kbd: kbd,
   emptyState: emptyState,

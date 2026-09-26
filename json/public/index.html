@@ -163,7 +163,7 @@ window.LINT_CONFIG = {
   emptyLine: 'You\'ll get a tree you can search, with the path to any value.',
   hue: '#4F46E5',
   hueInk: '#FFFFFF',
-  accept: '.json,.jsonc,.txt,application/json',
+  accept: '.json,.jsonl,.ndjson,.jsonc,.txt,application/json',
   placeholder: 'Paste JSON or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
@@ -173,7 +173,11 @@ window.LINT_CONFIG = {
   ],
   /* rarer commands, listed in the ⋮ menu ahead of Copy */
   more: [
-    { id: 'btnEscape', label: 'Unescape a string', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' }
+    { id: 'btnEscape', label: 'Unescape a string', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' },
+    { id: 'btnToArray', label: 'Convert to a JSON array', title: 'JSON Lines, one record per line, into one JSON array' },
+    { id: 'btnToLines', label: 'Convert to JSON Lines', title: 'A JSON array into JSON Lines: one record per line (.jsonl, .ndjson)' },
+    { id: 'btnToCsv', label: 'Convert to CSV', title: 'An array of records, or JSON Lines, as a CSV table in the CSV viewer (also copied)' },
+    { id: 'btnToLog', label: 'Open in LOG', title: 'Read these JSON Lines as a log: filter by severity, fold stack traces' }
   ]
 };
 </script>
@@ -211,10 +215,35 @@ function highlight(text) {
    JSON.parse gives a character offset but no line/column — derive them so
    the gutter can mark the bad line.
    ========================================================================== */
+/* JSON Lines (.jsonl, .ndjson): one JSON value per line. A document that
+   does not parse whole, but whose lines do, is read that way: the records
+   become one array for the tree, and a bad line is marked in the gutter
+   while the rest are still shown. */
+var jsonl = null;            // {records, bad: [{line, message}]} in JSON Lines mode
+var offeredLog = false;     // the LOG viewer was offered for this document
+
+function parseLines(text) {
+  var rows = text.split('\n'), records = [], bad = [], first = true;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i].trim();
+    if (!r) continue;
+    try { records.push(JSON.parse(r)); }
+    catch (e) {
+      if (first) return null;
+      bad.push({ line: i + 1, message: String(e.message || 'Invalid JSON').replace(/^JSON\.parse:\s*/, '').replace(/\s*(?:in JSON )?at position \d+.*$/i, '') });
+    }
+    first = false;
+  }
+  return records.length >= 2 || (records.length && bad.length) ? { records: records, bad: bad } : null;
+}
+
 function parse(text) {
+  jsonl = null;
   try {
     return { ok: true, value: JSON.parse(text) };
   } catch (e) {
+    var jl = parseLines(text);
+    if (jl) { jsonl = jl; return { ok: true, value: jl.records }; }
     var msg = e.message || 'Invalid JSON';
     var pos = null;
 
@@ -263,6 +292,10 @@ function stats(value) {
       else for (var k in v) walk(v[k], d + 1);
     }
   })(value, 1);
+  if (jsonl) {
+    return 'JSON Lines · ' + LintApp.fmtNum(jsonl.records.length) + (jsonl.records.length === 1 ? ' record' : ' records') +
+      (jsonl.bad.length ? ' · ' + jsonl.bad.length + (jsonl.bad.length === 1 ? ' invalid line' : ' invalid lines') : '');
+  }
   return LintApp.fmtNum(nodes) + ' nodes, depth ' + depth;
 }
 
@@ -552,6 +585,8 @@ var app = LintApp.init({
   label: 'JSON',
   parse: parse,
   stats: stats,
+  /* JSON Lines with a broken line is not simply valid: the status leaves the word out */
+  get okLabel() { return jsonl && jsonl.bad.length ? null : undefined; },
   adapter: adapter,
   highlighter: highlight,
   autoDepth: 2,
@@ -561,13 +596,36 @@ var app = LintApp.init({
     extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
   /* the editor is Compare's "before", so every edit re-runs the diff */
-  onParsed: function () { if (comparing()) onEditorChanged(); },
+  onParsed: function () {
+    /* JSON Lines that are a log read better in LOG: offered once a document */
+    if (!jsonl) offeredLog = false;
+    else if (!offeredLog && LintApp.jsonlKind && LintApp.jsonlKind(app.editor.getValue().slice(0, 65536)) === 'log') {
+      offeredLog = true;
+      LintApp.toast('These look like log lines', {
+        label: 'Open in LOG viewer', href: '/log/',
+        onFollow: function () { document.getElementById('btnToLog').click(); }
+      });
+    }
+    /* a bad line in JSON Lines is marked and the rest still read */
+    if (app.editor.setMarks) {
+      var marks = {};
+      if (jsonl) jsonl.bad.forEach(function (b) { marks[b.line] = { kind: 'err', title: 'Line ' + b.line + ': ' + b.message }; });
+      app.editor.setMarks(marks);
+    }
+    if (comparing()) onEditorChanged();
+  },
   sample: SAMPLE
 });
 
 document.getElementById('btnFormat').addEventListener('click', function () {
   var res = parse(app.editor.getValue());
   if (!res.ok) { app.run(); LintApp.toast('Fix the JSON before formatting'); return; }
+  if (jsonl) {
+    /* JSON Lines stays one record per line; formatting tidies each one */
+    app.editor.setValue(jsonl.records.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
+    LintApp.toast(jsonl.bad.length ? 'Formatted; invalid lines were left out' : 'Formatted, one record per line');
+    return;
+  }
   app.editor.setValue(JSON.stringify(res.value, null, 2));
   LintApp.toast('Formatted');
 });
@@ -576,7 +634,7 @@ document.getElementById('btnMinify').addEventListener('click', function () {
   var res = parse(app.editor.getValue());
   if (!res.ok) { app.run(); LintApp.toast('Fix the JSON before minifying'); return; }
   var before = app.editor.getValue().length;
-  var out = JSON.stringify(res.value);
+  var out = jsonl ? jsonl.records.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n' : JSON.stringify(res.value);
   app.editor.setValue(out);
   LintApp.toast('Minified — saved ' + LintApp.fmtBytes(Math.max(0, before - out.length)));
 });
@@ -598,6 +656,53 @@ document.getElementById('btnEscape').addEventListener('click', function () {
   }
 });
 
+
+/* ---------- JSON Lines and arrays, both ways ---------- */
+document.getElementById('btnToArray').addEventListener('click', function () {
+  var res = parse(app.editor.getValue());
+  if (!jsonl) { LintApp.toast(res.ok ? 'This is already one JSON document' : 'Fix the JSON first'); return; }
+  app.editor.setValue(JSON.stringify(jsonl.records, null, 2));
+  LintApp.toast('Converted to a JSON array of ' + LintApp.fmtNum(res.value.length) + ' records');
+});
+
+document.getElementById('btnToLines').addEventListener('click', function () {
+  var res = parse(app.editor.getValue());
+  if (jsonl) { LintApp.toast('This is already JSON Lines'); return; }
+  if (!res.ok || !Array.isArray(res.value)) { LintApp.toast('Only a JSON array can become JSON Lines'); return; }
+  app.editor.setValue(res.value.map(function (r) { return JSON.stringify(r); }).join('\n') + '\n');
+  LintApp.toast('Converted to JSON Lines: ' + LintApp.fmtNum(res.value.length) + ' lines');
+});
+
+/* records to a table: one column per key, in the order keys first appear;
+   a nested value is written as JSON in its cell */
+function toCsv(records) {
+  var cols = [];
+  records.forEach(function (r) { if (r && typeof r === 'object' && !Array.isArray(r)) Object.keys(r).forEach(function (k) { if (cols.indexOf(k) === -1) cols.push(k); }); });
+  var cell = function (v) {
+    if (v === undefined || v === null) return '';
+    var t = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    return /[",\n\r]/.test(t) || t !== t.trim() ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  return [cols.map(cell).join(',')].concat(records.map(function (r) {
+    return cols.map(function (c) { return cell(r && typeof r === 'object' ? r[c] : undefined); }).join(',');
+  })).join('\n');
+}
+
+document.getElementById('btnToCsv').addEventListener('click', function () {
+  var res = parse(app.editor.getValue());
+  if (!res.ok || !Array.isArray(res.value) || !res.value.some(function (r) { return r && typeof r === 'object' && !Array.isArray(r); })) {
+    LintApp.toast('CSV needs an array of records, or JSON Lines'); return;
+  }
+  LintApp.copyAndOffer(toCsv(res.value), 'CSV', 'json', 'csv');
+});
+
+document.getElementById('btnToLog').addEventListener('click', function () {
+  var text = app.editor.getValue();
+  if (!text.trim()) return;
+  var chip = document.querySelector('.doc-name');
+  var name = chip && /\.(jsonl|ndjson|log)$/i.test(chip.textContent.trim()) ? chip.textContent.trim() : 'records.jsonl';
+  LintApp.openIn(text, name, 'log');
+});
 
 document.getElementById('btnToYaml').addEventListener('click', function () {
   var res = parse(app.editor.getValue());

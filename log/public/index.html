@@ -719,11 +719,25 @@ async function openFile(file) {
     applyFilters();
     drawDensity();
     $('viewport').scrollTop = 0;
+    offerJson(file);
   } catch (e) {
     $('progress').style.width = '0';
     setStatus('err', 'Could not read that file');
     LintApp.toast('Could not read that file');
   }
+}
+
+/* JSON Lines that are data, not a log (records with no level, nor a time
+   and a message), read better as a tree: offered, not forced. Past 20 MB
+   they stay here, where a file of any size opens. */
+const JSON_TOOL_LIMIT = 20 * 1048576;
+function offerJson(file) {
+  if (!LintApp.jsonlKind || file.size > JSON_TOOL_LIMIT) return;
+  if (LintApp.jsonlKind(lines.slice(0, 60).join('\n')) !== 'data') return;
+  LintApp.toast('These look like data records, not a log', {
+    label: 'Open in JSON viewer', href: '/json/',
+    onFollow: () => file.text().then((t) => LintApp.openIn(t, file.name, 'json'))
+  });
 }
 
 /* one pass: severity per line, and which lines belong to the event above */
