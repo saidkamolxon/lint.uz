@@ -284,12 +284,32 @@ kbd {
 .gutter-inner { will-change: transform; }
 /* one number per line of text, so its height follows the text's size */
 .gutter .ln { display: block; height: calc(var(--code-size, var(--fs-base)) * 1.6); }
+/* a number with a message on it can be pointed at or tapped */
+.gutter .ln[data-tip] { cursor: help; }
 /* the current line is marked by its number alone; an error stays a filled
    block, because an error should be loud */
 .gutter .ln.cur {
   color: var(--gutter-cur);
   font-weight: 600;
 }
+.gutter .ln.warn {
+  color: var(--warn);
+  font-weight: 700;
+  box-shadow: inset -3px 0 0 var(--warn);
+  margin-right: calc(var(--s2) * -1);
+  padding-right: var(--s2);
+}
+/* a marked line's message, shown beside its number on hover */
+.gutter-tip {
+  position: fixed; z-index: 60; max-width: min(56ch, 70vw);
+  padding: var(--s1) var(--s2);
+  background: var(--raised); color: var(--ink);
+  border: var(--hairline) solid var(--line-strong); border-left: 3px solid var(--warn);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  font: 500 var(--fs-small)/1.45 var(--ui); white-space: pre-line;
+  pointer-events: none;
+}
+.gutter-tip.err { border-left-color: var(--bad); }
 .gutter .ln.err {
   color: var(--hue-ink);
   background: var(--bad);
