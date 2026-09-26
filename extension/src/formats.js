@@ -15,7 +15,8 @@
     { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
     { id: 'log',    name: 'Logs',   hue: '#0369A1', ext: 'log' },
     { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' },
-    { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' }
+    { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' },
+    { id: 'parquet', name: 'Parquet', hue: '#F7CE46', ext: 'parquet' }
   ];
   var BY_ID = {};
   TOOLS.forEach(function (t) { BY_ID[t.id] = t; });
@@ -34,7 +35,8 @@
     opus: 'audio', m4a: 'audio', aac: 'audio', weba: 'audio',
     aif: 'audio', aiff: 'audio',
     db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
-    sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite'
+    sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite',
+    parquet: 'parquet', parq: 'parquet', pqt: 'parquet'
   };
 
   function extOf(name) {
@@ -55,6 +57,7 @@
     if (t === 'application/pdf') return 'pdf';
     if (/^audio\//.test(t)) return 'audio';
     if (/sqlite/.test(t)) return 'sqlite';
+    if (/parquet/.test(t)) return 'parquet';
     if (/(^|[\/+])x?-?ndjson$|jsonl|json-seq/.test(t)) return 'log';
     if (/(^|[\/+])json$/.test(t)) return 'json';
     if (/(^|[\/+])x?-?yaml$|\/yml$/.test(t)) return 'yaml';
@@ -123,6 +126,7 @@
   function sniffHead(head) {
     var h = String(head || '');
     if (h.slice(0, 16) === 'SQLite format 3\u0000') return 'sqlite';
+    if (h.slice(0, 4) === 'PAR1') return 'parquet';
     if (h.slice(0, 5) === '%PDF-') return 'pdf';
     if (/^(ID3|fLaC|OggS|FORM)/.test(h) || /^RIFF....WAVE/.test(h) ||
         /^....ftypM4A/.test(h)) return 'audio';

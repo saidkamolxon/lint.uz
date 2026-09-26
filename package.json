@@ -23,7 +23,8 @@
     "formatter",
     "pdf",
     "log",
-    "sqlite"
+    "sqlite",
+    "parquet"
   ],
   "author": "saidkamolxon",
   "license": "MIT"

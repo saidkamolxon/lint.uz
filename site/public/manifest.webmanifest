@@ -2,7 +2,7 @@
   "id": "/",
   "name": "lint",
   "short_name": "lint",
-  "description": "Read JSON, XML, YAML, CSV, PDF, logs, SQLite and audio files in your browser. Nothing you open leaves your device.",
+  "description": "Read JSON, XML, YAML, CSV, PDF, logs, SQLite, Parquet and audio files in your browser. Nothing you open leaves your device.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -21,7 +21,8 @@
     { "name": "PDF", "url": "/pdf/", "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "Logs", "url": "/log/", "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
     { "name": "Audio", "url": "/audio/", "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] },
-    { "name": "SQLite", "url": "/sqlite/", "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] }
+    { "name": "SQLite", "url": "/sqlite/", "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] },
+    { "name": "Parquet", "url": "/parquet/", "icons": [{ "src": "/icons/file-parquet.png", "sizes": "256x256", "type": "image/png" }] }
   ],
   "file_handlers": [
     { "action": "/json/", "accept": { "application/json": [".json", ".jsonc", ".geojson"] }, "icons": [{ "src": "/icons/file-json.png", "sizes": "256x256", "type": "image/png" }] },
@@ -31,6 +32,7 @@
     { "action": "/pdf/", "accept": { "application/pdf": [".pdf"] }, "icons": [{ "src": "/icons/file-pdf.png", "sizes": "256x256", "type": "image/png" }] },
     { "action": "/log/", "accept": { "text/plain": [".log", ".txt", ".out", ".err", ".jsonl", ".ndjson"] }, "icons": [{ "src": "/icons/file-log.png", "sizes": "256x256", "type": "image/png" }] },
     { "action": "/audio/", "accept": { "audio/*": [".mp3", ".wav", ".flac", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".aif", ".aiff"] }, "icons": [{ "src": "/icons/file-audio.png", "sizes": "256x256", "type": "image/png" }] },
-    { "action": "/sqlite/", "accept": { "application/vnd.sqlite3": [".db", ".sqlite", ".sqlite3", ".db3", ".s3db", ".sl3", ".gpkg", ".mbtiles"] }, "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] }
+    { "action": "/sqlite/", "accept": { "application/vnd.sqlite3": [".db", ".sqlite", ".sqlite3", ".db3", ".s3db", ".sl3", ".gpkg", ".mbtiles"] }, "icons": [{ "src": "/icons/file-sqlite.png", "sizes": "256x256", "type": "image/png" }] },
+    { "action": "/parquet/", "accept": { "application/vnd.apache.parquet": [".parquet", ".parq", ".pqt"] }, "icons": [{ "src": "/icons/file-parquet.png", "sizes": "256x256", "type": "image/png" }] }
   ]
 }

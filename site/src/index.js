@@ -9,7 +9,7 @@
    not exist yet into something useful — a page that says so and counts how
    many people wanted it. */
 
-const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite'];
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet'];
 
 /* Other names people type for a format we read, each sent to the tool that
    reads it: /yml is /yaml, /db is /sqlite. The same names the landing page
@@ -26,7 +26,8 @@ const ALIASES = {
   mp3: 'audio', wav: 'audio', flac: 'audio', ogg: 'audio', oga: 'audio', opus: 'audio',
   m4a: 'audio', aac: 'audio', weba: 'audio', aiff: 'audio',
   db: 'sqlite', sql: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
-  sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite'
+  sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite',
+  parq: 'parquet', pqt: 'parquet'
 };
 
 /* What might plausibly be a file format someone hoped for: short, letters and

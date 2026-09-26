@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lint.one art</title>
+<!--
+  Draws the link-preview cards (site/public/og/*.png) and the icons files
+  wear when lint.one opens them (site/public/icons/file-*.png), and posts
+  each to serve.py, which writes it. Run from the repository root:
+
+    python3 site/art/serve.py
+    open http://localhost:8767/site/art/render.html?jobs=og:parquet,icon:parquet,home
+
+  jobs is a comma list of og:<tool>, icon:<tool> and home. With no jobs the
+  page draws everything it knows. Adding a tool is one entry in TOOLS.
+-->
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 24px; background: #eee; }
+  canvas { display: block; margin: 12px 0; max-width: 100%; box-shadow: 0 1px 4px #0003; }
+</style>
+</head>
+<body>
+<pre id="log">drawing…</pre>
+<script type="module">
+const INK = '#1A1D23';
+const MUTED = '#5F6672';
+const BG = '#FBFBFC';
+
+/* each tool: its hue, its glyph, and the two lines of its card */
+const TOOLS = {
+  json:    { name: 'JSON',    hue: '#4F46E5' },
+  xml:     { name: 'XML',     hue: '#0F766E' },
+  yaml:    { name: 'YAML',    hue: '#B45309' },
+  csv:     { name: 'CSV',     hue: '#4D7C0F', lines: ['A sortable table that finds the', 'delimiter and flags broken rows.'] },
+  pdf:     { name: 'PDF',     hue: '#BE123C' },
+  log:     { name: 'Logs',    hue: '#0369A1', glyph: 'log' },
+  audio:   { name: 'Audio',   hue: '#C026D3' },
+  sqlite:  { name: 'SQLite',  hue: '#7C3AED', lines: ['Tables, schema and your own', 'SQL, on a .db file that stays put.'] },
+  /* the one light hue: its glyph and mark are ink, not white */
+  parquet: { name: 'Parquet', hue: '#F7CE46', ink: INK, lines: ['Rows, schema, statistics and SQL', 'on a .parquet file that stays put.'] }
+};
+/* the home card's row of tiles, in the suite's order */
+const SUITE = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet'];
+
+const font = new FontFace('Plex', 'url(/shared/fonts/plex-sans-var.woff2)', { weight: '100 700' });
+document.fonts.add(await font.load());
+
+async function svgImage(url, recolor) {
+  let text = await (await fetch(url)).text();
+  if (recolor) text = recolor(text);
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text);
+  await img.decode();
+  return img;
+}
+
+/* a glyph's strokes in white (or the tool's ink), as the favicons draw them */
+const glyph = (id, ink = '#FFFFFF') => svgImage('/shared/glyphs/' + id + '.svg', (t) => t.replace(/#000/g, ink));
+/* the lint.one mark: the ink tile with the white "l1" */
+const mark = () => svgImage('/site/public/favicon.svg');
+const bareMark = (ink = '#FFFFFF') => svgImage('/shared/glyph.svg', (t) => t.replace('currentColor', ink));
+
+function tile(ctx, x, y, size, hue) {
+  ctx.fillStyle = hue;
+  ctx.beginPath();
+  ctx.roundRect(x, y, size, size, size * 15 / 64);
+  ctx.fill();
+}
+
+function footer(ctx, m) {
+  ctx.drawImage(m, 96, 498, 44, 44);
+  ctx.fillStyle = INK;
+  ctx.font = '600 31px Plex';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('lint.one', 157, 531);
+  ctx.fillStyle = MUTED;
+  ctx.font = '400 31px Plex';
+  ctx.textAlign = 'right';
+  ctx.fillText('Nothing leaves your browser.', 1104, 531);
+  ctx.textAlign = 'left';
+}
+
+function canvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  document.body.append(c);
+  return c;
+}
+
+async function drawCard(id) {
+  const t = TOOLS[id];
+  const c = canvas(1200, 630), ctx = c.getContext('2d');
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, 1200, 630);
+  tile(ctx, 96, 88, 168, t.hue);
+  ctx.drawImage(await glyph(t.glyph || id, t.ink), 96, 88, 168, 168);
+  ctx.fillStyle = INK;
+  ctx.font = '600 112px Plex';
+  ctx.letterSpacing = '-0.03em';
+  ctx.fillText(t.name, 300, 214);
+  ctx.letterSpacing = '0px';
+  ctx.fillStyle = MUTED;
+  ctx.font = '400 44px Plex';
+  t.lines.forEach((line, i) => ctx.fillText(line, 96, 345 + i * 57));
+  footer(ctx, await mark());
+  ctx.fillStyle = t.hue; ctx.fillRect(0, 618, 1200, 12);
+  return c;
+}
+
+async function drawHome() {
+  const c = canvas(1200, 630), ctx = c.getContext('2d');
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, 1200, 630);
+  ctx.fillStyle = INK;
+  ctx.font = '600 104px Plex';
+  ctx.letterSpacing = '-0.035em';
+  ctx.fillText('Read your files.', 96, 182);
+  ctx.fillText('Send nothing.', 96, 291);
+  ctx.letterSpacing = '0px';
+  /* the tiles span the same width as the footer, whatever their number */
+  const n = SUITE.length, size = 96, step = (1104 - 96 - size) / (n - 1);
+  for (let i = 0; i < n; i++) {
+    const id = SUITE[i], x = Math.round(96 + i * step);
+    tile(ctx, x, 364, size, TOOLS[id].hue);
+    ctx.drawImage(await glyph(TOOLS[id].glyph || id, TOOLS[id].ink), x, 364, size, size);
+  }
+  footer(ctx, await mark());
+  return c;
+}
+
+/* the icon a file shows once lint.one opens it: the mark on the tool's hue */
+async function drawIcon(id) {
+  const c = canvas(256, 256), ctx = c.getContext('2d');
+  tile(ctx, 0, 0, 256, TOOLS[id].hue);
+  ctx.drawImage(await bareMark(TOOLS[id].ink), 0, 0, 256, 256);
+  return c;
+}
+
+async function save(c, path) {
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+  const res = await fetch('/save?path=' + encodeURIComponent(path), { method: 'POST', body: blob });
+  if (!res.ok) throw new Error(path + ': ' + res.status);
+  return path + ' (' + blob.size + ' bytes)';
+}
+
+const params = new URLSearchParams(location.search);
+const jobs = (params.get('jobs') || [...Object.keys(TOOLS).filter((k) => TOOLS[k].lines).map((k) => 'og:' + k),
+  ...Object.keys(TOOLS).map((k) => 'icon:' + k), 'home'].join(',')).split(',');
+const done = [];
+for (const job of jobs) {
+  const [kind, id] = job.split(':');
+  if (kind === 'og') done.push(await save(await drawCard(id), 'og/' + id + '.png'));
+  else if (kind === 'icon') done.push(await save(await drawIcon(id), 'icons/file-' + id + '.png'));
+  else if (kind === 'home') done.push(await save(await drawHome(), 'og/home.png'));
+}
+document.getElementById('log').textContent = 'saved\n' + done.join('\n');
+document.title = 'done';
+</script>
+</body>
+</html>
