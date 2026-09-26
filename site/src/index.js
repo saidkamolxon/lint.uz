@@ -9,7 +9,7 @@
    not exist yet into something useful — a page that says so and counts how
    many people wanted it. */
 
-const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet', 'env'];
+const TOOLS = ['json', 'xml', 'yaml', 'csv', 'pdf', 'log', 'audio', 'sqlite', 'parquet', 'env', 'har'];
 
 /* Other names people type for a format we read, each sent to the tool that
    reads it: /yml is /yaml, /db is /sqlite. The same names the landing page

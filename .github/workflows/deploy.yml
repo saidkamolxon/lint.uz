@@ -39,6 +39,7 @@ jobs:
               - 'sqlite/**'
               - 'parquet/**'
               - 'env/**'
+              - 'har/**'
             redirect:
               - 'redirect/**'
               - '.github/workflows/deploy.yml'

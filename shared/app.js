@@ -20,6 +20,7 @@ var SUITE = [
   { id: 'csv',  name: 'CSV',  host: '/csv'  },
   { id: 'env', name: 'ENV', host: '/env' },
   { id: 'log',  name: 'LOG',  host: '/log'  },
+  { id: 'har',  name: 'HAR',  host: '/har'  },
   { id: 'xml',  name: 'XML',  host: '/xml'  },
   { id: 'sqlite', name: 'SQLite', host: '/sqlite' },
   { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
