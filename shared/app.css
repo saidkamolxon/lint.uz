@@ -158,6 +158,18 @@ button[aria-pressed="true"] {
 
 .group { display: flex; align-items: center; gap: 2px; }
 
+/* Convert to ▾ and Export ▾: ghost buttons like the actions beside them,
+   with a caret saying a choice follows */
+.menu-btn { display: inline-flex; align-items: center; gap: 3px; padding-right: 6px; }
+.menu-btn svg {
+  width: 14px; height: 14px; flex: none; color: var(--muted);
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--t-fast);
+}
+.menu-btn[aria-expanded="true"] { background: var(--row-hover); }
+.menu-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .menu-btn svg { transition: none; } }
+
 .sep { width: var(--hairline); height: 18px; background: var(--line); margin: 0 var(--s2); flex: none; }
 .spacer { flex: 1 1 auto; min-width: var(--s2); }
 

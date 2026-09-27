@@ -387,11 +387,12 @@ $('app').innerHTML = `
             aria-label="Wrap long lines" aria-pressed="false" disabled></button>
     <button id="btnTail" class="icon-btn needs-file" title="Jump to the end (${MOD}End)"
             aria-label="Jump to the end" disabled></button>
-    <div class="menu-wrap needs-file">
-      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
-      <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnCopyVisible" role="menuitem" disabled>Copy filtered lines</button>
-      </div>
+    <!-- Export is where every tool keeps its ways out -->
+    <div class="group needs-file">
+      ${LintApp.toolMenuHTML('menuExport', 'Export', [
+        { id: 'btnCopyVisible', label: 'Copy the lines shown', title: 'The lines the filters leave, up to 50,000' },
+        { id: 'btnSaveVisible', label: 'Download the lines shown', title: 'The lines the filters leave, all of them, as a .log file' }
+      ])}
     </div>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
@@ -436,10 +437,7 @@ const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 $('btnWrap').innerHTML = I('<path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-3m0 0 2.5-2.5M12 18l2.5 2.5M4 18h4"/>');
 $('btnTail').innerHTML = I('<path d="M12 5v14M6 13l6 6 6-6"/>');
-$('btnMore').innerHTML = I('<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
-  '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
-  '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>');
-LintApp.wireMenu($('btnMore'), $('moreMenu'));
+LintApp.wireToolMenus(() => '');
 $('detailPrev').innerHTML = I('<path d="M6 15l6-6 6 6"/>');
 $('detailNext').innerHTML = I('<path d="M6 9l6 6 6-6"/>');
 $('detailCopy').innerHTML = I('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>');
@@ -794,7 +792,7 @@ function reset() {
 }
 
 function enable(v) {
-  ['btnWrap', 'btnTail', 'btnCopyVisible']
+  ['btnWrap', 'btnTail', 'btnCopyVisible', 'btnSaveVisible']
     .forEach((id) => { $(id).disabled = !v; });
   document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = !v; });
   if (!v) showEmpty();
@@ -1304,6 +1302,18 @@ $('btnCopyVisible').addEventListener('click', () => {
   const text = take.map((i) => lines[i]).join('\n');
   LintApp.copy(text, take.length < visible.length
     ? 'First ' + LintApp.fmtNum(LIMIT) + ' lines' : LintApp.fmtNum(take.length) + ' lines');
+});
+
+/* the whole of what is shown, however long: no clipboard stands in the way.
+   Named after the file, with .filtered when a filter hides some lines. */
+$('btnSaveVisible').addEventListener('click', () => {
+  if (!visible.length) return;
+  const base = (fileName || 'log').replace(/\.(log|txt|jsonl|ndjson)$/i, '');
+  const ext = (/\.(log|txt|jsonl|ndjson)$/i.exec(fileName) || [, 'log'])[1];
+  const name = base + (visible.length < lines.length ? '.filtered.' : '.') + ext;
+  const parts = [];
+  for (let i = 0; i < visible.length; i++) parts.push(lines[visible[i]], '\n');
+  LintApp.download(new Blob(parts, { type: 'text/plain' }), name);
 });
 
 /* drag and drop */

@@ -103,9 +103,12 @@ window.LINT_CONFIG = {
   placeholder: 'Paste CSV or drop a file…',
   searchPlaceholder: 'Filter rows…',
   actions: [
-    { id: 'btnToJson', label: 'To JSON', primary: true, key: 'mod+shift+j', title: 'Convert the rows to a JSON array and open it in the JSON viewer (also copied)' },
     { id: 'btnFormat', label: 'Fix quotes', key: 'shift+alt+f', title: 'Quote only the cells that need quotes, and unquote the rest' }
-  ]
+  ],
+  convert: [
+    { id: 'btnToJson', label: 'JSON', key: 'mod+shift+j', title: 'Convert the rows to a JSON array and open it in the JSON viewer (also copied)' }
+  ],
+  ext: 'csv'
 };
 </script>
 <script src="/shared/theme-boot.js"></script>

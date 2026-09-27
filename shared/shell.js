@@ -43,10 +43,11 @@ document.getElementById('app').innerHTML =
     '<button id="tabTree">Tree</button>' +
   '</nav>' +
   /* Open sits right after the brand in every tool, and the open document's
-     chip after it; Copy and Sample live in the ⋮ menu app.js adds */
+     chip after it; Copy and Download live in Export, Sample in the ⋮ */
   '<button id="btnLoad" class="primary" data-key="mod+o" ' +
     'title="Open a file — or drop one on the editor">Open</button>' +
   '<span class="sep hide-sm tool-actions"></span>' +
+  /* app.js adds Convert to ▾ and Export ▾ after the actions */
   '<div class="group tool-actions">' + actions + '</div>' +
   '<span class="spacer"></span>' +
   '<div class="group" id="chromeSlot"></div>' +

@@ -332,13 +332,13 @@ $('app').innerHTML = `
     <button id="btnQuery" class="bordered needs-file" title="Run SQL on this file (${MOD}E)">SQL</button>
     <button id="btnInfo" class="icon-btn needs-file" title="Details: the chosen value, and the file (${MOD}I)"
             aria-label="Details" aria-pressed="false"></button>
-    <div class="menu-wrap needs-file">
-      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
-      <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnCsv" role="menuitem">Copy rows as CSV</button>
-        <button class="menu-item" id="btnJson" role="menuitem">Copy rows as JSON</button>
-        <button class="menu-item" id="btnSchemaJson" role="menuitem">Copy the schema as JSON</button>
-      </div>
+    <!-- Export is where every tool keeps its ways out -->
+    <div class="group needs-file">
+      ${LintApp.toolMenuHTML('menuExport', 'Export', [
+        { id: 'btnCsv', label: 'Copy rows as CSV', title: 'The rows shown, sorted and filtered as they are' },
+        { id: 'btnJson', label: 'Copy rows as JSON', title: 'The rows shown, as an array of records' },
+        { id: 'btnSchemaJson', label: 'Copy the schema as JSON', title: 'Every column with its type, nesting and statistics' }
+      ])}
     </div>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
@@ -403,21 +403,17 @@ $('app').innerHTML = `
 `;
 
 LintApp.mountChrome($('chromeSlot'), 'parquet');
-LintApp.wireMenu($('btnMore'), $('moreMenu'));
+LintApp.wireToolMenus(() => '');
 
 const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 const ICON = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
-  more: '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
-        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
-        '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
   prev: '<path d="M15 6l-6 6 6 6"/>',
   next: '<path d="M9 6l6 6-6 6"/>'
 };
 $('btnInfo').innerHTML = I(ICON.info);
 $('btnCloseDrawer').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
-$('btnMore').innerHTML = I(ICON.more);
 $('btnPrev').innerHTML = I(ICON.prev);
 $('btnNext').innerHTML = I(ICON.next);
 

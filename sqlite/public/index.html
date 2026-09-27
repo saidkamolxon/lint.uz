@@ -375,13 +375,13 @@ $('app').innerHTML = `
     <button id="btnQuery" class="bordered needs-db" title="Run SQL on this database (${MOD}E)">SQL</button>
     <button id="btnInfo" class="icon-btn needs-db" title="Details: the chosen value, and the file (${MOD}I)"
             aria-label="Details" aria-pressed="false"></button>
-    <div class="menu-wrap needs-db">
-      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
-      <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnCsv" role="menuitem">Copy rows as CSV</button>
-        <button class="menu-item" id="btnJson" role="menuitem">Copy rows as JSON</button>
-        <button class="menu-item" id="btnCreate" role="menuitem">Copy the CREATE statement</button>
-      </div>
+    <!-- Export is where every tool keeps its ways out -->
+    <div class="group needs-db">
+      ${LintApp.toolMenuHTML('menuExport', 'Export', [
+        { id: 'btnCsv', label: 'Copy rows as CSV', title: 'The rows shown, sorted and filtered as they are' },
+        { id: 'btnJson', label: 'Copy rows as JSON', title: 'The rows shown, as an array of records' },
+        { id: 'btnCreate', label: 'Copy the CREATE statement', title: 'The SQL that makes this table or view' }
+      ])}
     </div>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
@@ -445,16 +445,15 @@ $('app').innerHTML = `
 `;
 
 LintApp.mountChrome($('chromeSlot'), 'sqlite');
-LintApp.wireMenu($('btnMore'), $('moreMenu'));
+LintApp.wireToolMenus(() => '');
+/* a query result has no CREATE statement of its own */
+LintApp.when('btnCreate', () => state.mode !== 'query');
 
 const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 const ICON = {
   rail: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
-  more: '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
-        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
-        '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
   prev: '<path d="M15 6l-6 6 6 6"/>',
   next: '<path d="M9 6l6 6-6 6"/>',
   query: '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>'
@@ -462,7 +461,6 @@ const ICON = {
 $('btnRail').innerHTML = I(ICON.rail);
 $('btnInfo').innerHTML = I(ICON.info);
 $('btnCloseDrawer').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
-$('btnMore').innerHTML = I(ICON.more);
 $('btnPrev').innerHTML = I(ICON.prev);
 $('btnNext').innerHTML = I(ICON.next);
 

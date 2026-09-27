@@ -261,6 +261,21 @@ function copyText(text, label) {
   } else fallbackCopy(text, done);
 }
 
+/* Save text or bytes as a file on the device: an object URL on a
+   throwaway link, so nothing is uploaded anywhere. */
+function download(data, name, type) {
+  var url = URL.createObjectURL(data instanceof Blob ? data
+    : new Blob([data], { type: type || 'text/plain' }));
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  showToast('Saved ' + name);
+}
+
 function fallbackCopy(text, done) {
   var ta = document.createElement('textarea');
   ta.value = text;
@@ -424,6 +439,83 @@ function buildSuiteMark(activeId) {
   wireMenu(btn, menu);
 }
 
+/* ---------- Convert to ▾ and Export ▾ ----------
+   Every way out of a document, in the same two places in every tool. The
+   editor tools get them from init(); LOG, HAR, SQLite and Parquet put
+   toolMenuHTML in their own toolbar and call wireToolMenus. Before each
+   opening a menu hides the items a tool has said do not apply, so it never
+   offers what would only answer with "that does not work here". A tool
+   says so with LintApp.when(id, fn) from its own script, where its state
+   lives; fn gets the editor text and returns whether to show the item. */
+var itemRules = {};
+function when(id, fn) { itemRules[id] = fn; }
+
+/* The markup of one of them. The items keep the ids a tool binds, so a
+   handler cannot tell a menu item from the toolbar button it replaced.
+   `fold` hides it on a phone, where the ⋮ lists its items instead. */
+function toolMenuHTML(id, label, items, fold) {
+  if (!items.length) return '';
+  return '<div class="menu-wrap tool-menu' + (fold ? ' hide-sm' : '') + '">' +
+    '<button id="' + id + '" class="menu-btn" aria-haspopup="true">' +
+      label + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>' +
+    '</button>' +
+    '<div class="menu menu-start" role="menu" aria-label="' + label + '">' +
+    items.map(function (it) {
+      if (it.sep) return '<div class="menu-sep"></div>';
+      return '<button id="' + it.id + '" class="menu-item" role="menuitem"' +
+        (it.key ? ' data-key="' + it.key + '"' : '') +
+        (it.title ? ' title="' + esc(it.title).replace(/"/g, '&quot;') + '"' : '') + '>' +
+        esc(it.label) + '</button>';
+    }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function wireToolMenus(getText) {
+  var wraps = document.querySelectorAll('.toolbar .tool-menu');
+  for (var i = 0; i < wraps.length; i++) (function (wrap) {
+    var btn = wrap.querySelector('.menu-btn'), menu = wrap.querySelector('.menu');
+    wireMenu(btn, menu);
+    menu.addEventListener('click', function (e) {
+      if (e.target.closest('.menu-item')) closeAllMenus();
+    });
+    menu._refresh = function () { refreshToolMenu(menu, itemRules, getText()); };
+    btn.addEventListener('click', menu._refresh, true);
+    /* hung from the right of its button, unless that runs off the page */
+    btn.addEventListener('click', function () {
+      if (!menu.classList.contains('open')) return;
+      menu.classList.add('menu-start');
+      if (menu.getBoundingClientRect().right > window.innerWidth - 8) menu.classList.remove('menu-start');
+    });
+  })(wraps[i]);
+}
+
+function refreshToolMenu(menu, specs, text) {
+  var items = menu.querySelectorAll('.menu-item');
+  for (var i = 0; i < items.length; i++) {
+    var fn = specs[items[i].id], show = true;
+    /* a rule that fails leaves its item showing: the handler still answers */
+    if (fn) try { show = !!fn(text); } catch (e) { show = true; }
+    items[i].hidden = !show;
+  }
+  /* a separator only between two groups that both still show something */
+  var kids = menu.children, lastShown = null;
+  for (var k = 0; k < kids.length; k++) {
+    var el = kids[k];
+    if (el.classList.contains('menu-sep')) {
+      el.hidden = !lastShown || lastShown.classList.contains('menu-sep');
+      if (!el.hidden) lastShown = el;
+    } else if (!el.hidden) lastShown = el;
+  }
+  if (lastShown && lastShown.classList.contains('menu-sep')) lastShown.hidden = true;
+  /* nothing applies: say so, rather than open an empty box */
+  var note = menu.querySelector('.menu-empty');
+  if (!lastShown) {
+    if (!note) menu.appendChild(Object.assign(document.createElement('div'),
+      { className: 'menu-label menu-empty', textContent: 'Nothing here for this document' }));
+  } else if (note) note.remove();
+}
+
 /* ---------- more menu ----------
    The ⋮ every tool ends its toolbar with, just before the suite and theme
    menus. It holds the tool's quieter commands (`items`), and on narrow
@@ -465,32 +557,58 @@ function buildOverflowMenu(container, items) {
 
   function rebuild() {
     mirror.innerHTML = '';
-    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md');
+    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md, ' +
+      '.toolbar .tool-menu.hide-sm, .toolbar .tool-menu.hide-md');
     var added = 0;
     for (var i = 0; i < hidden.length; i++) {
       var src = hidden[i];
       if (src.offsetParent !== null) continue;   /* still visible — skip */
-      (function (source) {
-        var item = document.createElement('button');
-        item.className = 'menu-item';
-        item.setAttribute('role', 'menuitem');
-        /* the label only — not any icon markup rendered after it */
-        item.textContent = source.firstChild && source.firstChild.nodeType === 3
-          ? source.firstChild.textContent : source.textContent || source.title;
-        item.title = source.title || '';
-        item.addEventListener('click', function () {
-          closeAllMenus();
-          source.click();
-        });
-        if (!added && items.length) {
+      /* a folded Convert to or Export brings its items, under its name */
+      if (src.classList.contains('tool-menu')) {
+        if (added || items.length) {
           mirror.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
         }
-        mirror.appendChild(item);
-      })(src);
+        mirror.appendChild(Object.assign(document.createElement('div'), {
+          className: 'menu-label', textContent: src.querySelector('.menu-btn').textContent
+        }));
+        var subs = src.querySelectorAll('.menu .menu-item');
+        for (var j = 0; j < subs.length; j++) mirror.appendChild(mirrorItem(subs[j]));
+        added++;
+        continue;
+      }
+      if (!added && items.length) {
+        mirror.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
+      }
+      mirror.appendChild(mirrorItem(src));
       added++;
     }
     wrap.style.display = added || items.length ? '' : 'none';
   }
+
+  /* a stand-in that clicks the real control, which keeps its handlers */
+  function mirrorItem(source) {
+    var item = document.createElement('button');
+    item.className = 'menu-item';
+    item.setAttribute('role', 'menuitem');
+    /* the label only — not any icon markup rendered after it */
+    item.textContent = source.firstChild && source.firstChild.nodeType === 3
+      ? source.firstChild.textContent : source.textContent || source.title;
+    item.title = source.title || '';
+    item.hidden = source.hidden;
+    item.addEventListener('click', function () {
+      closeAllMenus();
+      source.click();
+    });
+    return item;
+  }
+
+  /* folded menus check what applies each time the ⋮ opens, as they would */
+  btn.addEventListener('click', function () {
+    if (!document.querySelector('.toolbar .tool-menu.hide-sm, .toolbar .tool-menu.hide-md')) return;
+    var ms = document.querySelectorAll('.toolbar .tool-menu .menu');
+    for (var i = 0; i < ms.length; i++) if (ms[i]._refresh) ms[i]._refresh();
+    rebuild();
+  }, true);
 
   rebuild();
   var t;
@@ -1321,10 +1439,19 @@ function init(config) {
   /* a tool's own quieter commands (LINT_CONFIG.more) come first; closing
      the document is the chip's job, not an item here */
   var lc = global.LINT_CONFIG || {};
+  /* every way out of the document, in the same two places in every tool;
+     Copy and Download are everyone's, so Export exists in each */
+  var exportItems = lc.export || [];
+  document.querySelector('.toolbar .group.tool-actions').insertAdjacentHTML('beforeend',
+    toolMenuHTML('menuConvert', 'Convert to', lc.convert || [], true) +
+    toolMenuHTML('menuExport', 'Export', exportItems.concat(exportItems.length ? [{ sep: true }] : [], [
+      { id: 'btnCopy', label: 'Copy ' + config.label, title: 'Copy the editor contents' },
+      { id: 'btnDownload', label: 'Download', key: 'mod+s', title: 'Save the editor contents as a file' }
+    ]), true));
   var refreshOverflow = buildOverflowMenu(slot, (lc.more || []).concat([
-    { id: 'btnCopy', label: 'Copy ' + config.label, title: 'Copy the editor contents' },
     { id: 'btnSample', label: 'Load a sample', title: 'Replace the editor contents with a sample document' }
   ]));
+  wireToolMenus(function () { return $('input').value; });
 
   /* the document's text follows the reader's text size */
   textZoom();
@@ -1450,6 +1577,16 @@ function init(config) {
   on('btnCopy', function () {
     var v = editor.getValue();
     if (v) copyText(v, config.label);
+  });
+  /* the open file's own name when there is one; pasted text and samples
+     are named after the tool (pasted.json, sample.yaml) */
+  on('btnDownload', function () {
+    var v = editor.getValue();
+    if (!v) return;
+    var ext = lc.ext || config.id;
+    var name = docName && /\.[A-Za-z0-9]{1,12}$/.test(docName) ? docName
+      : (/^Sample/.test(docName || '') ? 'sample' : 'pasted') + '.' + ext;
+    download(v, name);
   });
 
   /* Closing the document: the chip's × or Alt+W. Back to the empty prompt,
@@ -1587,7 +1724,14 @@ function init(config) {
      by naming it in its config and nothing here needs to change. The same
      key goes into the button's tooltip and the shortcuts panel. */
   var keyed = Array.prototype.slice.call(document.querySelectorAll('.toolbar button[data-key]'));
-  keyed.forEach(function (b) { b.title += ' (' + keyText(b.dataset.key) + ')'; });
+  keyed.forEach(function (b) {
+    b.title += ' (' + keyText(b.dataset.key) + ')';
+    /* inside a menu the key is also shown, where the eye already is */
+    if (b.classList.contains('menu-item')) {
+      b.appendChild(Object.assign(document.createElement('span'),
+        { className: 'menu-key', textContent: keyText(b.dataset.key) }));
+    }
+  });
 
   /* every declared toolbar action except Open, which General lists; Format
      keeps Ctrl/⌘+Enter as a second key */
@@ -1919,6 +2063,10 @@ global.LintApp = {
   emptyState: emptyState,
   esc: esc,
   copy: copyText,
+  download: download,
+  wireToolMenus: wireToolMenus,
+  toolMenuHTML: toolMenuHTML,
+  when: when,
   toast: showToast,
   fmtBytes: fmtBytes,
   fmtNum: fmtNum,

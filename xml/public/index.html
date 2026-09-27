@@ -48,9 +48,12 @@ window.LINT_CONFIG = {
   searchPlaceholder: 'Search elements, attributes and text…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Put every element on its own line, indented two spaces per level' },
-    { id: 'btnMinify', label: 'Minify', title: 'Remove the whitespace between tags to make the document as small as possible' },
-    { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Convert this document to JSON and open it in the JSON viewer (also copied)' }
-  ]
+    { id: 'btnMinify', label: 'Minify', title: 'Remove the whitespace between tags to make the document as small as possible' }
+  ],
+  convert: [
+    { id: 'btnToJson', label: 'JSON', key: 'mod+shift+j', title: 'Convert this document to JSON and open it in the JSON viewer (also copied)' }
+  ],
+  ext: 'xml'
 };
 </script>
 <script src="/shared/theme-boot.js"></script>

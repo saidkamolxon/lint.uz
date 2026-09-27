@@ -48,9 +48,15 @@ window.LINT_CONFIG = {
   placeholder: 'Paste YAML or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Rewrite the document with a consistent two-space indent' },
-    { id: 'btnToYaml', label: 'From JSON', title: 'Replace JSON in the editor with the same data written as YAML' },
-    { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Convert this document to JSON and open it in the JSON viewer (also copied)' }
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Rewrite the document with a consistent two-space indent' }
+  ],
+  convert: [
+    { id: 'btnToJson', label: 'JSON', key: 'mod+shift+j', title: 'Convert this document to JSON and open it in the JSON viewer (also copied)' }
+  ],
+  ext: 'yaml',
+  /* the way in rather than out, so it is not under Convert to */
+  more: [
+    { id: 'btnToYaml', label: 'Rewrite pasted JSON as YAML', title: 'Replace JSON in the editor with the same data written as YAML' }
   ]
 };
 </script>

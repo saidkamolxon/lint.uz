@@ -168,16 +168,21 @@ window.LINT_CONFIG = {
   searchPlaceholder: 'Search keys and values…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Put every value on its own line, indented two spaces per level' },
-    { id: 'btnMinify', label: 'Minify', title: 'Remove all whitespace to make the document as small as possible' },
-    { id: 'btnToYaml', label: 'To YAML', hide: 'md', key: 'mod+shift+y', title: 'Convert this document to YAML and open it in the YAML viewer (also copied)' }
+    { id: 'btnMinify', label: 'Minify', title: 'Remove all whitespace to make the document as small as possible' }
   ],
-  /* rarer commands, listed in the ⋮ menu ahead of Copy */
+  /* Convert to ▾ offers only what this document can become: the rules
+     are set with LintApp.when below, beside the state they read */
+  convert: [
+    { id: 'btnToYaml', label: 'YAML', key: 'mod+shift+y', title: 'Convert this document to YAML and open it in the YAML viewer (also copied)' },
+    { id: 'btnToCsv', label: 'CSV', title: 'An array of records, or JSON Lines, as a CSV table in the CSV viewer (also copied)' },
+    { id: 'btnToLines', label: 'JSON Lines', title: 'A JSON array into JSON Lines: one record per line (.jsonl, .ndjson)' },
+    { id: 'btnToArray', label: 'JSON array', title: 'JSON Lines, one record per line, into one JSON array' },
+    { id: 'btnToLog', label: 'LOG', title: 'Read these JSON Lines as a log: filter by severity, fold stack traces' }
+  ],
+  ext: 'json',
+  /* rarer commands, listed in the ⋮ menu ahead of Load a sample */
   more: [
-    { id: 'btnEscape', label: 'Unescape a string', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' },
-    { id: 'btnToArray', label: 'Convert to a JSON array', title: 'JSON Lines, one record per line, into one JSON array' },
-    { id: 'btnToLines', label: 'Convert to JSON Lines', title: 'A JSON array into JSON Lines: one record per line (.jsonl, .ndjson)' },
-    { id: 'btnToCsv', label: 'Convert to CSV', title: 'An array of records, or JSON Lines, as a CSV table in the CSV viewer (also copied)' },
-    { id: 'btnToLog', label: 'Open in LOG', title: 'Read these JSON Lines as a log: filter by severity, fold stack traces' }
+    { id: 'btnEscape', label: 'Unescape a string', title: 'Turn JSON saved as an escaped string, as found in logs, back into readable JSON' }
   ]
 };
 </script>
@@ -219,6 +224,7 @@ function highlight(text) {
    does not parse whole, but whose lines do, is read that way: the records
    become one array for the tree, and a bad line is marked in the gutter
    while the rest are still shown. */
+var docValue;                // the last parse, for what Convert to offers
 var jsonl = null;            // {records, bad: [{line, message}]} in JSON Lines mode
 var offeredLog = false;     // the LOG viewer was offered for this document
 var offeredHar = false;     // the HAR viewer was offered for this document
@@ -598,6 +604,7 @@ var app = LintApp.init({
   }),
   /* the editor is Compare's "before", so every edit re-runs the diff */
   onParsed: function (value) {
+    docValue = value;
     /* a browser's HAR export reads better as requests: offered once a document */
     var isHar = !jsonl && value && typeof value === 'object' && value.log && Array.isArray(value.log.entries);
     if (!isHar) offeredHar = false;
@@ -671,6 +678,14 @@ document.getElementById('btnEscape').addEventListener('click', function () {
   }
 });
 
+
+/* what Convert to offers for this document */
+LintApp.when('btnToCsv', function () {
+  return Array.isArray(docValue) && docValue.some(function (r) { return r && typeof r === 'object' && !Array.isArray(r); });
+});
+LintApp.when('btnToLines', function () { return Array.isArray(docValue) && !jsonl; });
+LintApp.when('btnToArray', function () { return !!jsonl; });
+LintApp.when('btnToLog', function () { return !!jsonl; });
 
 /* ---------- JSON Lines and arrays, both ways ---------- */
 document.getElementById('btnToArray').addEventListener('click', function () {
