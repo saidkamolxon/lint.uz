@@ -865,7 +865,23 @@ $('grid').addEventListener('click', (e) => {
     return;
   }
   const td = e.target.closest('td[data-c]');
-  if (td) selectCell(+td.dataset.r, +td.dataset.c);
+  if (!td) return;
+  selectCell(+td.dataset.r, +td.dataset.c);
+  /* a cell that shows only part of its value opens it whole, formatted */
+  if (clipped(td) && !$('drawer').classList.contains('open')) openDrawer('value');
+});
+
+/* nested values, and anything cut short by the column or the 200-character
+   limit, have more than the cell shows */
+function clipped(td) {
+  const col = grid && grid.columns[+td.dataset.c];
+  return (col && col.kind === 'nested') || td.scrollWidth > td.clientWidth || /…$/.test(td.textContent);
+}
+/* and say so on hover, in the tooltip style every icon uses */
+$('grid').addEventListener('pointerover', (e) => {
+  const td = e.target.closest('td[data-c]');
+  if (!td || td.dataset.quickTip !== undefined) return;
+  if (clipped(td)) td.dataset.quickTip = 'Click to see the whole value';
 });
 
 let filterTimer;

@@ -410,6 +410,7 @@ spec:
    ========================================================================== */
 var lastMulti = null;
 
+var offeredYaml = false;   // rewriting pasted JSON was offered for this document
 var app = LintApp.init({
   id: 'yaml',
   label: 'YAML',
@@ -431,6 +432,21 @@ var app = LintApp.init({
       'Multi-document files load as a list.',
     extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
+  /* JSON is valid YAML, so it reads fine here, but whoever pastes it
+     usually wants it written as YAML: offered once a document */
+  onParsed: function () {
+    if (!app) return;   /* a document handed over at start parses before init returns */
+    var raw = app.editor.getValue().trim();
+    var isJson = false;
+    if (/^[\[{]/.test(raw) && raw.length < 5e6) try { JSON.parse(raw); isJson = true; } catch (e) {}
+    if (!isJson) { offeredYaml = false; return; }
+    if (offeredYaml) return;
+    offeredYaml = true;
+    LintApp.toast('This is JSON', {
+      label: 'Rewrite as YAML', href: '#',
+      onFollow: function () { document.getElementById('btnToYaml').click(); }
+    });
+  },
   sample: SAMPLE
 });
 

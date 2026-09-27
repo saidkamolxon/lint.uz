@@ -172,7 +172,11 @@
 .req .dom, .req .ty { color: var(--muted); font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.92); }
 .req .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--t-num); }
 .req .num.faint { color: var(--faint); font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.92); }
-.req .key { font-size: 11px; color: var(--warn); margin-left: 4px; }
+/* a secret is marked with a key, here and on the findings bar, so it is
+   never read as one of the amber dots that mean slow or large */
+.key { display: inline-flex; vertical-align: -2px; color: var(--warn); }
+.key svg { width: 13px; height: 13px; }
+.req .key { margin-left: 5px; }
 
 /* the waterfall: when a request started and how long it took, on the
    file's one time axis. Neutral ink, as the list's text is; a failed
@@ -795,7 +799,7 @@ function paintFindings() {
     `<select id="groupSel">${[['', 'None'], ['endpoint', 'By endpoint'], ['domain', 'By domain']].map(([v, l]) =>
       `<option value="${v}"${v === grouping ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` +
     `<button id="btnSecrets" aria-pressed="${panel === 'secrets'}" title="Cookies, tokens and passwords in this file">` +
-    `<span class="pip ${secrets ? '' : 'ok'}"></span>` + (secrets ? `<b>${fmtNum(secrets)}</b> ${secrets === 1 ? 'secret' : 'secrets'}` : 'No secrets') +
+    (secrets ? `<span class="key">${KEY_ICON}</span><b>${fmtNum(secrets)}</b> ${secrets === 1 ? 'secret' : 'secrets'}` : '<span class="pip ok"></span>No secrets') +
     '</button>';
   $('findings').innerHTML = html;
 }
@@ -894,6 +898,8 @@ const COLS = [
   ['dom', 'Domain', 'host'], ['ty', 'Type', 'type'], ['sz num', 'Size', 'size'], ['tm num', 'Time', 'time'],
   ['wf', 'Waterfall', 'start']
 ];
+/* the mark a request, and the findings bar, carry for a secret */
+const KEY_ICON = I('<circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3M16 7l3 3M14 9l2 2"/>');
 const TYPE_LABEL = { xhr: 'fetch', doc: 'document', js: 'script', css: 'style', img: 'image', font: 'font', media: 'media', ws: 'websocket', other: 'other' };
 
 function paintHead() {
@@ -1039,7 +1045,7 @@ function reqRow(k) {
     `<span class="st ${stCls}" title="${esc(r.error || r.statusText)}">${r.status || (r.error ? 'failed' : '—')}</span>` +
     `<span class="m">${esc(r.method)}</span>` +
     `<span class="nm" title="${esc(r.url)}">${esc(r.name)}<span class="q">${esc(r.query)}</span>` +
-      (r.secrets ? `<span class="key" title="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request">●</span>` : '') + `</span>` +
+      (r.secrets ? `<span class="key" role="img" aria-label="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request" data-quick-tip="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request">${KEY_ICON}</span>` : '') + `</span>` +
     `<span class="dom" title="${esc(r.host)}">${esc(r.host)}</span>` +
     `<span class="ty" title="${esc(r.mime)}">${TYPE_LABEL[r.type] || r.type}</span>` +
     size +

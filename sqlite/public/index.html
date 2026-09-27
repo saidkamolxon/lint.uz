@@ -94,8 +94,6 @@
   flex: none; font-size: var(--fs-micro); color: var(--faint);
   text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500;
 }
-.rail-item.query { color: var(--hue); font-weight: 550; margin-bottom: var(--s1); }
-.rail-item.query svg { width: 14px; height: 14px; align-self: center; flex: none; }
 
 /* ---------- the view: one table, its schema, or a query ---------- */
 #view { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); position: relative; }
@@ -455,8 +453,7 @@ const ICON = {
   rail: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
   prev: '<path d="M15 6l-6 6 6 6"/>',
-  next: '<path d="M9 6l6 6-6 6"/>',
-  query: '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>'
+  next: '<path d="M9 6l6 6-6 6"/>'
 };
 $('btnRail').innerHTML = I(ICON.rail);
 $('btnInfo').innerHTML = I(ICON.info);
@@ -676,7 +673,8 @@ function buildRail() {
        so folded until asked for */
     ['Internal', t.filter((x) => x.kind === 'internal' || x.kind === 'shadow'), false]
   ];
-  let html = `<button class="rail-item query" data-query>${I(ICON.query)}<span class="nm">SQL query</span></button>`;
+  /* SQL is reached from the toolbar, as in Parquet, and not listed here too */
+  let html = '';
   groups.forEach(([title, items, open]) => {
     if (!items.length && title !== 'Tables') return;
     const list = items.map((x) =>
@@ -696,7 +694,7 @@ function buildRail() {
 
 function markRail() {
   $('rail').querySelectorAll('.rail-item').forEach((b) => {
-    const here = b.hasAttribute('data-query') ? state.mode === 'query' : state.mode !== 'query' && b.dataset.name === state.name;
+    const here = state.mode !== 'query' && b.dataset.name === state.name;
     b.setAttribute('aria-current', String(here));
   });
 }
@@ -704,8 +702,7 @@ function markRail() {
 $('rail').addEventListener('click', (e) => {
   const b = e.target.closest('.rail-item');
   if (!b) return;
-  if (b.hasAttribute('data-query')) openQuery();
-  else select(b.dataset.name);
+  select(b.dataset.name);
   if (window.matchMedia('(max-width: 860px)').matches) toggleRail(false);
 });
 
@@ -760,7 +757,10 @@ function showMode() {
   $('pager').hidden = state.mode === 'schema';
   $('grid').hidden = state.mode === 'schema';
   $('schemaView').hidden = state.mode !== 'schema';
-  $('btnCreate').hidden = q;
+  /* one button goes to SQL and back, named for where it goes */
+  const back = q && state.name;
+  $('btnQuery').textContent = back ? 'Table' : 'SQL';
+  $('btnQuery').title = back ? `Back to ${state.name} (${MOD}E)` : `Run SQL on this database (${MOD}E)`;
   $('modeSeg').querySelectorAll('button').forEach((b) =>
     b.setAttribute('aria-checked', String(b.dataset.mode === state.mode)));
 
@@ -821,13 +821,22 @@ function renderGrid() {
   const numeric = grid.columns.map((_, i) => grid.rows.length > 0 &&
     grid.rows.every((r) => r[i] === null || typeof r[i] === 'number' || typeof r[i] === 'bigint'));
 
+  /* SQLite has no date type, so times are often stored as seconds (or
+     milliseconds) since 1970. A column named like a time whose every value
+     is one says so under its name, and each cell shows its date on hover;
+     the number itself stays, since it is what the database holds. */
+  const TIME_NAME = /(^|_)(at|on|time|date|ts|timestamp|created|updated|modified|deleted|expires?)$|(At|On|Time|Date)$/;
+  const timeCol = grid.columns.map((col, i) => numeric[i] && TIME_NAME.test(col.name) &&
+    grid.rows.some((r) => r[i] !== null) && grid.rows.every((r) => r[i] === null || asTime(r[i]) !== null));
+
   let html = '<table class="grid-table"><thead><tr><th class="rn"></th>';
   grid.columns.forEach((col, i) => {
     const arrow = sortable && state.order && state.order.col === col.name
       ? `<span class="sort">${state.order.dir < 0 ? '▼' : '▲'}</span>` : '';
     const sub = col.type !== undefined
-      ? (col.pk ? '<span class="key">key</span> ' : '') + esc((col.type || 'any').toLowerCase())
-      : '';
+      ? (col.pk ? '<span class="key">key</span> ' : '') + esc((col.type || 'any').toLowerCase()) +
+        (timeCol[i] ? ' · unix time' : '')
+      : (timeCol[i] ? 'unix time' : '');
     html += `<th data-col="${i}"${sortable ? ' class="sortable" title="Sort by this column"' : ''}>` +
       esc(col.name) + arrow + (sub ? `<span class="coltype">${sub}</span>` : '') + '</th>';
   });
@@ -837,7 +846,8 @@ function renderGrid() {
     html += `<tr><td class="rn">${fmtNum(grid.offset + r + 1)}</td>`;
     row.forEach((v, ci) => {
       const selected = sel && sel.r === r && sel.c === ci ? ' sel' : '';
-      html += `<td data-r="${r}" data-c="${ci}" class="${cellClass(v, numeric[ci])}${selected}">${cellText(v)}</td>`;
+      const when = timeCol[ci] && v !== null ? ` data-quick-tip="${asTime(v)}"` : '';
+      html += `<td data-r="${r}" data-c="${ci}" class="${cellClass(v, numeric[ci])}${selected}"${when}>${cellText(v)}</td>`;
     });
     html += '</tr>';
   });
@@ -905,7 +915,22 @@ $('grid').addEventListener('click', (e) => {
     return;
   }
   const td = e.target.closest('td[data-c]');
-  if (td) selectCell(+td.dataset.r, +td.dataset.c);
+  if (!td) return;
+  selectCell(+td.dataset.r, +td.dataset.c);
+  /* a cell that shows only part of its value opens it whole, formatted */
+  if (clipped(td) && !$('drawer').classList.contains('open')) openDrawer('value');
+});
+
+/* long text, JSON and anything the column cuts short have more than the
+   cell shows; a blob opens as hex */
+function clipped(td) {
+  return td.classList.contains('blob') || td.scrollWidth > td.clientWidth || /…$/.test(td.textContent);
+}
+/* and say so on hover, in the tooltip style every icon uses */
+$('grid').addEventListener('pointerover', (e) => {
+  const td = e.target.closest('td[data-c]');
+  if (!td || td.dataset.quickTip !== undefined) return;
+  if (clipped(td)) td.dataset.quickTip = 'Click to see the whole value';
 });
 
 let filterTimer;

@@ -307,11 +307,14 @@ function highlightInto(el, text, q) {
    shows its title at once below it (above, near the bottom of the page),
    on hover and on keyboard focus; moving along a row of icons keeps it up.
    The title is lifted off while the tip shows, so the two never stack,
-   and put back after unless the page gave the button a new one meanwhile. */
+   and put back after unless the page gave the button a new one meanwhile.
+   Any other element can ask for one with data-quick-tip="…". */
 (function () {
   var tip = null, timer = null, cur = null, warmUntil = 0;
 
   function target(el) {
+    var q = el && el.closest ? el.closest('[data-quick-tip]') : null;
+    if (q) return q;
     var b = el && el.closest ? el.closest('button, [role="button"]') : null;
     if (!b || b.disabled || b.closest('.menu')) return null;
     if (!b.title && !b.dataset.tipText) return null;
@@ -321,14 +324,14 @@ function highlightInto(el, text, q) {
   function show(b) {
     if (cur && cur !== b) hide();
     cur = b;
-    if (b.title) { b.dataset.tipText = b.title; b.removeAttribute('title'); }
+    if (b.title && !b.dataset.quickTip) { b.dataset.tipText = b.title; b.removeAttribute('title'); }
     if (!tip) {
       tip = document.createElement('div');
       tip.className = 'quick-tip';
       tip.setAttribute('role', 'tooltip');
       document.body.appendChild(tip);
     }
-    tip.textContent = b.dataset.tipText;
+    tip.textContent = b.dataset.quickTip || b.dataset.tipText;
     tip.hidden = false;
     var r = b.getBoundingClientRect(), t = tip.getBoundingClientRect();
     var left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, window.innerWidth - t.width - 6));
