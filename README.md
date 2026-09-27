@@ -13,19 +13,20 @@
 | `≡` | **[log.lint.one](https://log.lint.one)** | Severity filtering, folded stack traces, density strip; handles 1M+ lines |
 | `⋯` | **[lint.one/har](https://lint.one/har)** | The requests in a browser's HAR export: what failed, was slow, large or repeated at a glance; search through headers and bodies, `status:5xx time:>1s` filters; grouped by endpoint (`/users/{id}`) or domain; headers, bodies, timing; copy as cURL, fetch, Python, C#, PowerShell or raw HTTP; finds cookies, tokens and passwords and saves a copy without them |
 | `<>` | **[xml.lint.one](https://xml.lint.one)** | Element/attribute/text tree, XPath for any node, XML → JSON |
+| `✓` | **[lint.one/cert](https://lint.one/cert)** | SSL/TLS certificates from PEM, `.crt`, `.cer`, `.der` or `.p7b`: when each expires, the names it covers (with a domain check), the chain with every signature verified by WebCrypto, whether a key matches, CSRs; puts a chain in order |
 | `⛁` | **[lint.one/sqlite](https://lint.one/sqlite)** | Tables, schema and read-only SQL on a `.db` file; JSON cells formatted, blobs as hex or images |
 | `P` | **[pdf.lint.one](https://pdf.lint.one)** | Page reader, text extraction, fonts, metadata, and what the file contains |
 | `⫼` | **[lint.one/parquet](https://lint.one/parquet)** | Rows, schema, row groups and column statistics of a `.parquet` file; sorting, filtering and SQL by DuckDB |
 | `♪` | **[audio.lint.one](https://audio.lint.one)** | Plays a file or another tab's sound with a live spectrum; waveform seek, tags, levels |
 
-The landing page at **[lint.one](https://lint.one)** links all eleven, and opens
+The landing page at **[lint.one](https://lint.one)** links all twelve, and opens
 any file dropped on it in the tool that reads it.
 
 The original domain, `lint.uz`, redirects here: every path and subdomain is
 preserved, so `yaml.lint.uz` lands on `yaml.lint.one`.
 
 Other names for a format lead to its tool: `/yml` opens YAML, `/db` and
-`/sql` open SQLite, `/parq` opens Parquet, `/dotenv` opens .env, `/tsv` opens CSV, `/mp3` opens Audio, and so on. The
+`/sql` open SQLite, `/pem`, `/crt` and `/ssl` open CERT, `/parq` opens Parquet, `/dotenv` opens .env, `/tsv` opens CSV, `/mp3` opens Audio, and so on. The
 aliases are the same extensions the landing page routes a dropped file by,
 and they work as subdomains too, so `yml.lint.one` lands on `lint.one/yaml/`.
 
@@ -124,9 +125,9 @@ Every page shares one system in [`shared/`](shared/):
 gutter, the logo mark, the suite menu and the favicon — so a tab is identifiable at a glance while the suite
 still reads as one product:
 
-| JSON | YAML | CSV | ENV | LOG | HAR | XML | SQLite | PDF | Parquet | Audio |
-| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| `#4F46E5` indigo | `#B45309` ochre | `#4D7C0F` green | `#A32972` raspberry | `#0369A1` blue | `#475569` slate | `#0F766E` teal | `#7C3AED` violet | `#BE123C` crimson | `#F7CE46` saffron | `#C026D3` magenta |
+| JSON | YAML | CSV | ENV | LOG | HAR | XML | CERT | SQLite | PDF | Parquet | Audio |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| `#4F46E5` indigo | `#B45309` ochre | `#4D7C0F` green | `#A32972` raspberry | `#0369A1` blue | `#475569` slate | `#0F766E` teal | `#4ADE80` light green | `#7C3AED` violet | `#BE123C` crimson | `#F7CE46` saffron | `#C026D3` magenta |
 
 **Themes:** System, Light and Dark, each with an **Increase contrast** switch
 (WCAG AAA palettes) that starts from the OS setting. To add a theme, copy a
