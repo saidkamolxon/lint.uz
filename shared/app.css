@@ -118,8 +118,9 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--fs-small); font-weight: 500; color: var(--ink);
 }
+/* 24px: the smallest a pointer target may be (WCAG 2.2, 2.5.8) */
 .doc-close {
-  width: 22px; height: 22px; padding: 0;
+  width: 24px; height: 24px; padding: 0;
   display: grid; place-items: center; flex: none;
   color: var(--muted); border-radius: var(--radius-sm);
 }
@@ -314,6 +315,18 @@ kbd {
   margin-right: calc(var(--s2) * -1);
   padding-right: var(--s2);
 }
+/* an icon button's name, shown at once (see app.js, quick tooltips) */
+.quick-tip {
+  position: fixed; z-index: 70; max-width: min(40ch, 80vw);
+  padding: 3px var(--s2);
+  background: var(--ink); color: var(--surface);
+  border-radius: var(--radius-sm);
+  font: 500 var(--fs-small)/1.4 var(--ui);
+  pointer-events: none;
+}
+.quick-tip[hidden] { display: none; }
+:root[data-contrast="more"] .quick-tip { outline: var(--hairline) solid var(--surface); }
+
 /* a marked line's message, shown beside its number on hover */
 .gutter-tip {
   position: fixed; z-index: 60; max-width: min(56ch, 70vw);

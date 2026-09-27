@@ -1396,10 +1396,53 @@ function showEmpty() {
   $('rows').innerHTML = LintApp.emptyState({
     title: 'Open a log or drop it here',
     body: 'It never leaves your browser, even at a gigabyte.',
-    extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>'
+    extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button>' +
+      '<button class="bordered" id="emptySample">Load a sample</button></div>'
   });
   $('emptyOpen').addEventListener('click', () => $('fileInput').click());
+  $('emptySample').addEventListener('click', () => openFile(new File([sampleLog()], 'checkout-api.log', { type: 'text/plain' })));
   $('spacer').style.height = '0px';
+}
+
+/* A few minutes of a checkout service, made here rather than shipped: every
+   level, a slow patch, retries, and exceptions with their stack traces, so
+   the filters, the folding and the density strip all have something to do.
+   Seeded, so it is the same log every time. */
+function sampleLog() {
+  let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const routes = ['GET /v2/cart', 'POST /v2/cart/items', 'GET /v2/products', 'POST /v2/checkout', 'GET /v2/orders', 'GET /health'];
+  const out = [];
+  let t = Date.UTC(2026, 8, 14, 9, 31, 0);
+  const at = () => new Date(t += Math.floor(rnd() * 1400) + 80).toISOString();
+  const line = (lvl, msg) => out.push(at() + ' ' + lvl.padEnd(5) + ' [checkout-api] ' + msg);
+  line('INFO', 'Starting checkout-api 2.4.1 on port 8080 (environment: production)');
+  line('INFO', 'Connected to postgres at db-eu-1a:5432, pool 4..32');
+  line('DEBUG', 'Loaded 12 feature flags from config service');
+  for (let i = 0; i < 260; i++) {
+    const r = rnd(), route = pick(routes), user = 1000 + Math.floor(rnd() * 90);
+    const slow = i > 150 && i < 190;
+    const ms = Math.floor((slow ? 900 : 20) + rnd() * (slow ? 2400 : 180));
+    if (r < 0.62) line('INFO', route + ' ' + (route.startsWith('POST') ? 201 : 200) + ' in ' + ms + 'ms user=' + user);
+    else if (r < 0.8) line('DEBUG', 'Cache ' + (rnd() < 0.7 ? 'hit' : 'miss') + ' cart:' + user);
+    else if (r < 0.9 || slow) line('WARN', slow ? 'Slow query on orders: ' + ms + 'ms (threshold 500ms)' : 'Retrying payment provider, attempt ' + (1 + Math.floor(rnd() * 2)) + ' of 3');
+    else if (r < 0.95) {
+      line('ERROR', 'POST /v2/checkout 500 in ' + ms + 'ms user=' + user);
+      out.push('System.InvalidOperationException: Cart ' + user + ' has no items to check out',
+        '   at Shop.Checkout.CheckoutHandler.Handle(CheckoutRequest request) in /src/Checkout/CheckoutHandler.cs:line 58',
+        '   at Shop.Pipeline.RequestPipeline`1.RunAsync(TRequest request) in /src/Pipeline/RequestPipeline.cs:line 31',
+        '   at Microsoft.AspNetCore.Routing.EndpointMiddleware.Invoke(HttpContext httpContext)');
+    } else {
+      line('ERROR', 'Payment provider did not answer: user=' + user);
+      out.push('System.Net.Http.HttpRequestException: The SSL connection could not be established',
+        ' ---> System.TimeoutException: The operation has timed out.',
+        '   at Shop.Payments.StripeClient.ChargeAsync(Charge charge) in /src/Payments/StripeClient.cs:line 112',
+        '   at Shop.Checkout.CheckoutHandler.Handle(CheckoutRequest request) in /src/Checkout/CheckoutHandler.cs:line 71');
+    }
+  }
+  line('INFO', 'Draining connections before shutdown');
+  return out.join('\n') + '\n';
 }
 
 enable(false);

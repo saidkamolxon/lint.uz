@@ -301,6 +301,74 @@ function highlightInto(el, text, q) {
   if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
 }
 
+/* ---------- quick tooltips ----------
+   An icon says little on its own, and a browser's own tooltip waits about
+   a second, which reads as nothing there. A button with no text of its own
+   shows its title at once below it (above, near the bottom of the page),
+   on hover and on keyboard focus; moving along a row of icons keeps it up.
+   The title is lifted off while the tip shows, so the two never stack,
+   and put back after unless the page gave the button a new one meanwhile. */
+(function () {
+  var tip = null, timer = null, cur = null, warmUntil = 0;
+
+  function target(el) {
+    var b = el && el.closest ? el.closest('button, [role="button"]') : null;
+    if (!b || b.disabled || b.closest('.menu')) return null;
+    if (!b.title && !b.dataset.tipText) return null;
+    return (b.textContent || '').trim() ? null : b;
+  }
+
+  function show(b) {
+    if (cur && cur !== b) hide();
+    cur = b;
+    if (b.title) { b.dataset.tipText = b.title; b.removeAttribute('title'); }
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'quick-tip';
+      tip.setAttribute('role', 'tooltip');
+      document.body.appendChild(tip);
+    }
+    tip.textContent = b.dataset.tipText;
+    tip.hidden = false;
+    var r = b.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    var left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, window.innerWidth - t.width - 6));
+    var top = r.bottom + 6;
+    if (top + t.height > window.innerHeight - 6) top = r.top - t.height - 6;
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
+  function hide() {
+    clearTimeout(timer);
+    if (cur) {
+      if (!cur.title && cur.dataset.tipText) cur.title = cur.dataset.tipText;
+      delete cur.dataset.tipText;
+      warmUntil = Date.now() + 400;
+      cur = null;
+    }
+    if (tip) tip.hidden = true;
+  }
+
+  document.addEventListener('pointerover', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    var b = target(e.target);
+    if (b === cur) return;
+    if (!b) { if (cur) hide(); return; }
+    clearTimeout(timer);
+    if (Date.now() < warmUntil || cur) show(b);
+    else timer = setTimeout(function () { show(b); }, 300);
+  });
+  document.addEventListener('focusin', function (e) {
+    var b = target(e.target);
+    if (b && b.matches(':focus-visible')) show(b);
+  });
+  document.addEventListener('focusout', function () { if (cur) hide(); });
+  document.addEventListener('pointerdown', hide, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('blur', hide);
+})();
+
 /* ---------- menus ---------- */
 function closeAllMenus(except) {
   var menus = document.querySelectorAll('.menu.open');
