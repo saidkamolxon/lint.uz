@@ -206,7 +206,9 @@ body.show-links .lnk {
 
 /* ---------- reading position ----------
    A label by default; it becomes an input only when you mean to jump. */
-.pagebox { display: flex; align-items: center; gap: 2px; }
+.pagebox { display: flex; align-items: center; gap: 2px; position: relative; }
+/* hung off the left, so the page number stays centred with or without it */
+#btnContents { position: absolute; right: calc(100% + var(--s2)); top: 50%; transform: translateY(-50%); }
 /* Between two spacers the position would sit in the middle of whatever the
    left and right groups leave over, and drift with the file name's length.
    It belongs over the page instead: centred on the page column, which the
@@ -474,13 +476,15 @@ $('app').innerHTML = `
       </span>
     </a>
     <button id="btnOpen" class="primary" title="Open a PDF, or drop one anywhere">Open</button>
-    <button id="btnContents" class="icon-btn needs-doc" title="Contents" aria-label="Contents"
-            aria-pressed="false" disabled></button>
 
     <span class="spacer"></span>
 
     <!-- reading position: a label until you click it -->
     <span class="pagebox needs-doc" id="pageBox">
+      <!-- the contents list is a way around the document, so it sits with
+           the page controls, not after the file's name where it drifted -->
+      <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
+              aria-pressed="false" disabled></button>
       <button id="btnPrev" class="icon-btn" title="Previous page (Page Up)" aria-label="Previous page" disabled></button>
       <button id="pagePos" class="page-pos" title="Go to page (${MOD}G)">
         <span id="pageCur">1</span><span class="slash">/</span><span id="pageTotal">1</span>
