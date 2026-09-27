@@ -475,7 +475,8 @@ kbd {
 .empty-state .keys { font-size: var(--fs-small); color: var(--faint); margin: 0; }
 
 .children {
-  margin-left: 15px; padding-left: var(--s2);
+  /* under the caret, however large the text */
+  margin-left: calc(15px * var(--code-scale, 1)); padding-left: var(--s2);
   border-left: var(--hairline) solid var(--line);
   display: none;
 }
@@ -498,27 +499,29 @@ kbd {
 /* the row menu opens where the pointer is, not under a button */
 .ctx-menu { position: fixed; right: auto; top: 0; left: 0; min-width: 220px; }
 
+/* The caret, the type chip and the counts beside a key grow with the text
+   size (--code-scale), so zooming the tree keeps each row in proportion */
 .caret {
-  flex: none; width: 15px; align-self: center;
+  flex: none; width: calc(15px * var(--code-scale, 1)); align-self: center;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--faint); cursor: pointer;
   transition: transform var(--t-fast);
 }
 .caret::before {
   content: ""; display: block;
-  border-left: 5px solid currentColor;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
+  border-left: calc(5px * var(--code-scale, 1)) solid currentColor;
+  border-top: calc(4px * var(--code-scale, 1)) solid transparent;
+  border-bottom: calc(4px * var(--code-scale, 1)) solid transparent;
 }
 .node.open > .row .caret { transform: rotate(90deg); }
 .caret.leaf { visibility: hidden; cursor: default; }
 
 .ticon {
-  flex: none; width: 17px; height: 15px; border-radius: var(--radius-sm);
+  flex: none; width: calc(17px * var(--code-scale, 1)); height: calc(15px * var(--code-scale, 1)); border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; justify-content: center;
   align-self: center; margin-right: var(--s2);
   /* the one size off the scale: two letters inside a 15px chip */
-  font-family: var(--mono); font-size: calc(var(--fs-micro) - 2px); font-weight: 700;
+  font-family: var(--mono); font-size: calc((var(--fs-micro) - 2px) * var(--code-scale, 1)); font-weight: 700;
   letter-spacing: -0.05em; user-select: none;
 }
 .t-obj  { color: var(--t-key);  background: color-mix(in srgb, var(--t-key) 15%, transparent); }
@@ -551,7 +554,7 @@ kbd {
 
 .badge { color: var(--muted); }
 .badge .cnt {
-  color: var(--faint); font-family: var(--ui); font-size: var(--fs-small);
+  color: var(--faint); font-family: var(--ui); font-size: calc(var(--fs-small) * var(--code-scale, 1));
   margin-left: var(--s2); font-variant-numeric: tabular-nums;
 }
 
@@ -561,7 +564,7 @@ mark {
 }
 
 .more-btn, .trunc-btn {
-  font-family: var(--ui); font-size: var(--fs-small);
+  font-family: var(--ui); font-size: calc(var(--fs-small) * var(--code-scale, 1));
   color: var(--hue); border: none; padding: 1px 6px;
   font-weight: 500;
 }
@@ -598,8 +601,10 @@ mark {
 #tree.wrap .v { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
 #tree.wrap .k, #tree.wrap .colon, #tree.wrap .badge { flex: 0 0 auto; }
 #tree.wrap .k { max-width: 100%; overflow-wrap: anywhere; }
-#tree.wrap .caret { align-self: flex-start; margin-top: 4px; }
-#tree.wrap .ticon { align-self: flex-start; margin-top: 2px; }
+/* a wrapped row keeps its caret and chip in the middle of its first line,
+   at any text size: half of what the line has to spare above them */
+#tree.wrap .caret { align-self: flex-start; margin-top: calc((var(--code-size, var(--fs-base)) * 1.55 - 8px * var(--code-scale, 1)) / 2); }
+#tree.wrap .ticon { align-self: flex-start; margin-top: calc((var(--code-size, var(--fs-base)) * 1.55 - 15px * var(--code-scale, 1)) / 2); }
 
 /* ==========================================================================
    Status bar
