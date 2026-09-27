@@ -22,6 +22,7 @@ var SUITE = [
   { id: 'log',  name: 'LOG',  host: '/log'  },
   { id: 'har',  name: 'HAR',  host: '/har'  },
   { id: 'xml',  name: 'XML',  host: '/xml'  },
+  { id: 'cert', name: 'CERT', host: '/cert' },
   { id: 'sqlite', name: 'SQLite', host: '/sqlite' },
   { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
   { id: 'parquet', name: 'Parquet', host: '/parquet' },
@@ -1491,12 +1492,21 @@ function init(config) {
       showToast('That file is over 50 MB — too large to open here');
       return;
     }
-    var reader = new FileReader();
-    reader.onload = function () {
+    var opened = function (text) {
       docName = file.name;
-      editor.setValue(String(reader.result));
+      editor.setValue(String(text));
       showToast('Opened ' + file.name + ' (' + fmtBytes(file.size) + ')');
     };
+    /* a tool whose files can be binary (a DER certificate) turns them into
+       the text it edits itself */
+    if (config.fileToText) {
+      config.fileToText(file).then(opened, function (err) {
+        showToast((err && err.message) || 'Could not read that file');
+      });
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () { opened(reader.result); };
     reader.onerror = function () { showToast('Could not read that file'); };
     reader.readAsText(file);
   }

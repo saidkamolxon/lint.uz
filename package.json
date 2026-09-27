@@ -26,7 +26,8 @@
     "sqlite",
     "parquet",
     "dotenv",
-    "har"
+    "har",
+    "x509"
   ],
   "author": "saidkamolxon",
   "license": "MIT"

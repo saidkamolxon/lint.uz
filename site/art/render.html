@@ -39,10 +39,11 @@ const TOOLS = {
   /* the one light hue: its glyph and mark are ink, not white */
   parquet: { name: 'Parquet', hue: '#F7CE46', ink: INK, lines: ['Rows, schema, statistics and SQL', 'on a .parquet file that stays put.'] },
   env:     { name: 'ENV',     hue: '#A32972', lines: ['Find the .env mistakes that break', 'your app, and fix them.'] },
-  har:     { name: 'HAR',     hue: '#475569', lines: ['Every request a page made, and a', 'copy safe to send without secrets.'] }
+  har:     { name: 'HAR',     hue: '#475569', lines: ['Every request a page made, and a', 'copy safe to send without secrets.'] },
+  cert:    { name: 'CERT',    hue: '#4ADE80', ink: INK, lines: ['When a certificate expires, what it', 'covers, and whether the chain holds.'] }
 };
 /* the home card's row of tiles, in the suite's order: most used first */
-const SUITE = ['json', 'yaml', 'csv', 'env', 'log', 'har', 'xml', 'sqlite', 'pdf', 'parquet', 'audio'];
+const SUITE = ['json', 'yaml', 'csv', 'env', 'log', 'har', 'xml', 'cert', 'sqlite', 'pdf', 'parquet', 'audio'];
 
 const font = new FontFace('Plex', 'url(/shared/fonts/plex-sans-var.woff2)', { weight: '100 700' });
 document.fonts.add(await font.load());

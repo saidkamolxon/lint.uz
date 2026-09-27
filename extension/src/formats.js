@@ -15,6 +15,7 @@
     { id: 'log',    name: 'LOG',    hue: '#0369A1', ext: 'log' },
     { id: 'har',    name: 'HAR',    hue: '#475569', ext: 'har' },
     { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
+    { id: 'cert',   name: 'CERT',   hue: '#4ADE80', ext: 'pem' },
     { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' },
     { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
     { id: 'parquet', name: 'Parquet', hue: '#F7CE46', ext: 'parquet' },
@@ -27,6 +28,7 @@
   var BY_EXT = {
     json: 'json', geojson: 'json', jsonc: 'json',
     har: 'har',
+    pem: 'cert', crt: 'cert', cer: 'cert', der: 'cert', p7b: 'cert', p7c: 'cert', csr: 'cert',
     jsonl: 'log', ndjson: 'log',   // until settle() reads what is in them
     xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
     rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
@@ -77,6 +79,7 @@
   function settle(tool, head, size) {
     if ((tool !== 'log' && tool !== 'json') || head == null) return tool;
     if (HAR_HEAD.test(String(head).replace(/^\uFEFF/, ''))) return 'har';
+    if (/^-----BEGIN [A-Z0-9 ]+-----/m.test(String(head).slice(0, 4096))) return 'cert';
     var kind = jsonlKind(head);
     if (kind === 'log') return 'log';
     if (kind === 'data') return size > JSON_TOOL_LIMIT ? 'log' : 'json';
@@ -104,6 +107,7 @@
     if (/^audio\//.test(t)) return 'audio';
     if (/sqlite/.test(t)) return 'sqlite';
     if (/parquet/.test(t)) return 'parquet';
+    if (/x509|pkix-cert|pem-file|pkcs7|pkcs10/.test(t)) return 'cert';
     if (/(^|[\/+])x?-?ndjson$|jsonl|json-seq/.test(t)) return 'log';
     if (/(^|[\/+])json$/.test(t)) return 'json';
     if (/(^|[\/+])x?-?yaml$|\/yml$/.test(t)) return 'yaml';
@@ -140,6 +144,7 @@
       return jsonlKind(s) === 'log' ? 'log' : 'json';
     }
     if (c === '<') return 'xml';
+    if (/^-----BEGIN [A-Z0-9 ]+-----/m.test(s)) return 'cert';
 
     /* KEY=value on every line that is not a comment: a .env file */
     var assigns = lines.filter(function (l) { return /^\s*(export\s+)?[A-Za-z_][A-Za-z0-9_.-]*=/.test(l); }).length;
