@@ -114,6 +114,9 @@ document.getElementById('app').innerHTML =
   '<span class="dot"></span>' +
   '<span id="statusMsg"></span>' +
   '<span id="pathBox" title="Click to copy"></span>' +
+  /* the selected row's other copies (its value, as YAML, as XML…), beside
+     its path: in sight, where a pointer or a finger can reach them */
+  '<span id="rowCopy" class="row-copy"></span>' +
 '</footer>';
 
 /* responsive hiding declared per-action */
