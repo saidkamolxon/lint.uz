@@ -499,6 +499,13 @@ var app = LintApp.init({
   }),
   /* the editor is Compare's "before", so every edit re-runs the diff */
   onParsed: function () { if (cmp && cmp.comparing()) cmp.onEditorChanged(); },
+  /* a whole document pasted in lands formatted — unless it was formatted
+     already, or keeps text whose whitespace matters (CDATA, xml:space) */
+  formatPaste: function (text) {
+    if (text.length > 20e6 || /\n[ \t]+</.test(text) || /<!\[CDATA\[|xml:space\s*=\s*["']preserve/.test(text)) return null;
+    if (!parse(text).ok) return null;
+    return formatXml(text).replace(/\s+$/, '');
+  },
   sample: SAMPLE
 });
 

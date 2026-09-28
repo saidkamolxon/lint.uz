@@ -980,9 +980,11 @@ async function selectCell(r, ci) {
 }
 
 let shownValue = null;     // what Copy copies
+let shownName = 'value.json';   // what the JSON viewer names it
 
 function paintValue(col, where, d) {
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  shownName = String(col.name).replace(/[^\w.-]+/g, '_') + '-' + String(where).replace(/\s+/g, '') + '.json';
   const head = `<div class="value-head"><span class="col">${esc(col.name)}</span>` +
     `<span class="kind">${esc(col.type)}</span><span class="where">${where}</span></div>`;
   const p = $('panelValue');
@@ -1039,7 +1041,8 @@ function paintValue(col, where, d) {
 
 $('panelValue').addEventListener('click', (e) => {
   if (e.target.id === 'btnCopyValue') copyValue();
-  else if (e.target.id === 'btnToJson') LintApp.copyAndOffer(shownValue, 'JSON', 'parquet', 'json');
+  /* straight into the JSON viewer: the button already says where it goes */
+  else if (e.target.id === 'btnToJson') LintApp.openIn(shownValue, shownName, 'json');
 });
 
 function copyValue() {
