@@ -518,8 +518,50 @@ var app = LintApp.init({
     }
     if (cmp && cmp.comparing()) cmp.onEditorChanged();
   },
+  /* a whole document pasted in lands formatted — unless it is JSON Lines,
+     or was formatted already (any line starts indented), which is left as
+     the writer laid it out */
+  formatPaste: function (text) {
+    if (text.length > 20e6 || /\n[ \t]+\S/.test(text)) return null;
+    try { JSON.parse(text); } catch (e) { return null; }
+    return reindent(text.trim());
+  },
   sample: SAMPLE
 });
+
+/* Lays valid JSON out two spaces a level by moving whitespace alone: every
+   number, string and key stays exactly as written. (Format rewrites from
+   the parsed value, which turns 1.50 into 1.5 and rounds a 19-digit id;
+   that is its job when asked, never on a paste.) */
+function reindent(text) {
+  var out = '', depth = 0, n = text.length;
+  var at = function (d) { return '\n' + '  '.repeat(d); };
+  for (var i = 0; i < n; i++) {
+    var c = text[i];
+    if (c === '"') {
+      var j = i + 1;
+      while (j < n && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      out += text.slice(i, j + 1);
+      i = j;
+    } else if (c === ' ' || c === '\t' || c === '\n' || c === '\r') {
+      continue;
+    } else if (c === '{' || c === '[') {
+      var k = i + 1;
+      while (k < n && /\s/.test(text[k])) k++;
+      if (text[k] === (c === '{' ? '}' : ']')) { out += c + text[k]; i = k; continue; }
+      out += c + at(++depth);
+    } else if (c === '}' || c === ']') {
+      out += at(--depth) + c;
+    } else if (c === ',') {
+      out += ',' + at(depth);
+    } else if (c === ':') {
+      out += ': ';
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
 
 document.getElementById('btnFormat').addEventListener('click', function () {
   var res = parse(app.editor.getValue());

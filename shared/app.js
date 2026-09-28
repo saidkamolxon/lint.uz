@@ -1844,12 +1844,36 @@ function init(config) {
     }
   }
 
-  /* a paste that brings most of the text is a new document arriving */
+  /* A paste that brings most of the text is a new document arriving: its
+     tree unfolds, and, where the tool can (config.formatPaste), it lands
+     formatted. The paste goes in as the browser makes it, then is replaced
+     in the same moment through the browser's own editing, so nothing
+     flickers and Ctrl/⌘+Z takes back the formatting alone. */
+  var formatNext = false;
   editor.input.addEventListener('paste', function (e) {
     var pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
     var inp = editor.input;
     var after = inp.value.length - (inp.selectionEnd - inp.selectionStart) + pasted.length;
-    if (pasted.length && pasted.length >= after * 0.5) tree.arrive();
+    if (!pasted.length || pasted.length < after * 0.5) return;
+    tree.arrive();
+    formatNext = !!config.formatPaste;
+  });
+  editor.input.addEventListener('input', function (e) {
+    if (!formatNext || e.inputType !== 'insertFromPaste') { formatNext = false; return; }
+    formatNext = false;
+    var text = editor.getValue();
+    var out = null;
+    try { out = config.formatPaste(text); } catch (err) { out = null; }
+    if (!out || out === text) return;
+    var inp = editor.input;
+    inp.setSelectionRange(0, text.length);
+    if (!document.execCommand('insertText', false, out)) {
+      inp.setRangeText(out, 0, text.length, 'end');
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    inp.setSelectionRange(0, 0);
+    inp.scrollTop = 0;
+    showToast('Formatted as it was pasted. ' + keyText('mod+z') + ' keeps it as it came');
   });
 
   errorBar.addEventListener('click', function () {
