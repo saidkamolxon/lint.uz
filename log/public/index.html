@@ -1429,7 +1429,8 @@ function showEmpty() {
     title: 'Open a log or drop it here',
     body: 'It never leaves your browser, even at a gigabyte.',
     extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button>' +
-      '<button class="bordered" id="emptySample">Load a sample</button></div>'
+      '<button class="bordered" id="emptySample">Load a sample</button></div>' +
+      LintApp.shortcutsHint
   });
   $('emptyOpen').addEventListener('click', () => $('fileInput').click());
   $('emptySample').addEventListener('click', () => openFile(new File([sampleLog()], 'checkout-api.log', { type: 'text/plain' })));

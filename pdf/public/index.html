@@ -643,7 +643,8 @@ let firstPage = null;    // every slot is laid out from page 1's size
 const EMPTY = LintApp.emptyState({
   title: 'Open a PDF or drop it here',
   body: 'Pages render in your browser and the file never leaves it.',
-  extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>'
+  extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>' +
+    LintApp.shortcutsHint
 });
 
 function showEmpty() {

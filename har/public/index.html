@@ -681,7 +681,8 @@ const EMPTY = LintApp.emptyState({
   body: 'Save one from your browser’s Network tab with “Export HAR”. Requests, timings and secrets are read in this tab; the file never leaves it.',
   extra: '<div class="empty-actions">' +
     '<button class="primary" data-empty="open">Open a file</button>' +
-    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>' +
+    LintApp.shortcutsHint
 });
 function showEmpty() {
   const list = $('list');

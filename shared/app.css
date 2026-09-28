@@ -755,6 +755,16 @@ body.is-empty .tool-actions { visibility: hidden; }
 }
 .empty-actions button { pointer-events: auto; padding: 7px var(--s4); }
 
+/* under the first screen's buttons: where the shortcuts are (app.js) */
+.shortcuts-hint { margin: var(--s4) 0 0; font-size: var(--fs-small); color: var(--faint); }
+.shortcuts-hint button {
+  pointer-events: auto; padding: 3px var(--s2);
+  font-size: inherit; font-weight: 400; color: var(--muted);
+}
+.shortcuts-hint button:hover { color: var(--ink); }
+/* a phone has no keys to press */
+@media (hover: none) { .shortcuts-hint { display: none; } }
+
 /* arriving from another viewer: what is waiting, and the key that pastes it */
 .empty-note {
   margin: var(--s3) auto 0;

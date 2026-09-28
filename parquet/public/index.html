@@ -622,7 +622,8 @@ const EMPTY = LintApp.emptyState({
   body: 'Rows, schema, statistics and SQL all run in this tab. The file never leaves it.',
   extra: '<div class="empty-actions">' +
     '<button class="primary" data-empty="open">Open a file</button>' +
-    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>' +
+    LintApp.shortcutsHint
 });
 
 function showEmpty() {

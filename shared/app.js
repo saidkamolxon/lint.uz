@@ -843,6 +843,14 @@ window.addEventListener('keydown', function (e) {
   if (shortcutsOpen()) e.stopImmediatePropagation();
 }, true);
 
+/* The first screen of every tool says where the shortcuts are; its key is
+   Ctrl/⌘+/, since a ? typed into an editor is text. A click opens it too. */
+var SHORTCUTS_HINT = '<p class="shortcuts-hint"><button type="button" data-shortcuts>' +
+  'Keyboard shortcuts ' + kbd('mod+/') + '</button></p>';
+document.addEventListener('click', function (e) {
+  if (e.target.closest && e.target.closest('[data-shortcuts]')) showShortcuts();
+});
+
 /* ? opens the panel wherever a ? is not being typed; Ctrl/⌘+/ anywhere */
 document.addEventListener('keydown', function (e) {
   if (keyMatches(e, 'mod+/') || (keyMatches(e, '?') && !isTyping(e.target))) {
@@ -1523,6 +1531,9 @@ function init(config) {
     { id: 'btnSample', label: 'Load a sample', title: 'Replace the editor contents with a sample document' }
   ]));
   wireToolMenus(function () { return $('input').value; });
+  /* the first screen says where the shortcuts are */
+  var promptActions = document.querySelector('#emptyPrompt .empty-actions');
+  if (promptActions) promptActions.insertAdjacentHTML('afterend', SHORTCUTS_HINT);
 
   /* the document's text follows the reader's text size */
   textZoom();
@@ -2124,6 +2135,7 @@ global.LintApp = {
   textZoom: textZoom,
   shortcuts: shortcuts,
   showShortcuts: showShortcuts,
+  shortcutsHint: SHORTCUTS_HINT,
   setDocument: setDocument,
   keyText: keyText,
   copyAndOffer: copyAndOffer,
