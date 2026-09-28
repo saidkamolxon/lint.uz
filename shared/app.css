@@ -365,6 +365,13 @@ kbd {
   pointer-events: none;
   color: var(--ink);
   scrollbar-width: none;
+  /* The textarea over it keeps its scrollbars, which take room it can
+     scroll into; this layer hides its own, so it ended a scrollbar short.
+     At the bottom or the far right the text then sat off the selection
+     and the caret. Room past the end lets it follow the textarea all the
+     way; the extra is never seen, since it only scrolls as far as that. */
+  padding-bottom: calc(var(--ed-pad-y) + 32px);
+  padding-right: calc(var(--ed-pad-x) + 32px);
 }
 #highlight::-webkit-scrollbar { width: 0; height: 0; }
 #input {
