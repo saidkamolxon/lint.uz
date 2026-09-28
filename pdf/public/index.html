@@ -63,8 +63,7 @@
 }
 
 /* The lift sits on the wrapper, never on the canvas: a filter applies to an
-   element's shadow too, so an inverted page would turn its own dark shadow
-   into a bright halo. On a desk as light as the paper, the hairline is what
+   element's shadow too, so a filtered page would tint its own shadow. On a desk as light as the paper, the hairline is what
    gives the sheet its edge; the shadow lifts it. */
 .page-wrap {
   position: relative; flex: none;
@@ -72,18 +71,26 @@
   outline: var(--hairline) solid var(--line);
   line-height: 0;
 }
-.page-wrap canvas {
+.page-wrap > canvas:not(.pic) {
   /* sized only from script: a max-width here clamped the width of a zoomed
      page while its height stayed put, squashing it */
   display: block;
   background: #fff;
 }
-/* the page treatment — chrome is always themed, the sheet is opt-in */
-body[data-page="dim"] .page-wrap canvas { filter: brightness(0.82) contrast(1.04); }
-body[data-page="invert"] .page-wrap canvas { filter: invert(1) hue-rotate(180deg); }
-/* an inverted page is nearly black, so a dark shadow under it reads as dirt —
-   a hairline edge separates it from the backdrop instead */
-body[data-page="invert"] .page-wrap { box-shadow: none; }
+/* The page treatment — chrome is always themed, the sheet is opt-in, and
+   every one is a filter, so switching is instant. Dim lowers the light and
+   warms it a little, as a reading lamp does. Dark turns paper to the dark
+   theme's surface and ink to its text (--dark-page, from darkTone), and the
+   pictures are laid over it as they were (.pic, see addPictures). */
+body[data-page="dim"] .page-wrap > canvas:not(.pic) { filter: sepia(0.16) brightness(0.8) contrast(1.04); }
+body[data-page="dark"] .page-wrap > canvas:not(.pic),
+body[data-page="dark"] .thumb-img > canvas:not(.pic) { filter: var(--dark-page, invert(1) hue-rotate(180deg)); }
+/* a dark page on a dark desk: a hairline edge, not a shadow, sets it apart */
+body[data-page="dark"] .page-wrap { box-shadow: none; }
+/* a picture kept in its own colours, a little dimmer; sized in percent of
+   the page, so it follows a zoom that stretches the canvas */
+.pic { position: absolute; display: none; pointer-events: none; }
+body[data-page="dark"] .pic { display: block; filter: brightness(0.9); }
 
 /* a slot waiting to be filled should not pretend to be a page */
 .page-wrap.pending {
@@ -107,7 +114,7 @@ body[data-page="invert"] .page-wrap { box-shadow: none; }
   pointer-events: none;
   mix-blend-mode: multiply;
 }
-body[data-page="invert"] .hl-box { mix-blend-mode: screen; }
+body[data-page="dark"] .hl-box { mix-blend-mode: screen; }
 .hl-box.current {
   background: color-mix(in srgb, var(--hue) 45%, transparent);
   outline: 1.5px solid var(--hue);
@@ -313,17 +320,16 @@ body.show-links .lnk {
   padding: 6px 6px 4px; border-radius: var(--radius);
 }
 .thumb-img {
-  display: block; line-height: 0;
+  display: block; line-height: 0; position: relative;
   background: var(--sunken);
   outline: var(--hairline) solid var(--line);
 }
-.thumb-img canvas { display: block; width: 100%; height: 100%; background: #fff; }
+.thumb-img > canvas:not(.pic) { display: block; width: 100%; height: 100%; background: #fff; }
 .thumb-n { font-size: var(--fs-micro); color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.4; }
 .thumb.here { background: var(--hue-wash); }
 .thumb.here .thumb-img { outline: 2px solid var(--hue); }
 .thumb.here .thumb-n { color: var(--hue); font-weight: 600; }
-body[data-page="dim"] .thumb-img canvas { filter: brightness(0.82) contrast(1.04); }
-body[data-page="invert"] .thumb-img canvas { filter: invert(1) hue-rotate(180deg); }
+body[data-page="dim"] .thumb-img > canvas:not(.pic) { filter: sepia(0.16) brightness(0.8) contrast(1.04); }
 @media (max-width: 620px) {
   .find-pop { left: var(--s2); right: var(--s2); top: var(--s2); }
   #findInput { width: auto; flex: 1; min-width: 0; }
@@ -626,7 +632,7 @@ const ICON = {
   /* page appearance — one circle, filled three ways */
   normal:   '<circle cx="12" cy="12" r="8"/>',
   dim:      '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" opacity="0.45" stroke="none"/>',
-  invert:   '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="5.6" fill="currentColor" stroke="none"/>'
+  dark:     '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'
 };
 
 $('btnFind').innerHTML = I(ICON.find);
@@ -644,8 +650,8 @@ $('btnIn').innerHTML = I(ICON.plus);
    to the current state, which read as a verb rather than a state. */
 const PAGE_MODES = [
   { id: 'normal', name: 'Normal', hint: 'The page as the author made it' },
-  { id: 'dim',    name: 'Dim',    hint: 'Softened for low light — nothing recoloured' },
-  { id: 'invert', name: 'Invert', hint: 'Dark page — images are recoloured too' }
+  { id: 'dim',    name: 'Dim',    hint: 'Softer and a little warmer for low light, nothing recoloured' },
+  { id: 'dark',   name: 'Dark',   hint: 'A dark page, with photos and colour pictures kept as they are' }
 ];
 
 let pageMode = 'normal';
@@ -655,6 +661,9 @@ try {
   modeExplicit = saved !== null;
   if (saved) pageMode = saved;
 } catch (e) {}
+/* Invert was the dark mode before Dark; a reader who chose it wants Dark */
+if (pageMode === 'invert') pageMode = 'dark';
+if (!PAGE_MODES.some((m) => m.id === pageMode)) pageMode = 'normal';
 
 const DARK_THEMES = ['slate', 'midnight'];
 function isDarkTheme() {
@@ -662,7 +671,7 @@ function isDarkTheme() {
   if (t) return DARK_THEMES.indexOf(t) !== -1;
   return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
 }
-if (!modeExplicit) pageMode = isDarkTheme() ? 'dim' : 'normal';
+if (!modeExplicit) pageMode = isDarkTheme() ? 'dark' : 'normal';
 
 function applyPageMode(id) {
   pageMode = id;
@@ -678,8 +687,12 @@ $('pageModeSeg').innerHTML = PAGE_MODES.map((m) =>
 ).join('');
 $('pageModeSeg').querySelectorAll('button').forEach((b) => {
   b.addEventListener('click', () => {
+    const was = pageMode;
     applyPageMode(b.dataset.mode);
+    darkTone();
     try { localStorage.setItem('lintuz-pdf-page', b.dataset.mode); } catch (e) {}
+    /* the pages drawn before Dark was chosen get their pictures now */
+    if (pageMode === 'dark' && was !== 'dark') pictureAll();
   });
 });
 applyPageMode(pageMode);
@@ -878,6 +891,134 @@ function fitScale(page) {
   return Math.max(MIN_SCALE, Math.min(MAX_SCALE, avail / base.width));
 }
 
+/* ---------- Dark ----------
+   The page canvas is never changed: Dark is a filter on it, so choosing it,
+   leaving it or changing theme costs nothing but a repaint. The filter turns
+   paper to the theme's surface and ink to the theme's text, read from the
+   theme so Increase contrast gets true black and white.
+   A photo filtered that way is a negative, so each picture is laid over the
+   page as it was, cut from the untouched canvas. pdf.js says where each one
+   sits (recordImages). A picture that is really part of the page is left to
+   go dark with it: one covering most of the page (a scan), or one mostly
+   light and colourless (a diagram, a formula, scanned text), which would
+   otherwise glare as a white box. */
+function darkTone() {
+  const root = document.documentElement, css = getComputedStyle(root);
+  const lum = (v) => {
+    const probe = document.createElement('span');
+    probe.style.color = v;
+    document.body.appendChild(probe);
+    const m = getComputedStyle(probe).color.match(/[\d.]+/g) || [0, 0, 0];
+    probe.remove();
+    return (+m[0] + +m[1] + +m[2]) / 765;
+  };
+  let lo = lum(css.getPropertyValue('--surface').trim() || '#15171C');
+  let hi = lum(css.getPropertyValue('--ink').trim() || '#E6E9F0');
+  /* a light theme's surface is the light end: Dark there takes the dark
+     theme's pair, or true black and white under Increase contrast */
+  if (lo > hi) {
+    const more = root.getAttribute('data-contrast') === 'more';
+    lo = more ? 0 : lum('#15171C');
+    hi = more ? 1 : lum('#E6E9F0');
+  }
+  /* invert, keep the hues, then squeeze black-to-white into lo-to-hi:
+     contrast(c) spans 0.5 ± c/2, and brightness(b) scales that span */
+  const b = hi + lo, c = (hi - lo) / b;
+  document.body.style.setProperty('--dark-page',
+    `invert(1) hue-rotate(180deg) contrast(${c.toFixed(3)}) brightness(${b.toFixed(3)})`);
+}
+
+/* true when a picture should stay as it is, rather than go dark */
+function keepPicture(ctx, x0, y0, x1, y1, W, H) {
+  if ((x1 - x0) * (y1 - y0) > W * H * 0.7) return false;          // a scan
+  const w = Math.max(1, Math.round(x1 - x0)), h = Math.max(1, Math.round(y1 - y0));
+  let data;
+  try { data = ctx.getImageData(Math.round(x0), Math.round(y0), w, h).data; } catch (e) { return true; }
+  const step = Math.max(1, Math.floor(Math.sqrt(w * h / 4000)));
+  let n = 0, light = 0, sat = 0;
+  for (let y = 0; y < h; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i + 1], bl = data[i + 2];
+      light += (r + g + bl) / 765;
+      sat += (Math.max(r, g, bl) - Math.min(r, g, bl)) / 255;
+      n++;
+    }
+  }
+  /* mostly light and near grey: line art or text, part of the page */
+  return !n || !(light / n > 0.6 && sat / n < 0.08);
+}
+
+/* Lay the pictures worth keeping over a drawn page (or thumbnail), once. */
+function addPictures(host, canvas, page) {
+  if (canvas.dataset.pics) return;
+  canvas.dataset.pics = '1';
+  const q = page.imageCoordinates;
+  if (!q || !q.length) return;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  const pct = (v, of) => (v / of * 100).toFixed(3) + '%';
+  for (let i = 0; i + 5 < q.length; i += 6) {
+    const p0 = [q[i] * W, q[i + 1] * H], p1 = [q[i + 2] * W, q[i + 3] * H], p2 = [q[i + 4] * W, q[i + 5] * H];
+    const p3 = [p1[0] + p2[0] - p0[0], p1[1] + p2[1] - p0[1]];
+    const xs = [p0[0], p1[0], p2[0], p3[0]], ys = [p0[1], p1[1], p2[1], p3[1]];
+    /* rounded inwards: rounded out, the cut took a pixel of white paper
+       along its edges, which showed as a bright frame on the dark page */
+    const x0 = Math.max(0, Math.ceil(Math.min(...xs) - 0.01)), x1 = Math.min(W, Math.floor(Math.max(...xs) + 0.01));
+    const y0 = Math.max(0, Math.ceil(Math.min(...ys) - 0.01)), y1 = Math.min(H, Math.floor(Math.max(...ys) + 0.01));
+    const w = x1 - x0, h = y1 - y0;
+    if (w < 2 || h < 2 || !keepPicture(ctx, x0, y0, x1, y1, W, H)) continue;
+    /* Laid in percent, the cut cannot meet the page pixel for pixel, and in
+       the seam the filtered page shows the picture's edge as a negative: a
+       light line. So the cut reaches P pixels past each edge, those filled
+       by stretching the picture's own outermost rows and columns. */
+    const P = 2;
+    const pic = document.createElement('canvas');
+    pic.className = 'pic';
+    pic.width = w + 2 * P; pic.height = h + 2 * P;
+    const g = pic.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(canvas, x0, y0, w, h, P, P, w, h);
+    g.drawImage(canvas, x0, y0, w, 1, P, 0, w, P);                 // top
+    g.drawImage(canvas, x0, y1 - 1, w, 1, P, P + h, w, P);         // bottom
+    g.drawImage(canvas, x0, y0, 1, h, 0, P, P, h);                 // left
+    g.drawImage(canvas, x1 - 1, y0, 1, h, P + w, P, P, h);         // right
+    g.drawImage(canvas, x0, y0, 1, 1, 0, 0, P, P);                 // corners
+    g.drawImage(canvas, x1 - 1, y0, 1, 1, P + w, 0, P, P);
+    g.drawImage(canvas, x0, y1 - 1, 1, 1, 0, P + h, P, P);
+    g.drawImage(canvas, x1 - 1, y1 - 1, 1, 1, P + w, P + h, P, P);
+    pic.style.left = pct(x0 - P, W); pic.style.top = pct(y0 - P, H);
+    pic.style.width = pct(w + 2 * P, W); pic.style.height = pct(h + 2 * P, H);
+    /* a turned picture keeps its own outline, not its bounding box */
+    const axial = [p0, p1, p2, p3].every((p) =>
+      (Math.abs(p[0] - x0) < 1.5 || Math.abs(p[0] - x1) < 1.5) && (Math.abs(p[1] - y0) < 1.5 || Math.abs(p[1] - y1) < 1.5));
+    if (!axial) {
+      pic.style.clipPath = 'polygon(' + [p0, p2, p3, p1].map((p) =>
+        pct(p[0] - x0 + P, w + 2 * P) + ' ' + pct(p[1] - y0 + P, h + 2 * P)).join(',') + ')';
+    }
+    canvas.after(pic);
+  }
+}
+
+/* pages and thumbnails drawn before Dark was chosen */
+async function pictureAll() {
+  if (!doc) return;
+  const d = doc;
+  for (const canvas of document.querySelectorAll('.page-wrap > canvas:not(.pic):not([data-pics]), .thumb-img > canvas:not(.pic):not([data-pics])')) {
+    const n = +(canvas.closest('[data-page]') || {}).dataset?.page;
+    if (!n) continue;
+    const page = await d.getPage(n);
+    if (d !== doc || !canvas.isConnected) return;
+    addPictures(canvas.parentElement, canvas, page);
+  }
+}
+
+/* the theme decides Dark's two colours */
+new MutationObserver(darkTone)
+  .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-contrast'] });
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', darkTone);
+darkTone();
+
 async function renderPage(n) {
   if (renderedPages.has(n)) return;
   renderedPages.set(n, true);
@@ -900,10 +1041,13 @@ async function renderPage(n) {
     canvas.style.width = Math.round(vp.width) + 'px';
     canvas.style.height = Math.round(vp.height) + 'px';
 
+    canvas.getContext('2d', { alpha: false });
+    /* where the pictures sit is recorded every time, so Dark can keep them */
     await page.render({
-      canvasContext: canvas.getContext('2d', { alpha: false }),
+      canvas,
       viewport: vp,
-      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
+      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+      recordImages: true
     }).promise;
     /* zoomed again while this was drawing — a newer render owns the slot */
     if (at !== scale) return;
@@ -913,6 +1057,7 @@ async function renderPage(n) {
     wrap.style.height = '';
     wrap.innerHTML = '';
     wrap.appendChild(canvas);
+    if (pageMode === 'dark') addPictures(wrap, canvas, page);
     if (findTerm.trim()) paintHighlightsFor(n);
     paintLinksFor(n);
   } catch (e) {
@@ -954,8 +1099,9 @@ function rerender(x, y, draw = true) {
     wrap.style.width = w;
     wrap.style.height = h;
     if (canvas) {
-      /* overlays are placed in pixels, so they go and are redrawn after */
-      [...wrap.children].forEach((c) => { if (c !== canvas) c.remove(); });
+      /* overlays are placed in pixels, so they go and are redrawn after;
+         pictures are placed in percent, so they stretch with the page */
+      [...wrap.children].forEach((c) => { if (c !== canvas && !c.classList.contains('pic')) c.remove(); });
       canvas.style.width = w;
       canvas.style.height = h;
     } else {
@@ -1856,13 +2002,15 @@ async function pumpThumbs() {
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(vp.width);
       canvas.height = Math.floor(vp.height);
-      await page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp }).promise;
+      canvas.getContext('2d', { alpha: false });
+      await page.render({ canvas, viewport: vp, recordImages: true }).promise;
       if (d !== doc) break;
       const slot = $('thumbs').querySelector(`.thumb[data-page="${n}"] .thumb-img`);
       if (!slot) continue;
       /* a page of another size takes its own shape */
       slot.style.height = Math.round(THUMB_W * base.height / base.width) + 'px';
       slot.replaceChildren(canvas);
+      if (pageMode === 'dark') addPictures(slot, canvas, page);
     } catch (e) {
       thumbDone.delete(n);
     }
