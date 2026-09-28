@@ -1097,11 +1097,32 @@ function Tree(opts) {
   var root = null;
   this.hasData = false;
 
+  /* A document that arrives — into an empty viewer, from a file, a sample
+     or a paste that replaces most of the text — unfolds from the top, as a
+     branch does when opened. Typing, formatting and searching redraw the
+     tree in place. */
+  var arriving = false;
+  this.arrive = function () { arriving = true; };
   this.setData = function (value, has) {
+    var fresh = has && (arriving || !self.hasData);
+    arriving = false;
     root = value;
     self.hasData = has;
     self.render();
+    if (fresh) unveil();
   };
+
+  /* A clip, not a height: it costs no layout, so a long tree unfolds as
+     smoothly as a short one. */
+  function unveil() {
+    var first = el.firstElementChild;
+    if (!first || !first.animate || (still && still.matches)) return;
+    var ms = Math.round(Math.min(420, 240 + first.getBoundingClientRect().height * 0.06));
+    first.animate(
+      [{ clipPath: 'inset(0 0 100% 0)', opacity: 0.3, transform: 'translateY(-6px)' },
+       { clipPath: 'inset(0 0 0 0)', opacity: 1, transform: 'none' }],
+      { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+  }
 
   this.query = function () { return searchBox.value.trim().toLowerCase(); };
 
@@ -1110,6 +1131,7 @@ function Tree(opts) {
     el.classList.remove('stale');
     selected = null;
     pathBox.textContent = '';
+    paintRowCopy(null);
     if (!self.hasData) {
       el.innerHTML = emptyHTML;
       matchCount.textContent = '';
@@ -1149,20 +1171,6 @@ function Tree(opts) {
 
     adapter.decorate(row, entry, q, { highlightInto: highlightInto, STR_TRUNC: STR_TRUNC });
 
-    var actions = document.createElement('span');
-    actions.className = 'row-actions';
-    adapter.actions(entry).forEach(function (a) {
-      var b = document.createElement('button');
-      b.textContent = a.label;
-      b.title = a.title;
-      b.addEventListener('click', function (e) {
-        e.stopPropagation();
-        copyText(a.get(), a.toastLabel || a.label);
-      });
-      actions.appendChild(b);
-    });
-    row.appendChild(actions);
-
     node.appendChild(row);
     return node;
   }
@@ -1193,15 +1201,130 @@ function Tree(opts) {
     node.dataset.loaded = '1';
   }
 
-  function toggle(node, force) {
-    var row = node.querySelector(':scope > .row');
-    var entry = info.get(row);
-    if (!entry || adapter.childCount(entry) === 0) return;
+  /* ---------- opening and closing branches ----------
+     Every branch the reader opens or closes, one or many at once, goes
+     through change(): Expand all, Collapse all, a click, the arrow keys,
+     Alt/Option-click and the row menu alike. Only the outermost blocks that
+     change move; whatever changes inside them goes with them. Drawing the
+     tree for a document, a search or a match opens branches with toggle()
+     unanimated: the arriving tree unveils as one (see unveil). */
+  function change(nodes, open, animate) {
+    var moving = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var entry = info.get(node.querySelector(':scope > .row'));
+      if (!entry || adapter.childCount(entry) === 0) continue;
+      if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
+      var box = node.querySelector(':scope > .children');
+      /* a fold still running is overtaken by whatever comes next */
+      if (box && box._fold) {
+        box._fold.cancel(); box._fold = null;
+        box.classList.remove('drawing', 'retracting');
+        /* a close cut short still finishes its work, inner branches too */
+        var close = box._close;
+        box._close = null;
+        if (close) close();
+      }
+      if (node.classList.contains('open') !== open) moving.push(node);
+    }
+    if (!moving.length) return;
+    var inSet = new Set(moving);
+    var outer = moving.filter(function (n) {
+      for (var p = n.parentElement; p && p !== el; p = p.parentElement) if (inSet.has(p)) return false;
+      return true;
+    });
+    if (open) {
+      moving.forEach(function (n) { n.classList.add('open'); });
+      if (animate) outer.forEach(function (n) { slide(n.querySelector(':scope > .children'), true); });
+      return;
+    }
+    outer.forEach(function (n) {
+      /* the branches inside close with it, once it has gone */
+      var inner = moving.filter(function (m) { return m !== n && n.contains(m); });
+      function shut() {
+        n.classList.remove('open');
+        inner.forEach(function (m) { m.classList.remove('open'); });
+      }
+      if (!animate || !slide(n.querySelector(':scope > .children'), false, shut)) shut();
+    });
+  }
+
+  function toggle(node, force, animate) {
     var open = force !== undefined ? force : !node.classList.contains('open');
-    if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
-    node.classList.toggle('open', open);
+    change([node], open, animate);
   }
   this.toggle = toggle;
+
+  /* A block slides down from under its row as it opens, its guide line
+     growing with it, and back up as it closes; the same time and curve both
+     ways. A block too tall to slide smoothly is unveiled or veiled with a
+     clip instead, which costs no layout. Nothing moves for a reader who asks
+     for less motion. Returns whether it moves, and calls `done` once it has. */
+  var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
+  var TALL = 1600;
+  function slide(box, opening, done) {
+    if (!box || !box.animate || (still && still.matches)) return false;
+    var h = box.getBoundingClientRect().height;
+    if (!h) return false;
+    var ms = Math.round(Math.min(opening ? 300 : 260, 150 + Math.min(h, TALL) * 0.1));
+    var frames;
+    if (h > TALL || box.childElementCount > 150) {
+      var hid = { clipPath: 'inset(0 0 100% 0)', opacity: 0.3 }, all = { clipPath: 'inset(0 0 0 0)', opacity: 1 };
+      frames = opening ? [hid, all] : [all, hid];
+    } else {
+      var shut = { height: '0px', opacity: 0.2, overflow: 'hidden' };
+      var full = { height: h + 'px', opacity: 1, overflow: 'hidden' };
+      frames = opening ? [shut, full] : [full, shut];
+    }
+    var anim = box.animate(frames, { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+    box._fold = anim;
+    box._close = opening ? null : done;
+    box.style.setProperty('--draw-ms', ms + 'ms');
+    box.classList.remove('drawing', 'retracting');
+    void box.offsetWidth;
+    box.classList.add(opening ? 'drawing' : 'retracting');
+    /* finished once, by the animation or, where a hidden tab holds it
+       still, by the clock */
+    var ended = false;
+    function finish() {
+      if (ended || box._fold !== anim) return;
+      ended = true;
+      box._fold = null;
+      box._close = null;
+      box.classList.remove('drawing', 'retracting');
+      if (done) done();
+    }
+    anim.onfinish = finish;
+    setTimeout(finish, ms + 120);
+    return true;
+  }
+
+  /* every branch in and under `nodes`, rendered as it goes, to the row
+     budget Expand all has always kept */
+  function branchesUnder(nodes) {
+    var out = [], budget = ROW_BUDGET;
+    (function walk(list) {
+      for (var i = 0; i < list.length && budget > 0; i++) {
+        var n = list[i];
+        var entry = info.get(n.querySelector(':scope > .row'));
+        if (!entry || adapter.childCount(entry) === 0) continue;
+        budget--;
+        out.push(n);
+        if (!n.dataset.loaded) renderChildren(n, entry, self.query());
+        var box = n.querySelector(':scope > .children');
+        if (box) walk(box.querySelectorAll(':scope > .node'));
+      }
+    })(nodes);
+    if (budget <= 0) showToast('Opened the first ' + fmtNum(ROW_BUDGET) + ' rows');
+    return out;
+  }
+  function openAll(node) { change(branchesUnder([node]), true, true); }
+  function closeInside(node) { change(Array.prototype.slice.call(node.querySelectorAll('.node.open')), false, true); }
+  function closeAll(node) { change([node].concat(Array.prototype.slice.call(node.querySelectorAll('.node.open'))), false, true); }
+  function isBranch(node) {
+    var e = info.get(node.querySelector(':scope > .row'));
+    return !!e && adapter.childCount(e) > 0;
+  }
 
   function autoExpand(node, levels) {
     if (levels <= 0) return;
@@ -1394,6 +1517,14 @@ function Tree(opts) {
       sep.className = 'menu-sep';
       ctxMenu.appendChild(sep);
     }
+    var node = row.parentElement;
+    if (isBranch(node)) {
+      item('Expand everything inside', function () { openAll(node); });
+      item('Collapse everything inside', function () { toggle(node, true, true); closeInside(node); });
+      var sep2 = document.createElement('div');
+      sep2.className = 'menu-sep';
+      ctxMenu.appendChild(sep2);
+    }
     adapter.actions(entry).forEach(function (a) {
       item(a.title, function () { copyText(a.get(), a.toastLabel || a.label); });
     });
@@ -1412,27 +1543,53 @@ function Tree(opts) {
   el.addEventListener('scroll', function () { closeAllMenus(); }, { passive: true });
 
   /* interaction */
+  var rowCopy = $('rowCopy');
   function selectRow(row) {
     if (selected) selected.classList.remove('selected');
     selected = row;
     row.classList.add('selected');
     var entry = info.get(row);
     pathBox.textContent = entry ? adapter.path(entry) : '';
+    paintRowCopy(entry);
   }
+
+  /* the path is the status bar's own; every other copy a row offers sits
+     beside it as a small button */
+  function paintRowCopy(entry) {
+    if (!rowCopy) return;
+    rowCopy.innerHTML = '';
+    if (!entry) return;
+    adapter.actions(entry).slice(1).forEach(function (a) {
+      var b = document.createElement('button');
+      var what = a.toastLabel || a.label;
+      b.textContent = 'Copy ' + (what === 'Value' ? 'value' : what);
+      b.title = a.title;
+      b.addEventListener('click', function () { copyText(a.get(), what); });
+      rowCopy.appendChild(b);
+    });
+  }
+
 
   el.addEventListener('click', function (e) {
     var row = e.target.closest('.row');
     if (!row || !el.contains(row) || e.target.closest('button')) return;
+    var node = row.parentElement;
+    /* Alt/Option-click takes the whole branch: open everything inside, or
+       close it with everything inside */
+    if (e.altKey && isBranch(node)) {
+      if (node.classList.contains('open')) closeAll(node); else openAll(node);
+    } else toggle(node, undefined, true);
     selectRow(row);
-    toggle(row.parentElement);
   });
 
   el.addEventListener('keydown', function (e) {
     var row = e.target.closest('.row');
     if (!row) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); toggle(row.parentElement, true); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); toggle(row.parentElement, false); }
+    else if (e.key === 'ArrowRight' && e.altKey) { e.preventDefault(); openAll(row.parentElement); }
+    else if (e.key === 'ArrowLeft' && e.altKey) { e.preventDefault(); closeAll(row.parentElement); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); toggle(row.parentElement, true, true); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); toggle(row.parentElement, false, true); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       var rows = Array.prototype.slice.call(el.querySelectorAll('.row'));
@@ -1447,24 +1604,15 @@ function Tree(opts) {
   });
 
   $('btnExpand').addEventListener('click', function () {
-    var budget = ROW_BUDGET;
-    (function walk(container) {
-      var nodes = container.querySelectorAll(':scope > .node');
-      for (var i = 0; i < nodes.length; i++) {
-        if (budget-- <= 0) return;
-        toggle(nodes[i], true);
-        var box = nodes[i].querySelector(':scope > .children');
-        if (box) walk(box);
-      }
-    })(el);
-    if (budget <= 0) showToast('Expanded the first ' + fmtNum(ROW_BUDGET) + ' rows');
+    change(branchesUnder(el.querySelectorAll(':scope > .node')), true, true);
   });
 
+  /* everything closes but the top, which stays open to show what it holds */
   $('btnCollapse').addEventListener('click', function () {
-    var open = el.querySelectorAll('.node.open');
-    for (var i = 0; i < open.length; i++) open[i].classList.remove('open');
     var first = el.querySelector(':scope > .node');
-    if (first) toggle(first, true);
+    if (!first) return;
+    toggle(first, true, true);
+    closeInside(first);
   });
 
   /* wrap toggle */
@@ -1646,6 +1794,14 @@ function init(config) {
     }
   }
 
+  /* a paste that brings most of the text is a new document arriving */
+  editor.input.addEventListener('paste', function (e) {
+    var pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    var inp = editor.input;
+    var after = inp.value.length - (inp.selectionEnd - inp.selectionStart) + pasted.length;
+    if (pasted.length && pasted.length >= after * 0.5) tree.arrive();
+  });
+
   errorBar.addEventListener('click', function () {
     if (errorPos !== null) editor.jumpTo(errorPos);
   });
@@ -1680,6 +1836,7 @@ function init(config) {
   }
 
   on('btnSample', function () {
+    tree.arrive();
     docName = 'Sample ' + config.label;
     editor.setValue(config.sample.trim());
   });
@@ -1713,6 +1870,7 @@ function init(config) {
     }
     var opened = function (text) {
       docName = file.name;
+      tree.arrive();
       editor.setValue(String(text));
       showToast('Opened ' + file.name + ' (' + fmtBytes(file.size) + ')');
     };
@@ -1831,6 +1989,8 @@ function init(config) {
     { keys: ['mod+shift+['], label: 'Collapse all' },
     { keys: ['enter', 'f3'], label: 'Next match' },
     { keys: ['shift+enter', 'shift+f3'], label: 'Previous match' },
+    { keys: ['alt+right'], label: 'Open a branch and everything inside (or ' + keyText('alt') + '-click)' },
+    { keys: ['alt+left'], label: 'Close a branch and everything inside' },
     { keys: ['shift+alt+c'], label: 'Copy the path of the selected row' }
   ]) }]);
 
