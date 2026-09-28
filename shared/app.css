@@ -247,7 +247,7 @@ kbd {
 /* ==========================================================================
    Split layout
    ========================================================================== */
-.split { flex: 1; display: flex; min-height: 0; }
+.split { flex: 1; display: flex; min-height: 0; position: relative; }
 .pane { display: flex; flex-direction: column; min-height: 0; }
 
 #editorPane { width: 46%; min-width: 260px; background: var(--raised); position: relative; }
@@ -266,6 +266,25 @@ kbd {
   transition: opacity var(--t-fast);
 }
 #divider:hover::after, #divider.dragging::after { opacity: 1; }
+/* Where the divider will go, while it is dragged (see app.js): a line in
+   the tool's colour, and a band back to where the divider is, light there
+   and deepening toward the line. */
+.split-ghost, .split-band {
+  position: absolute; top: 0; bottom: 0; left: 0; z-index: 30;
+  pointer-events: none; will-change: transform;
+}
+.split-ghost { width: 6px; background: var(--hue); }
+.split-band {
+  width: 100px; transform-origin: left;
+  background: linear-gradient(to right,
+    color-mix(in srgb, var(--hue) 6%, transparent),
+    color-mix(in srgb, var(--hue) 38%, transparent));
+}
+.split-band.leftward {
+  background: linear-gradient(to left,
+    color-mix(in srgb, var(--hue) 6%, transparent),
+    color-mix(in srgb, var(--hue) 38%, transparent));
+}
 
 /* ==========================================================================
    Editor — gutter + highlight overlay + textarea, all sharing one grid

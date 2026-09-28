@@ -2051,8 +2051,8 @@ function init(config) {
      280px of tree. */
   var SPLIT_KEY = 'lintuz-split';
   var divider = $('divider'), editorPane = $('editorPane'), split = document.querySelector('.split');
-  function setSplit(px, save) {
-    var total = split.getBoundingClientRect().width;
+  function setSplit(px, save, total) {
+    total = total || split.getBoundingClientRect().width;
     if (!total) return;
     var w = Math.min(Math.max(px, 240), total - 280);
     editorPane.style.width = (w / total * 100).toFixed(2) + '%';
@@ -2062,21 +2062,54 @@ function init(config) {
   try { savedSplit = parseFloat(localStorage.getItem(SPLIT_KEY)); } catch (e) {}
   if (savedSplit > 0 && savedSplit < 1) editorPane.style.width = (savedSplit * 100).toFixed(2) + '%';
 
+  /* Dragging the divider moves only a line: a copy of the divider that
+     follows the pointer, and between it and where the divider is now a band
+     in the tool's colour, light at the divider and deep at the line. Both
+     move by transform, which costs no layout and no repaint. The panes stay as they are until the pointer lets go, and then
+     take their new widths once. On a large document every new width lays
+     out the editor's ten thousand lines and the tree's thousands of rows,
+     50–70 ms, so resizing them live made the divider lag the pointer. */
   divider.addEventListener('pointerdown', function (e) {
     e.preventDefault();
-    divider.classList.add('dragging');
     divider.setPointerCapture(e.pointerId);
-    function move(ev) {
-      setSplit(ev.clientX - split.getBoundingClientRect().left, false);
+    var box = split.getBoundingClientRect();
+    var min = 240, max = box.width - 280;
+    var at = editorPane.getBoundingClientRect().width;
+    var from = at;
+    var band = document.createElement('div');
+    band.className = 'split-band';
+    var ghost = document.createElement('div');
+    ghost.className = 'split-ghost';
+    split.appendChild(band);
+    split.appendChild(ghost);
+    /* the band is 100px wide, stretched to the gap and turned to face it */
+    function paint() {
+      ghost.style.transform = 'translateX(' + at + 'px)';
+      var left = Math.min(from, at), gap = Math.abs(at - from);
+      band.classList.toggle('leftward', at < from);
+      band.style.transform = 'translateX(' + left + 'px) scaleX(' + (gap / 100) + ')';
     }
+    paint();
+    var frame = 0, done = false;
+    function move(ev) {
+      at = Math.min(Math.max(ev.clientX - box.left, min), max);
+      if (!frame) frame = requestAnimationFrame(function () { frame = 0; paint(); });
+    }
+    /* on release, or if the pointer is taken away mid-drag */
     function up() {
-      divider.classList.remove('dragging');
+      if (done) return;
+      done = true;
       divider.removeEventListener('pointermove', move);
       divider.removeEventListener('pointerup', up);
-      setSplit(editorPane.getBoundingClientRect().width, true);
+      divider.removeEventListener('lostpointercapture', up);
+      cancelAnimationFrame(frame);
+      ghost.remove();
+      band.remove();
+      setSplit(at, true, box.width);
     }
     divider.addEventListener('pointermove', move);
     divider.addEventListener('pointerup', up);
+    divider.addEventListener('lostpointercapture', up);
   });
 
   /* Windows Terminal's resize-pane: 5% of the width a press */
