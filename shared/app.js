@@ -1112,16 +1112,10 @@ function Tree(opts) {
     if (fresh) unveil();
   };
 
-  /* A clip, not a height: it costs no layout, so a long tree unfolds as
-     smoothly as a short one. */
+  /* the rows in view cascade in, as they do when a branch opens */
   function unveil() {
-    var first = el.firstElementChild;
-    if (!first || !first.animate || (still && still.matches)) return;
-    var ms = Math.round(Math.min(420, 240 + first.getBoundingClientRect().height * 0.06));
-    first.animate(
-      [{ clipPath: 'inset(0 0 100% 0)', opacity: 0.3, transform: 'translateY(-6px)' },
-       { clipPath: 'inset(0 0 0 0)', opacity: 1, transform: 'none' }],
-      { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+    if (!el.animate || (still && still.matches)) return;
+    motion(null, null, true);
   }
 
   this.query = function () { return searchBox.value.trim().toLowerCase(); };
@@ -1168,6 +1162,7 @@ function Tree(opts) {
   }
 
   this.render = function () {
+    settle();                   // a close still leaving is done before a redraw
     var q = self.query();
     var cleared = !q && lastQuery;
     if (q && !lastQuery) openBefore = self.hasData ? chainsOpen() : null;
@@ -1254,49 +1249,24 @@ function Tree(opts) {
   /* ---------- opening and closing branches ----------
      Every branch the reader opens or closes, one or many at once, goes
      through change(): Expand all, Collapse all, a click, the arrow keys,
-     Alt/Option-click and the row menu alike. Only the outermost blocks that
-     change move; whatever changes inside them goes with them. Drawing the
-     tree for a document, a search or a match opens branches with toggle()
-     unanimated: the arriving tree unveils as one (see unveil). */
+     Alt/Option-click and the row menu alike. Drawing the tree for a
+     document, a search or a match opens branches with toggle() unanimated;
+     an arriving document cascades in (see unveil). */
   function change(nodes, open, animate) {
+    settle();
     var moving = [];
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
       var entry = info.get(node.querySelector(':scope > .row'));
       if (!entry || adapter.childCount(entry) === 0) continue;
       if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
-      var box = node.querySelector(':scope > .children');
-      /* a fold still running is overtaken by whatever comes next */
-      if (box && box._fold) {
-        box._fold.cancel(); box._fold = null;
-        box.classList.remove('drawing', 'retracting');
-        /* a close cut short still finishes its work, inner branches too */
-        var close = box._close;
-        box._close = null;
-        if (close) close();
-      }
       if (node.classList.contains('open') !== open) moving.push(node);
     }
     if (!moving.length) return;
-    var inSet = new Set(moving);
-    var outer = moving.filter(function (n) {
-      for (var p = n.parentElement; p && p !== el; p = p.parentElement) if (inSet.has(p)) return false;
-      return true;
-    });
-    if (open) {
-      moving.forEach(function (n) { n.classList.add('open'); });
-      if (animate) outer.forEach(function (n) { slide(n.querySelector(':scope > .children'), true); });
-      return;
-    }
-    outer.forEach(function (n) {
-      /* the branches inside close with it, once it has gone */
-      var inner = moving.filter(function (m) { return m !== n && n.contains(m); });
-      function shut() {
-        n.classList.remove('open');
-        inner.forEach(function (m) { m.classList.remove('open'); });
-      }
-      if (!animate || !slide(n.querySelector(':scope > .children'), false, shut)) shut();
-    });
+    var apply = function () {
+      for (var j = 0; j < moving.length; j++) moving[j].classList.toggle('open', open);
+    };
+    if (animate) motion(apply, moving, open); else apply();
   }
 
   function toggle(node, force, animate) {
@@ -1305,48 +1275,113 @@ function Tree(opts) {
   }
   this.toggle = toggle;
 
-  /* A block slides down from under its row as it opens, its guide line
-     growing with it, and back up as it closes; the same time and curve both
-     ways. A block too tall to slide smoothly is unveiled or veiled with a
-     clip instead, which costs no layout. Nothing moves for a reader who asks
-     for less motion. Returns whether it moves, and calls `done` once it has. */
+  /* ---------- motion ----------
+     Only what is on screen moves, however large the document: a change is
+     made at once, and then the rows in view that were there before glide
+     from where they were to where they are, while rows new to the view
+     fall into place one after another, and the guide line of a block that
+     opened grows down beside them. Opening a branch of three rows or
+     expanding every one of four thousand costs the same few dozen
+     transforms, so it stays smooth on any file. */
   var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
-  var TALL = 1600;
-  function slide(box, opening, done) {
-    if (!box || !box.animate || (still && still.matches)) return false;
-    var h = box.getBoundingClientRect().height;
-    if (!h) return false;
-    var ms = Math.round(Math.min(opening ? 300 : 260, 150 + Math.min(h, TALL) * 0.1));
-    var frames;
-    if (h > TALL || box.childElementCount > 150) {
-      var hid = { clipPath: 'inset(0 0 100% 0)', opacity: 0.3 }, all = { clipPath: 'inset(0 0 0 0)', opacity: 1 };
-      frames = opening ? [hid, all] : [all, hid];
-    } else {
-      var shut = { height: '0px', opacity: 0.2, overflow: 'hidden' };
-      var full = { height: h + 'px', opacity: 1, overflow: 'hidden' };
-      frames = opening ? [shut, full] : [full, shut];
+  var MOVE_MS = 240, EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+  var VIEW_CAP = 160;          // rows looked at on either side of a change
+
+  function rowsInView() {
+    var box = el.getBoundingClientRect(), out = [];
+    var rows = el.querySelectorAll('.row');
+    for (var i = 0; i < rows.length && out.length < VIEW_CAP; i++) {
+      var r = rows[i].getBoundingClientRect();
+      if (!r.height) continue;                     // inside a closed branch
+      if (r.bottom < box.top) continue;
+      if (r.top > box.bottom) break;
+      out.push({ row: rows[i], top: r.top });
     }
-    var anim = box.animate(frames, { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
-    box._fold = anim;
-    box._close = opening ? null : done;
-    box.style.setProperty('--draw-ms', ms + 'ms');
-    box.classList.remove('drawing', 'retracting');
-    void box.offsetWidth;
-    box.classList.add(opening ? 'drawing' : 'retracting');
-    /* finished once, by the animation or, where a hidden tab holds it
-       still, by the clock */
-    var ended = false;
-    function finish() {
-      if (ended || box._fold !== anim) return;
-      ended = true;
-      box._fold = null;
-      box._close = null;
-      box.classList.remove('drawing', 'retracting');
-      if (done) done();
+    return out;
+  }
+
+  /* Closing, the rows about to go leave first, up and out, in a moment;
+     then the branch closes and the rows that stay glide up into the space.
+     A change that comes before they are gone finishes this one at once. */
+  var LEAVE_MS = 140;
+  var pending = null;
+  function settle() {
+    if (!pending) return;
+    var p = pending;
+    pending = null;
+    clearTimeout(p.timer);
+    p.anims.forEach(function (a) { a.cancel(); });
+    p.run();
+  }
+
+  function motion(apply, changed, opening) {
+    if (!el.animate || (still && still.matches)) { if (apply) apply(); return; }
+    if (apply && !opening && changed) {
+      var going = rowsInView().filter(function (v) {
+        for (var i = 0; i < changed.length; i++) {
+          var box = changed[i].querySelector(':scope > .children');
+          if (box && box.contains(v.row)) return true;
+        }
+        return false;
+      });
+      if (going.length) {
+        var anims = going.map(function (v, i) {
+          return v.row.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-6px)' }],
+            { duration: LEAVE_MS, easing: 'cubic-bezier(0.4, 0, 1, 1)', delay: Math.min((going.length - 1 - i) * 4, 60), fill: 'forwards' });
+        });
+        pending = {
+          anims: anims,
+          run: function () { anims.forEach(function (a) { a.cancel(); }); place(apply, changed, false); },
+          timer: setTimeout(settle, LEAVE_MS + 70)
+        };
+        return;
+      }
     }
-    anim.onfinish = finish;
-    setTimeout(finish, ms + 120);
-    return true;
+    place(apply, changed, opening);
+  }
+
+  /* the change itself, and the rows in view gliding to where it puts them */
+  function place(apply, opened, opening) {
+    /* no change to make means everything in view is new: it cascades in */
+    var before = new Map();
+    if (apply) {
+      rowsInView().forEach(function (v) { before.set(v.row, v.top); });
+      apply();
+    }
+    var fresh = 0;
+    rowsInView().forEach(function (v) {
+      if (before.has(v.row)) {
+        var dy = before.get(v.row) - v.top;
+        if (Math.abs(dy) > 0.5) {
+          v.row.animate([{ transform: 'translateY(' + dy + 'px)' }, { transform: 'none' }],
+            { duration: MOVE_MS, easing: EASE });
+        }
+      } else {
+        /* new to the view: down from above as a branch opens, up from
+           below as rows close over the space */
+        v.row.animate(
+          [{ opacity: 0, transform: 'translateY(' + (opening ? -8 : 10) + 'px)' }, { opacity: 1, transform: 'none' }],
+          { duration: MOVE_MS, easing: EASE, delay: Math.min(fresh++ * 12, 220), fill: 'backwards' });
+      }
+    });
+    if (opening && opened) grow(opened);
+  }
+
+  /* the guide line of each block that opened in view grows down */
+  function grow(nodes) {
+    var top = el.getBoundingClientRect().bottom, n = 0;
+    for (var i = 0; i < nodes.length && n < 40; i++) {
+      var box = nodes[i].querySelector(':scope > .children');
+      if (!box) continue;
+      var r = box.getBoundingClientRect();
+      if (!r.height || r.top > top) continue;
+      n++;
+      box.style.setProperty('--draw-ms', MOVE_MS + 'ms');
+      box.classList.remove('drawing');
+      void box.offsetWidth;
+      box.classList.add('drawing');
+      (function (b) { setTimeout(function () { b.classList.remove('drawing'); }, MOVE_MS + 60); })(box);
+    }
   }
 
   /* every branch in and under `nodes`, rendered as it goes, to the row
@@ -1846,10 +1881,14 @@ function init(config) {
 
   /* A paste that brings most of the text is a new document arriving: its
      tree unfolds, and, where the tool can (config.formatPaste), it lands
-     formatted. The paste goes in as the browser makes it, then is replaced
-     in the same moment through the browser's own editing, so nothing
-     flickers and Ctrl/⌘+Z takes back the formatting alone. */
+     formatted, replaced in the same moment the browser makes the paste, so
+     nothing flickers. It is set as the value, not typed in through the
+     browser's editing: that path slows with every line (4,000 lines take
+     seven seconds), and a large minified file would freeze the tab. So the
+     way back is kept here: Ctrl/⌘+Z restores the text as it
+     was pasted, until the next edit. */
   var formatNext = false;
+  var asPasted = null;          // { raw, formatted } while the way back is open
   editor.input.addEventListener('paste', function (e) {
     var pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
     var inp = editor.input;
@@ -1859,21 +1898,35 @@ function init(config) {
     formatNext = !!config.formatPaste;
   });
   editor.input.addEventListener('input', function (e) {
+    asPasted = null;
     if (!formatNext || e.inputType !== 'insertFromPaste') { formatNext = false; return; }
     formatNext = false;
     var text = editor.getValue();
     var out = null;
     try { out = config.formatPaste(text); } catch (err) { out = null; }
     if (!out || out === text) return;
-    var inp = editor.input;
-    inp.setSelectionRange(0, text.length);
-    if (!document.execCommand('insertText', false, out)) {
-      inp.setRangeText(out, 0, text.length, 'end');
-      inp.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    inp.setSelectionRange(0, 0);
-    inp.scrollTop = 0;
+    editor.setValue(out);
+    editor.input.setSelectionRange(0, 0);
+    editor.input.scrollTop = 0;
+    editor.syncScroll();
+    asPasted = { raw: text, formatted: out };
+    /* no button on the toast: its Enter would take the formatting back
+       from someone who only meant a new line */
     showToast('Formatted as it was pasted. ' + keyText('mod+z') + ' keeps it as it came');
+  });
+  function keepAsPasted() {
+    if (!asPasted || editor.getValue() !== asPasted.formatted) { asPasted = null; return; }
+    var raw = asPasted.raw;
+    asPasted = null;
+    tree.arrive();
+    editor.setValue(raw);
+    showToast('Kept as pasted');
+  }
+  editor.input.addEventListener('keydown', function (e) {
+    if (asPasted && keyMatches(e, 'mod+z') && editor.getValue() === asPasted.formatted) {
+      e.preventDefault();
+      keepAsPasted();
+    }
   });
 
   errorBar.addEventListener('click', function () {

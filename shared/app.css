@@ -514,8 +514,8 @@ kbd {
   display: none;
 }
 .node.open > .children { display: block; }
-/* The guide line down a block: one hairline, which grows down as the block
-   opens and back up as it closes. */
+/* The guide line down a block: one hairline, which grows down beside the
+   rows as the block opens (see motion in app.js). */
 .children::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0;
   width: var(--hairline); background: var(--line);
@@ -524,13 +524,9 @@ kbd {
 }
 .children:hover::before { background: color-mix(in srgb, var(--hue) 45%, var(--line)); }
 .children.drawing::before { animation: guide-grow var(--draw-ms, 180ms) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-/* its own keyframes, not guide-grow reversed: reversing would reverse the
-   curve too, and the line would linger before it went */
-.children.retracting::before { animation: guide-shrink var(--draw-ms, 180ms) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes guide-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-@keyframes guide-shrink { from { transform: scaleY(1); } to { transform: scaleY(0); } }
 @media (prefers-reduced-motion: reduce) {
-  .children.drawing::before, .children.retracting::before { animation: none; }
+  .children.drawing::before { animation: none; }
   .children::before { transition: none; }
 }
 
