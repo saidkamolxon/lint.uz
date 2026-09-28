@@ -29,6 +29,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/shared/theme.css">
 <link rel="stylesheet" href="/shared/app.css">
+<link rel="stylesheet" href="/shared/compare.css">
 </head>
 <body>
 <div class="app" id="app"></div>
@@ -63,6 +64,7 @@ window.LINT_CONFIG = {
 <script src="/shared/theme-boot.js"></script>
 <script src="/shared/shell.js"></script>
 <script src="/shared/app.js"></script>
+<script src="/shared/compare.js"></script>
 <script>
 (function () {
 'use strict';
@@ -436,6 +438,7 @@ var app = LintApp.init({
      usually wants it written as YAML: offered once a document */
   onParsed: function () {
     if (!app) return;   /* a document handed over at start parses before init returns */
+    if (cmp && cmp.comparing()) cmp.onEditorChanged();
     var raw = app.editor.getValue().trim();
     var isJson = false;
     if (/^[\[{]/.test(raw) && raw.length < 5e6) try { JSON.parse(raw); isJson = true; } catch (e) {}
@@ -448,6 +451,14 @@ var app = LintApp.init({
     });
   },
   sample: SAMPLE
+});
+
+/* Compare, as in JSON. YAML reads timestamps as Dates, which the diff
+   would see as empty objects, so each side goes through JSON first:
+   a date becomes its ISO text, and two different dates differ. */
+var cmp = LintCompare.mount({
+  app: app, parse: parse, label: 'YAML',
+  toValue: function (res) { return JSON.parse(JSON.stringify(res.value === undefined ? null : res.value)); }
 });
 
 document.getElementById('btnFormat').addEventListener('click', function () {
