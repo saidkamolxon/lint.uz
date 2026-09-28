@@ -140,20 +140,23 @@ window.LINT_CONFIG = {
   accept: '.env,.example,.local,.development,.production,.staging,.test,.txt,text/plain',
   placeholder: 'Paste a .env file or drop one…',
   searchPlaceholder: 'Filter variables…',
+  /* fixing is what this tool is for, so Fix whitespace is the outlined one */
   actions: [
-    { id: 'btnToJson', label: 'To JSON', primary: true, key: 'mod+shift+j', title: 'Convert the variables to a JSON object and open it in the JSON viewer (also copied)' },
-    { id: 'btnCompare', label: 'Compare with example', title: 'Choose .env.example: see which keys are missing here, and which it does not have' },
-    { id: 'btnFix', label: 'Fix whitespace', key: 'shift+alt+f', title: 'Remove trailing spaces, invisible characters, a byte-order mark and Windows line endings' }
+    { id: 'btnFix', label: 'Fix whitespace', primary: true, key: 'shift+alt+f', title: 'Remove trailing spaces, invisible characters, a byte-order mark and Windows line endings' },
+    { id: 'btnCompare', label: 'Compare with example', title: 'Paste or choose .env.example: see which keys are missing here, and which it does not have' }
   ],
-  /* the other ways out, in the ⋮ menu ahead of Copy */
-  more: [
-    { id: 'btnMakeExample', label: 'Copy as .env.example', title: 'The same file with every value that could be a secret left empty, safe to commit' },
-    { id: 'btnPasteExample', label: 'Compare with pasted text', title: 'Paste the contents of .env.example instead of choosing the file' },
-    { id: 'btnCompose', label: 'Copy as Compose environment', title: 'An environment: block for docker-compose.yml, every $ doubled' },
-    { id: 'btnConfigMap', label: 'Copy as Kubernetes ConfigMap' },
-    { id: 'btnSecret', label: 'Copy as Kubernetes Secret' },
-    { id: 'btnShell', label: 'Copy as shell exports', title: 'export KEY=\'value\' lines, safe to source' }
-  ]
+  /* every one but JSON is copied, ready to paste where it goes */
+  convert: [
+    { id: 'btnToJson', label: 'JSON', key: 'mod+shift+j', title: 'Convert the variables to a JSON object and open it in the JSON viewer (also copied)' },
+    { id: 'btnCompose', label: 'Compose environment', title: 'Copy an environment: block for docker-compose.yml, every $ doubled' },
+    { id: 'btnConfigMap', label: 'Kubernetes ConfigMap', title: 'Copy the variables as a ConfigMap manifest' },
+    { id: 'btnSecret', label: 'Kubernetes Secret', title: 'Copy the variables as a Secret manifest (stringData, values as written)' },
+    { id: 'btnShell', label: 'Shell exports', title: 'Copy export KEY=\'value\' lines, safe to source' }
+  ],
+  export: [
+    { id: 'btnMakeExample', label: 'Copy as .env.example', title: 'The same file with every value that could be a secret left empty, safe to commit' }
+  ],
+  ext: 'env'
 };
 </script>
 <script src="/shared/theme-boot.js"></script>
@@ -447,7 +450,9 @@ function render() {
       '<div class="cmp-line"><span class="hint">' + cmp.both + ' of ' + cmp.exampleCount + ' example keys are set here</span><button class="bordered" id="btnClearExample">Clear</button></div>' +
       '</section>';
   } else if (pasting) {
-    html += '<section class="env-sec" id="cmpSec"><h3>Compare with .env.example</h3>' +
+    /* one place for both ways in: paste it, or choose the file */
+    html += '<section class="env-sec" id="cmpSec"><div class="cmp-line"><h3>Compare with .env.example</h3>' +
+      '<button class="bordered" id="btnChooseExample">Choose a file</button></div>' +
       '<textarea id="exampleText" spellcheck="false" placeholder="Paste .env.example here"></textarea></section>';
   }
 
@@ -572,6 +577,7 @@ document.getElementById('tree').addEventListener('click', function (e) {
   }
   if (t.id === 'btnClearExample') { exampleText = null; exampleName = null; pasting = false; pasteDraft = ''; render(); return; }
   if (t.id === 'btnAddMissing') { addMissing(); return; }
+  if (t.id === 'btnChooseExample') { exampleInput.click(); return; }
 });
 
 /* a double click on a variable goes to its line */
@@ -619,7 +625,9 @@ exampleInput.addEventListener('change', function () {
 
 document.getElementById('btnCompare').addEventListener('click', function () {
   if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
-  exampleInput.click();
+  exampleText = null; pasting = true; render();
+  var ex = document.getElementById('exampleText');
+  if (ex) { ex.scrollIntoView({ block: 'nearest' }); ex.focus(); }
 });
 
 function addMissing() {
@@ -743,13 +751,6 @@ function exportAs(kind) {
 document.getElementById('btnMakeExample').addEventListener('click', function () {
   if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
   LintApp.copyAndOffer(C.toExample(app.editor.getValue()), '.env.example', 'env', null);
-});
-
-document.getElementById('btnPasteExample').addEventListener('click', function () {
-  if (!current) { LintApp.toast('Open or paste a .env file first'); return; }
-  exampleText = null; pasting = true; render();
-  var ex = document.getElementById('exampleText');
-  if (ex) { ex.scrollIntoView({ block: 'nearest' }); ex.focus(); }
 });
 
 document.getElementById('btnToJson').addEventListener('click', function () {

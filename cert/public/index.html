@@ -76,7 +76,7 @@
 .find.break .dot { background: var(--bad); }
 .find.fyi { color: var(--muted); }
 .find .msg { flex: 1; min-width: 0; }
-.find .fix { flex: none; padding: 1px var(--s2); font-size: var(--fs-small); background: var(--raised); }
+.find .fix { flex: none; min-height: 24px; padding: 1px var(--s2); font-size: var(--fs-small); background: var(--raised); }
 
 /* the chain: one row a certificate, the signature between */
 .crt { border: var(--hairline) solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -116,8 +116,9 @@
 .meta dd { margin: 0; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.9); overflow-wrap: anywhere; color: var(--ink); line-height: 1.5; }
 .meta dd small { display: block; font-family: var(--ui); color: var(--muted); font-size: var(--fs-small); margin-top: 1px; }
 .meta dd.bad { color: var(--bad); }
+/* 24px high at least, the smallest a pointer target may be */
 .meta dd .copy {
-  margin-left: var(--s1); padding: 0 6px; font-family: var(--ui); font-size: var(--fs-micro);
+  min-height: 24px; margin-left: var(--s1); padding: 0 6px; font-family: var(--ui); font-size: var(--fs-micro);
   color: var(--muted); border: var(--hairline) solid var(--line); border-radius: var(--radius-sm); vertical-align: 1px;
 }
 .meta dd .copy:hover { color: var(--ink); }
@@ -157,14 +158,18 @@ window.LINT_CONFIG = {
   placeholder: 'Paste a certificate, a chain, a CSR or a key…',
   searchPlaceholder: 'Check a domain, e.g. api.example.com',
   actions: [
-    { id: 'btnOrder', label: 'Put in order', primary: true, title: 'The certificate first, then each issuer: the order servers send them in' },
-    { id: 'btnLeafOnly', label: 'Certificate only', title: 'Copy just the server certificate, without the chain or the key' }
+    { id: 'btnOrder', label: 'Put in order', primary: true, title: 'The certificate first, then each issuer: the order servers send them in' }
   ],
-  more: [
+  convert: [
+    { id: 'btnToJson', label: 'JSON', title: 'Every field of every certificate as JSON, to open in the JSON viewer (also copied)' }
+  ],
+  /* the parts people send on: each one copied */
+  export: [
+    { id: 'btnLeafOnly', label: 'Copy the certificate only', title: 'Just the server certificate, without the chain or the key' },
     { id: 'btnNoRoot', label: 'Copy the chain without the root', title: 'What a server should send: the certificate and its intermediates' },
-    { id: 'btnNoKey', label: 'Copy without the private key', title: 'The same text with every private key taken out, safe to share' },
-    { id: 'btnToJson', label: 'Copy decoded as JSON', title: 'Every field of every certificate as JSON, to open in the JSON viewer' }
-  ]
+    { id: 'btnNoKey', label: 'Copy without the private key', title: 'The same text with every private key taken out, safe to share' }
+  ],
+  ext: 'pem'
 };
 </script>
 <script src="/shared/theme-boot.js"></script>
@@ -560,15 +565,7 @@ function pemOf(x) { return X.toPem(x.c.der, 'CERTIFICATE'); }
 
 function saveDer(x) {
   var name = (x.c.subject.cn || x.name || 'certificate').replace(/[^\w.-]+/g, '_').replace(/^\*/, 'wildcard') + '.cer';
-  var url = URL.createObjectURL(new Blob([x.c.der], { type: 'application/pkix-cert' }));
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-  LintApp.toast('Saved ' + name);
+  LintApp.download(new Blob([x.c.der], { type: 'application/pkix-cert' }), name);
 }
 
 function copyKey(what, line) {
@@ -610,6 +607,16 @@ document.getElementById('tree').addEventListener('click', function (e) {
 });
 
 document.getElementById('btnOrder').addEventListener('click', putInOrder);
+/* Export ▾ and Convert to ▾ offer only what this text holds */
+LintApp.when('btnLeafOnly', function () { return !!(current && current.leaf); });
+LintApp.when('btnNoRoot', function () {
+  return !!(current && current.path.length > 1 && current.path.some(function (x) { return x.selfSigned; }));
+});
+LintApp.when('btnNoKey', function (text) {
+  return /-----BEGIN (?:RSA |EC |ENCRYPTED |OPENSSH )?PRIVATE KEY-----/.test(text);
+});
+LintApp.when('btnToJson', function () { return !!(current && current.certs.length); });
+
 document.getElementById('btnLeafOnly').addEventListener('click', function () {
   if (!current || !current.leaf) { LintApp.toast('No certificate here'); return; }
   LintApp.copy(pemOf(current.leaf), 'The certificate');

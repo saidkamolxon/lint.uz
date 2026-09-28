@@ -809,7 +809,9 @@ LintTheme.buildMenu(menu, closeMenu);
   }
 
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) { paint(SRC.length, true); return; }
+  /* a page opened in a background tab has its timers slowed to one a second,
+     so it would still be typing when the reader arrives: show it finished */
+  if (reduce || document.hidden) { paint(SRC.length, true); return; }
 
   /* the finished demo is measured first and its height held while it types,
      so nothing below it moves */

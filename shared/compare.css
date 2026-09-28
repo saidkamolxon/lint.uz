@@ -1,0 +1,117 @@
+/* ==========================================================================
+   lint.one — Compare (see compare.js), for JSON, YAML and XML
+   ========================================================================== */
+#compare { flex: 1; min-height: 0; display: none; flex-direction: column; }
+body.comparing #tree { display: none; }
+body.comparing #compare { display: flex; }
+
+/* the tree bar keeps its Tree | Compare switch and trades search and the
+   tree's own buttons for the diff's */
+.cmp-tools { display: none; flex: 1; min-width: 0; align-items: center; gap: var(--s1); font-size: var(--fs-small); color: var(--muted); }
+body.comparing .cmp-tools { display: flex; }
+body.comparing .treebar > :not(.mode-seg):not(.cmp-tools) { display: none !important; }
+.cmp-tools .summary { flex: 1; min-width: 0; padding-left: var(--s1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-tools .summary b { font-weight: 600; }
+.cmp-tools .n-add { color: var(--ok); }
+.cmp-tools .n-del { color: var(--bad); }
+.cmp-tools .n-chg { color: var(--warn); }
+.cmp-tools .pos { font-variant-numeric: tabular-nums; padding: 0 var(--s1); white-space: nowrap; }
+
+.cmp-side { flex: none; height: 30%; min-height: 96px; display: flex; flex-direction: column; border-bottom: var(--hairline) solid var(--line); }
+.cmp-head {
+  display: flex; align-items: center; gap: var(--s1); flex: none;
+  padding: var(--s1) var(--s2) var(--s1) var(--s3);
+  background: var(--raised);
+  border-bottom: var(--hairline) solid var(--line);
+  font-size: var(--fs-small); color: var(--muted);
+}
+.cmp-head .name { font-weight: 600; color: var(--ink); }
+.cmp-head .state { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cmp-head .state.ok { color: var(--ok); }
+.cmp-head .state.err { color: var(--bad); }
+.cmp-side textarea {
+  flex: 1; min-height: 0; resize: none;
+  border: 0; outline: none;
+  background: var(--surface); color: var(--ink);
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.55;
+  padding: var(--s2) var(--s3);
+  white-space: pre; tab-size: 2;
+}
+.cmp-side textarea::placeholder { color: var(--faint); font-family: var(--ui); }
+
+.cmp-body {
+  flex: 1; overflow: auto;
+  font-family: var(--mono); font-size: var(--code-size, var(--fs-base)); line-height: 1.6;
+  padding-bottom: 40vh;
+}
+.cmp-body .empty-state.err h2 { color: var(--bad); }
+
+/* one diff line: sign, then the code indented by its depth */
+.d-row { display: flex; }
+.d-row:hover { filter: brightness(0.97); }
+.d-sign {
+  flex: none; width: 3ch; text-align: center;
+  color: var(--faint); user-select: none;
+}
+.d-code {
+  flex: 1; min-width: 0; padding-right: var(--s3);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.d-add { background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.d-del { background: color-mix(in srgb, var(--bad) 13%, transparent); }
+.d-add .d-sign { color: var(--ok); font-weight: 700; }
+.d-del .d-sign { color: var(--bad); font-weight: 700; }
+.d-add .d-x { background: color-mix(in srgb, var(--ok) 34%, transparent); border-radius: 2px; }
+.d-del .d-x { background: color-mix(in srgb, var(--bad) 34%, transparent); border-radius: 2px; }
+.d-blank { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--ink) 4%, transparent) 6px 7px); }
+
+/* where a hunk sits in the document, like a git @@ header */
+.d-hunk {
+  position: sticky; top: 0; z-index: 1;
+  padding: var(--s1) var(--s3) var(--s1) 3ch;
+  background: color-mix(in srgb, var(--hue) 9%, var(--raised));
+  border-block: var(--hairline) solid color-mix(in srgb, var(--hue) 22%, var(--line));
+  color: var(--hue); font-size: calc(var(--code-size, var(--fs-base)) * 0.85);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.d-hunk:hover { text-decoration: underline; }
+.d-fold {
+  display: block; width: 100%; text-align: left;
+  padding: 2px var(--s3) 2px 3ch;
+  background: var(--sunken); color: var(--muted);
+  border: 0; border-radius: 0;
+  font-family: var(--ui); font-size: var(--fs-small);
+}
+.d-fold:hover { color: var(--hue); background: var(--hue-wash); }
+.d-current { box-shadow: inset 3px 0 0 var(--hue); }
+.d-notice { padding: var(--s3); font-family: var(--ui); font-size: var(--fs-small); color: var(--muted); }
+
+/* side by side: the same lines, before on the left and after on the right */
+/* tree: the shared tree's rows, tinted by what happened to each node */
+.cmp-body.as-tree { padding: var(--s2) var(--s3) 40vh var(--s2); line-height: 1.55; }
+.dt .row { cursor: pointer; }
+.dt .row.d-current { box-shadow: inset 3px 0 0 var(--hue); }
+.dt .dt-add > .row { background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.dt .dt-del > .row { background: color-mix(in srgb, var(--bad) 13%, transparent); }
+.dt .dt-chg > .row { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.dt .dt-same > .row { opacity: 0.55; }
+.dt .dt-same > .row:hover { opacity: 1; }
+.dt-tag {
+  flex: none; width: 2ch; text-align: center; font-weight: 700; margin-right: var(--s1);
+}
+.dt-add > .row .dt-tag { color: var(--ok); }
+.dt-del > .row .dt-tag { color: var(--bad); }
+.dt-chg > .row .dt-tag { color: var(--warn); }
+.dt-count {
+  margin-left: var(--s2);
+  font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.85); font-weight: 600;
+  color: var(--warn);
+}
+.dt-arrow { color: var(--faint); margin: 0 var(--s2); font-family: var(--ui); }
+.dt-old { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 60%, transparent); opacity: 0.8; }
+.dt-old .d-x { background: color-mix(in srgb, var(--bad) 34%, transparent); border-radius: 2px; }
+.dt-new .d-x { background: color-mix(in srgb, var(--ok) 34%, transparent); border-radius: 2px; }
+
+.cmp-body.side-by-side .d-pair { display: grid; grid-template-columns: 1fr 1fr; }
+.cmp-body.side-by-side .d-pair > .d-row + .d-row { border-left: var(--hairline) solid var(--line); }

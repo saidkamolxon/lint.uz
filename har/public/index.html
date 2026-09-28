@@ -47,7 +47,7 @@
 }
 
 /* ---------- the toolbar's filters ---------- */
-.filter-wrap { display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 360px; }
+.filter-wrap { display: flex; align-items: center; flex: 1; min-width: 212px; max-width: 360px; }
 #filter {
   width: 100%;
   font-family: var(--mono); font-size: var(--fs-base);
@@ -172,7 +172,11 @@
 .req .dom, .req .ty { color: var(--muted); font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.92); }
 .req .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--t-num); }
 .req .num.faint { color: var(--faint); font-family: var(--ui); font-size: calc(var(--code-size, var(--fs-base)) * 0.92); }
-.req .key { font-size: 11px; color: var(--warn); margin-left: 4px; }
+/* a secret is marked with a key, here and on the findings bar, so it is
+   never read as one of the amber dots that mean slow or large */
+.key { display: inline-flex; vertical-align: -2px; color: var(--warn); }
+.key svg { width: 13px; height: 13px; }
+.req .key { margin-left: 5px; }
 
 /* the waterfall: when a request started and how long it took, on the
    file's one time axis. Neutral ink, as the list's text is; a failed
@@ -362,17 +366,20 @@ body.dragover .har-main::after {
 :root[data-contrast="more"] .req .num.faint { color: var(--ink); }
 :root[data-contrast="more"] .wf-bar .w { background: color-mix(in srgb, var(--ink) 55%, transparent); }
 
-/* A phone cannot fit the filters beside Open: they take a second row of
-   the toolbar, which the break starts. */
+/* Below a wide screen the filters do not fit beside Open, Save and the two
+   menus: they take a second row of the toolbar, which the break starts. */
 .row-break { display: none; }
-@media (max-width: 860px) {
+@media (max-width: 1200px) {
   .har-toolbar { flex-wrap: wrap; row-gap: var(--s2); }
   .har-toolbar .row-break:not([hidden]) { display: block; order: 1; flex-basis: 100%; height: 0; }
   .har-toolbar .filter-wrap, .har-toolbar #filterCount, .har-toolbar #typeSeg { order: 1; }
   .har-toolbar .filter-wrap { flex: 1 1 0; min-width: 0; max-width: none; }
 }
+.fold-sm { display: none; }
 @media (max-width: 620px) {
   #typeSeg { display: none; }
+  .har-toolbar .tool-menu { display: none; }
+  .fold-sm { display: block; }
 }
 </style>
 </head>
@@ -431,13 +438,31 @@ $('app').innerHTML = `
     </div>
 
     <span class="spacer"></span>
+    <!-- a copy safe to share is what this tool is for, so it is in sight;
+         Convert to and Export are where every tool keeps them -->
+    <div class="group needs-file">
+      <button id="btnSave" class="bordered" title="Save a copy with every cookie, token and password taken out">Save without secrets</button>
+      ${LintApp.toolMenuHTML('menuConvert', 'Convert to', [
+        { id: 'btnToJson', label: 'JSON', title: 'Open the whole file in the JSON viewer' }
+      ])}
+      ${LintApp.toolMenuHTML('menuExport', 'Export', [
+        { id: 'btnCopyUrls', label: 'Copy the URLs listed', title: 'One URL per line, for the requests the filters show' },
+        { id: 'btnCopyCsv', label: 'Copy the list as CSV', title: 'The requests the filters show, one row each' }
+      ])}
+    </div>
     <div class="menu-wrap needs-file">
       <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
       <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnSave" role="menuitem">Save without secrets</button>
-        <button class="menu-item" id="btnCopyUrls" role="menuitem">Copy the URLs listed</button>
-        <button class="menu-item" id="btnCopyCsv" role="menuitem">Copy the list as CSV</button>
-        <button class="menu-item" id="btnToJson" role="menuitem">Open the file in JSON viewer</button>
+        <!-- on a phone Convert to and Export fold in here, as in every tool -->
+        <div class="fold-sm">
+          <div class="menu-label">Convert to</div>
+          <button class="menu-item" data-forward="btnToJson" role="menuitem">JSON</button>
+          <div class="menu-sep"></div>
+          <div class="menu-label">Export</div>
+          <button class="menu-item" data-forward="btnCopyUrls" role="menuitem">Copy the URLs listed</button>
+          <button class="menu-item" data-forward="btnCopyCsv" role="menuitem">Copy the list as CSV</button>
+          <div class="menu-sep"></div>
+        </div>
         <button class="menu-item" id="btnFile" role="menuitem">About this file</button>
       </div>
     </div>
@@ -477,6 +502,11 @@ $('app').innerHTML = `
 
 LintApp.mountChrome($('chromeSlot'), 'har');
 LintApp.wireMenu($('btnMore'), $('moreMenu'));
+LintApp.wireToolMenus(() => '');
+$('moreMenu').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-forward]');
+  if (b) { LintApp.closeMenus(); $(b.dataset.forward).click(); }
+});
 
 const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
@@ -651,7 +681,8 @@ const EMPTY = LintApp.emptyState({
   body: 'Save one from your browser’s Network tab with “Export HAR”. Requests, timings and secrets are read in this tab; the file never leaves it.',
   extra: '<div class="empty-actions">' +
     '<button class="primary" data-empty="open">Open a file</button>' +
-    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>' +
+    LintApp.shortcutsHint
 });
 function showEmpty() {
   const list = $('list');
@@ -769,7 +800,7 @@ function paintFindings() {
     `<select id="groupSel">${[['', 'None'], ['endpoint', 'By endpoint'], ['domain', 'By domain']].map(([v, l]) =>
       `<option value="${v}"${v === grouping ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` +
     `<button id="btnSecrets" aria-pressed="${panel === 'secrets'}" title="Cookies, tokens and passwords in this file">` +
-    `<span class="pip ${secrets ? '' : 'ok'}"></span>` + (secrets ? `<b>${fmtNum(secrets)}</b> ${secrets === 1 ? 'secret' : 'secrets'}` : 'No secrets') +
+    (secrets ? `<span class="key">${KEY_ICON}</span><b>${fmtNum(secrets)}</b> ${secrets === 1 ? 'secret' : 'secrets'}` : '<span class="pip ok"></span>No secrets') +
     '</button>';
   $('findings').innerHTML = html;
 }
@@ -868,6 +899,8 @@ const COLS = [
   ['dom', 'Domain', 'host'], ['ty', 'Type', 'type'], ['sz num', 'Size', 'size'], ['tm num', 'Time', 'time'],
   ['wf', 'Waterfall', 'start']
 ];
+/* the mark a request, and the findings bar, carry for a secret */
+const KEY_ICON = I('<circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3M16 7l3 3M14 9l2 2"/>');
 const TYPE_LABEL = { xhr: 'fetch', doc: 'document', js: 'script', css: 'style', img: 'image', font: 'font', media: 'media', ws: 'websocket', other: 'other' };
 
 function paintHead() {
@@ -1013,7 +1046,7 @@ function reqRow(k) {
     `<span class="st ${stCls}" title="${esc(r.error || r.statusText)}">${r.status || (r.error ? 'failed' : '—')}</span>` +
     `<span class="m">${esc(r.method)}</span>` +
     `<span class="nm" title="${esc(r.url)}">${esc(r.name)}<span class="q">${esc(r.query)}</span>` +
-      (r.secrets ? `<span class="key" title="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request">●</span>` : '') + `</span>` +
+      (r.secrets ? `<span class="key" role="img" aria-label="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request" data-quick-tip="${r.secrets === 1 ? 'A secret' : r.secrets + ' secrets'} in this request">${KEY_ICON}</span>` : '') + `</span>` +
     `<span class="dom" title="${esc(r.host)}">${esc(r.host)}</span>` +
     `<span class="ty" title="${esc(r.mime)}">${TYPE_LABEL[r.type] || r.type}</span>` +
     size +
@@ -1544,14 +1577,7 @@ async function saveClean() {
     setTimeout(() => setBusy(null), 300);
     if (d.left) { LintApp.toast('Some secrets could not be removed; the file was not saved'); return; }
     const name = doc.name.replace(/\.har$/i, '') + '.redacted.har';
-    const url = URL.createObjectURL(new Blob([d.text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    LintApp.download(new Blob([d.text], { type: 'application/json' }), name);
     const n = secretGroups().length;
     LintApp.toast(n ? 'Saved ' + name + ' with ' + fmtNum(n) + (n === 1 ? ' secret' : ' secrets') + ' removed' : 'Saved ' + name);
   } catch (err) {
