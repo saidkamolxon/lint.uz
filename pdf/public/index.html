@@ -815,12 +815,6 @@ async function renderDocument(file) {
   await buildInfo(file);
 }
 
-/* Fit the page to the window, but never beyond a comfortable reading width —
-   a page stretched across a wide monitor is both hard to read and expensive:
-   at scale 2.3 with a retina buffer each canvas is ~10 megapixels, which is
-   enough to lock the tab up. */
-const MAX_PAGE_WIDTH = 900;    // css px, about a printed page at 100%
-
 /* Render whatever the viewport covers, plus a screen either side. */
 function renderVisible() {
   if (!doc) return;
@@ -873,10 +867,15 @@ function sizePageBox(total) {
   $('pageNum').style.width = (w + 40) + 'px';
 }
 
+/* Fit fills the width the page column has, whatever the screen, up to the
+   zoom's own ceiling. The canvas cost of a big page is held down where it
+   is drawn (renderPage keeps each buffer near 4 megapixels). The width is
+   read with the scrollbar counted in, so a scrollbar appearing as pages
+   grow cannot change the fit and set it rocking. */
 function fitScale(page) {
-  const avail = Math.min($('pages').clientWidth - 64, MAX_PAGE_WIDTH);
+  const avail = $('pages').getBoundingClientRect().width - 80;
   const base = page.getViewport({ scale: 1 });
-  return Math.max(0.3, Math.min(2, avail / base.width));
+  return Math.max(MIN_SCALE, Math.min(MAX_SCALE, avail / base.width));
 }
 
 async function renderPage(n) {
@@ -2030,24 +2029,25 @@ if (LintApp.shortcuts) LintApp.shortcuts([{ title: 'PDF', items: [
   { keys: ['alt'], label: 'Hold to show every link on the page' }
 ] }]);
 
-/* refit on resize while in fit mode */
-let resizeTimer;
-window.addEventListener('resize', () => {
-  if (!doc || !fitMode) return;
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(async () => {
-    scale = fitScale(await doc.getPage(1));
-    rerender();
-  }, 220);
-});
-
-/* the page position sits over the page column (see .pdf-toolbar .pagebox);
-   clientWidth leaves out the scrollbar, as the centred pages do */
+/* The page column changes width with the window, and when a side panel or
+   the details drawer opens or closes. The page position follows it at once
+   (see .pdf-toolbar .pagebox; clientWidth leaves out the scrollbar, as the
+   centred pages do), and in fit mode the pages refit once it settles. */
+let refitTimer;
 new ResizeObserver(() => {
   const pages = $('pages');
   const left = pages.getBoundingClientRect().left;
   document.querySelector('.pdf-toolbar').style
     .setProperty('--page-center', (left + pages.clientWidth / 2) + 'px');
+  if (!doc || !fitMode) return;
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => {
+    if (!doc || !fitMode || !firstPage) return;
+    const next = fitScale(firstPage);
+    if (Math.abs(next - scale) / scale < 0.005) return;
+    scale = next;
+    rerender();
+  }, 160);
 }).observe($('pages'));
 
 resetView();
