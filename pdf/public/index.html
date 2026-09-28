@@ -206,9 +206,7 @@ body.show-links .lnk {
 
 /* ---------- reading position ----------
    A label by default; it becomes an input only when you mean to jump. */
-.pagebox { display: flex; align-items: center; gap: 2px; position: relative; }
-/* hung off the left, so the page number stays centred with or without it */
-#btnContents { position: absolute; right: calc(100% + var(--s2)); top: 50%; transform: translateY(-50%); }
+.pagebox { display: flex; align-items: center; gap: 2px; }
 /* Between two spacers the position would sit in the middle of whatever the
    left and right groups leave over, and drift with the file name's length.
    It belongs over the page instead: centred on the page column, which the
@@ -265,29 +263,67 @@ body.show-links .lnk {
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  opacity: 0.45;
-  transition: opacity var(--t-mid);
 }
+/* always at full strength: faded, its icons fell below the 3:1 a control
+   needs against what is behind it; the glass is what keeps it light */
 .zoom-pop[hidden] { display: none; }
-.zoom-pop:hover, .zoom-pop:focus-within { opacity: 1; }
 .zoom-fit {
   font-size: var(--fs-small); padding: 4px var(--s2);
   color: var(--muted); border-radius: var(--radius);
 }
 .zoom-fit:hover { color: var(--ink); }
 
-/* ---------- contents rail ---------- */
-#contents {
+/* ---------- the left edge: tabs on their side, and the panel they open ---------- */
+.side-tabs {
+  flex: none; width: 30px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  padding: var(--s2) 0;
+  background: var(--raised);
+  border-right: var(--hairline) solid var(--line);
+}
+.side-tabs[hidden], .side-tabs button[hidden] { display: none; }
+/* read from the bottom up, as a book's spine on the left of a shelf is */
+.side-tabs button {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  padding: var(--s3) 5px;
+  font-size: var(--fs-small); font-weight: 500; letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.side-tabs button:hover { color: var(--ink); }
+.side-tabs button[aria-selected="true"] { color: var(--hue); background: var(--hue-wash); font-weight: 600; }
+
+#side {
   width: 276px; flex: none; overflow: auto;
   border-right: var(--hairline) solid var(--line);
   background: var(--raised);
   padding: 0 0 var(--s4);
   display: none;
 }
-#contents.open { display: block; }
+#side.open { display: block; }
+.side-panel { display: none; }
+#side[data-show="contents"] #contents, #side[data-show="pages"] #thumbs { display: block; }
 @media (max-width: 860px) {
-  #contents { position: absolute; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow); }
+  #side { position: absolute; inset: 0 auto 0 30px; z-index: 30; box-shadow: var(--shadow); }
 }
+
+/* ---------- page thumbnails ---------- */
+.thumb-list { display: flex; flex-direction: column; align-items: center; gap: var(--s2); padding: var(--s3) 0 0; }
+.thumb {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  padding: 6px 6px 4px; border-radius: var(--radius);
+}
+.thumb-img {
+  display: block; line-height: 0;
+  background: var(--sunken);
+  outline: var(--hairline) solid var(--line);
+}
+.thumb-img canvas { display: block; width: 100%; height: 100%; background: #fff; }
+.thumb-n { font-size: var(--fs-micro); color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.4; }
+.thumb.here { background: var(--hue-wash); }
+.thumb.here .thumb-img { outline: 2px solid var(--hue); }
+.thumb.here .thumb-n { color: var(--hue); font-weight: 600; }
+body[data-page="dim"] .thumb-img canvas { filter: brightness(0.82) contrast(1.04); }
+body[data-page="invert"] .thumb-img canvas { filter: invert(1) hue-rotate(180deg); }
 @media (max-width: 620px) {
   .find-pop { left: var(--s2); right: var(--s2); top: var(--s2); }
   #findInput { width: auto; flex: 1; min-width: 0; }
@@ -319,6 +355,19 @@ body.show-links .lnk {
 .bm button.here {
   background: var(--hue-wash); color: var(--hue); font-weight: 600;
 }
+/* searching the contents: entries that do not match, and hold nothing that
+   does, step aside; the matched words are marked */
+.bm li.miss { display: none; }
+.bm mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
+.side-search {
+  display: block; width: 100%; box-sizing: border-box; margin-top: var(--s2);
+  font: 400 var(--fs-base) var(--ui); color: var(--ink);
+  background: var(--sunken); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: 5px var(--s2);
+}
+.side-search:focus { outline: 2px solid var(--hue); outline-offset: -1px; }
+.side-search::placeholder { color: var(--faint); }
+.side-none { padding: var(--s3) var(--s4); font-size: var(--fs-small); color: var(--muted); }
 
 /* ---------- the info drawer ---------- */
 #drawer {
@@ -409,7 +458,7 @@ body.dragover #pages::after {
 /* Increase contrast: the sheet gets a firm edge, the floating zoom stops
    fading, and highlights and links stop being tints */
 :root[data-contrast="more"] .page-wrap { outline-color: var(--line-strong); }
-:root[data-contrast="more"] .zoom-pop { opacity: 1; background: var(--raised); backdrop-filter: none; }
+:root[data-contrast="more"] .zoom-pop { background: var(--raised); backdrop-filter: none; }
 :root[data-contrast="more"] .hl-box { background: color-mix(in srgb, var(--mark) 80%, transparent); outline: 1px solid var(--mark-ink); }
 :root[data-contrast="more"] .hl-box.word { background: color-mix(in srgb, var(--mark) 40%, transparent); outline: none; }
 :root[data-contrast="more"] .hl-box.current { background: color-mix(in srgb, var(--hue) 55%, transparent); outline: 2px solid var(--hue); }
@@ -481,10 +530,6 @@ $('app').innerHTML = `
 
     <!-- reading position: a label until you click it -->
     <span class="pagebox needs-doc" id="pageBox">
-      <!-- the contents list is a way around the document, so it sits with
-           the page controls, not after the file's name where it drifted -->
-      <button id="btnContents" class="icon-btn" title="Contents" aria-label="Contents"
-              aria-pressed="false" disabled></button>
       <button id="btnPrev" class="icon-btn" title="Previous page (Page Up)" aria-label="Previous page" disabled></button>
       <button id="pagePos" class="page-pos" title="Go to page (${MOD}G)">
         <span id="pageCur">1</span><span class="slash">/</span><span id="pageTotal">1</span>
@@ -506,7 +551,17 @@ $('app').innerHTML = `
   <main class="pdf-main">
     <div id="progress"></div>
 
-    <aside id="contents" aria-label="Contents"></aside>
+    <!-- The left edge: the ways around the document, as tabs standing on
+         their side. Either one opens the panel beside it; the open one
+         closes it. Contents shows only when the file carries a contents list. -->
+    <nav class="side-tabs needs-doc" id="sideTabs" role="tablist" aria-label="Side panel" aria-orientation="vertical">
+      <button role="tab" id="tabContents" data-side="contents" aria-selected="false" aria-controls="side" hidden>Contents</button>
+      <button role="tab" id="tabPages" data-side="pages" aria-selected="false" aria-controls="side">Pages</button>
+    </nav>
+    <aside id="side" aria-label="Side panel">
+      <div id="contents" class="side-panel"></div>
+      <div id="thumbs" class="side-panel"></div>
+    </aside>
 
     <div class="page-area">
       <div id="pages"></div>
@@ -561,7 +616,6 @@ const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 
 const ICON = {
-  contents: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
   find:     '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/>',
   info:     '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
   up:       '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -575,7 +629,6 @@ const ICON = {
   invert:   '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="5.6" fill="currentColor" stroke="none"/>'
 };
 
-$('btnContents').innerHTML = I(ICON.contents);
 $('btnFind').innerHTML = I(ICON.find);
 $('btnInfo').innerHTML = I(ICON.info);
 $('btnPrev').innerHTML = I(ICON.up);
@@ -665,7 +718,7 @@ function setBusy(pct) {
 
 function enableControls(on) {
   ['btnOut', 'btnFit', 'btnIn', 'btnInfo', 'btnFind',
-   'btnPrev', 'btnNext', 'btnContents']
+   'btnPrev', 'btnNext']
     .forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
   document.querySelectorAll('.needs-doc').forEach((el) => { el.hidden = !on; });
 }
@@ -722,6 +775,7 @@ async function openFile(file) {
 
 async function renderDocument(file) {
   renderedPages.clear();
+  resetThumbs();
   const host = $('pages');
   host.innerHTML = '';
   host.style.display = 'flex';
@@ -757,6 +811,7 @@ async function renderDocument(file) {
   setStatus('ok', `${LintApp.fmtNum(doc.numPages)} page${doc.numPages === 1 ? '' : 's'}, ${size}`);
   $('pathBox').textContent = file.name;
   buildOutline();
+  if (side === 'pages') buildThumbs();
   await buildInfo(file);
 }
 
@@ -933,8 +988,8 @@ function resetView() {
   $('pageTotal').textContent = '1';
   $('pageCur').textContent = '1';
   $('contents').innerHTML = '';
-  $('contents').classList.remove('open');
-  $('btnContents').setAttribute('aria-pressed', 'false');
+  resetThumbs();
+  openSide(null);
   enableControls(false);
   $('drawer').classList.remove('open');
   $('pathBox').textContent = '';
@@ -1318,12 +1373,22 @@ async function scrollToPage(n, smooth = true) {
 
 function syncPageIndicator(n) {
   if ($('pageNum').hidden) $('pageCur').textContent = String(n);
-  const rail = $('contents');
-  if (!rail.classList.contains('open')) return;
-  /* mark the contents entry covering this page, if we know one */
-  rail.querySelectorAll('.bm button[data-page]').forEach((b) => {
-    b.classList.toggle('here', +b.dataset.page === n);
-  });
+  if (side === 'contents') {
+    /* mark the contents entry covering this page, if we know one */
+    $('contents').querySelectorAll('.bm button[data-page]').forEach((b) => {
+      b.classList.toggle('here', +b.dataset.page === n);
+    });
+  } else if (side === 'pages') {
+    const was = $('thumbs').querySelector('.thumb.here');
+    if (was) was.classList.remove('here');
+    const now = $('thumbs').querySelector(`.thumb[data-page="${n}"]`);
+    if (now) {
+      now.classList.add('here');
+      /* keep the reader's page in sight in the list */
+      const box = $('side'), r = now.getBoundingClientRect(), b = box.getBoundingClientRect();
+      if (r.top < b.top + 40 || r.bottom > b.bottom) box.scrollTop += r.top - b.top - box.clientHeight / 3;
+    }
+  }
 }
 
 /* ---------- cross-reference links ----------
@@ -1418,8 +1483,8 @@ async function buildOutline() {
       '<div class="rail-head">Contents</div>' +
       '<p class="hint">This document carries no contents list. Use the page ' +
       'number or find to move around.</p>';
-    $('btnContents').disabled = true;
-    $('btnContents').hidden = true;
+    $('tabContents').hidden = true;
+    if (side === 'contents') openSide(null);
     return;
   }
 
@@ -1429,7 +1494,7 @@ async function buildOutline() {
     items.forEach((it) => {
       const li = document.createElement('li');
       const b = document.createElement('button');
-      b.textContent = it.title || '(untitled)';
+      b.textContent = b.dataset.title = it.title || '(untitled)';
       b.addEventListener('click', () => jumpToDest(it.dest));
       /* resolve lazily so the rail opens instantly on a 958-entry book */
       resolveDestPage(it.dest).then((n) => { if (n) b.dataset.page = String(n); });
@@ -1440,10 +1505,69 @@ async function buildOutline() {
     return ul;
   };
 
-  panel.innerHTML = '<div class="rail-head">Contents</div>';
+  panel.innerHTML = '<div class="rail-head">Contents' +
+    '<input type="search" class="side-search" id="contentsSearch" placeholder="Search the contents" ' +
+    'aria-label="Search the contents" spellcheck="false" autocomplete="off"></div>' +
+    '<p class="side-none" id="contentsNone" hidden>No entry matches.</p>';
   panel.appendChild(build(outline));
-  $('btnContents').disabled = false;
+  /* shown again: a document without contents opened before hid it */
+  $('tabContents').hidden = false;
 }
+
+/* ---------- searching the contents ----------
+   Every word typed must appear in an entry's title, in any order and case.
+   A match keeps its parents in view, so the reader sees where it sits. */
+function filterContents(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const list = $('contents').querySelector('.bm');
+  if (!list) return;
+  let any = false;
+  (function walk(ul) {
+    let shown = false;
+    ul.querySelectorAll(':scope > li').forEach((li) => {
+      const b = li.querySelector(':scope > button');
+      const title = b.dataset.title;
+      const low = title.toLowerCase();
+      const hit = words.length > 0 && words.every((w) => low.includes(w));
+      const sub = li.querySelector(':scope > ul');
+      const kids = sub ? walk(sub) : false;
+      li.classList.toggle('miss', words.length > 0 && !hit && !kids);
+      b.innerHTML = hit ? markWords(title, words) : LintApp.esc(title);
+      if (hit) any = true;
+      if (hit || kids || !words.length) shown = true;
+    });
+    return shown;
+  })(list);
+  $('contentsNone').hidden = !words.length || any;
+}
+
+function markWords(title, words) {
+  const low = title.toLowerCase(), on = new Uint8Array(title.length);
+  words.forEach((w) => { for (let i = low.indexOf(w); i >= 0; i = low.indexOf(w, i + 1)) on.fill(1, i, i + w.length); });
+  let out = '', open = false;
+  for (let i = 0; i < title.length; i++) {
+    if (on[i] && !open) { out += '<mark>'; open = true; }
+    if (!on[i] && open) { out += '</mark>'; open = false; }
+    out += LintApp.esc(title[i]);
+  }
+  return out + (open ? '</mark>' : '');
+}
+
+$('contents').addEventListener('input', (e) => {
+  if (e.target.id === 'contentsSearch') filterContents(e.target.value);
+});
+$('contents').addEventListener('keydown', (e) => {
+  if (e.target.id !== 'contentsSearch') return;
+  if (e.key === 'Enter') {
+    /* the first match, as a click would */
+    const first = $('contents').querySelector('.bm button mark');
+    if (first) first.closest('button').click();
+  } else if (e.key === 'Escape' && e.target.value) {
+    e.stopPropagation();
+    e.target.value = '';
+    filterContents('');
+  }
+});
 
 async function jumpToDest(dest) {
   try {
@@ -1653,10 +1777,111 @@ $('btnFit').addEventListener('click', async () => {
 });
 
 /* ---------- navigation controls ---------- */
-$('btnContents').addEventListener('click', () => {
-  const open = $('contents').classList.toggle('open');
-  $('btnContents').setAttribute('aria-pressed', String(open));
-  if (open) syncPageIndicator(currentPage());
+/* ---------- the side panel: Contents or Pages ---------- */
+let side = null;                    // 'contents', 'pages', or null when closed
+function openSide(which) {
+  side = which;
+  $('side').classList.toggle('open', !!which);
+  $('side').dataset.show = which || '';
+  $('sideTabs').querySelectorAll('[data-side]').forEach((b) =>
+    b.setAttribute('aria-selected', String(b.dataset.side === which)));
+  if (!which || !doc) return;
+  if (which === 'pages') buildThumbs();
+  syncPageIndicator(currentPage());
+}
+$('sideTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-side]');
+  if (b) openSide(side === b.dataset.side ? null : b.dataset.side);
+});
+
+/* ---------- page thumbnails ----------
+   One slot per page, sized from the first page as the reading column is,
+   and drawn only while in or near view: one at a time, newest view first,
+   so a thousand-page book never renders a thousand canvases at once. */
+const THUMB_W = 132;
+let thumbsBuilt = false;
+const thumbDone = new Set();
+let thumbQueue = [];
+let thumbBusy = false;
+let thumbTick = null;
+
+function resetThumbs() {
+  thumbsBuilt = false;
+  thumbDone.clear();
+  thumbQueue = [];
+  $('thumbs').innerHTML = '';
+}
+
+function buildThumbs() {
+  if (thumbsBuilt || !doc || !firstPage) return;
+  thumbsBuilt = true;
+  const vp = firstPage.getViewport({ scale: 1 });
+  const h = Math.round(THUMB_W * vp.height / vp.width);
+  let html = '<div class="rail-head">Pages</div><div class="thumb-list">';
+  for (let n = 1; n <= doc.numPages; n++) {
+    html += `<button class="thumb" data-page="${n}" aria-label="Page ${n}">` +
+      `<span class="thumb-img" style="width:${THUMB_W}px;height:${h}px"></span>` +
+      `<span class="thumb-n">${n}</span></button>`;
+  }
+  $('thumbs').innerHTML = html + '</div>';
+  requestAnimationFrame(queueVisibleThumbs);
+}
+
+function queueVisibleThumbs() {
+  if (side !== 'pages' || !thumbsBuilt) return;
+  const box = $('side');
+  const top = box.scrollTop - box.clientHeight, bottom = box.scrollTop + box.clientHeight * 2;
+  const want = [];
+  $('thumbs').querySelectorAll('.thumb').forEach((el) => {
+    if (el.offsetTop < bottom && el.offsetTop + el.offsetHeight > top && !thumbDone.has(+el.dataset.page)) {
+      want.push(+el.dataset.page);
+    }
+  });
+  thumbQueue = want;
+  pumpThumbs();
+}
+
+async function pumpThumbs() {
+  if (thumbBusy) return;
+  thumbBusy = true;
+  const d = doc;
+  while (thumbQueue.length && d === doc) {
+    const n = thumbQueue.shift();
+    if (thumbDone.has(n)) continue;
+    thumbDone.add(n);
+    try {
+      const page = await d.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const vp = page.getViewport({ scale: THUMB_W / base.width * dpr });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(vp.width);
+      canvas.height = Math.floor(vp.height);
+      await page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp }).promise;
+      if (d !== doc) break;
+      const slot = $('thumbs').querySelector(`.thumb[data-page="${n}"] .thumb-img`);
+      if (!slot) continue;
+      /* a page of another size takes its own shape */
+      slot.style.height = Math.round(THUMB_W * base.height / base.width) + 'px';
+      slot.replaceChildren(canvas);
+    } catch (e) {
+      thumbDone.delete(n);
+    }
+  }
+  thumbBusy = false;
+}
+
+$('side').addEventListener('scroll', () => {
+  clearTimeout(thumbTick);
+  thumbTick = setTimeout(queueVisibleThumbs, 90);
+}, { passive: true });
+
+$('thumbs').addEventListener('click', (e) => {
+  const t = e.target.closest('.thumb');
+  if (!t) return;
+  scrollToPage(+t.dataset.page);
+  /* over the page on a narrow screen, so out of the way once used */
+  if (window.matchMedia('(max-width: 860px)').matches) openSide(null);
 });
 
 $('btnPrev').addEventListener('click', () => scrollToPage(currentPage() - 1));
