@@ -269,11 +269,34 @@ kbd {
 /* Where the divider will go, while it is dragged (see app.js): a line in
    the tool's colour, and a band back to where the divider is, light there
    and deepening toward the line. */
-.split-ghost, .split-band {
+.split-ghost, .split-band, .split-tape, .split-label {
   position: absolute; top: 0; bottom: 0; left: 0; z-index: 30;
   pointer-events: none; will-change: transform;
 }
-.split-ghost { width: 6px; background: var(--hue); }
+/* a tick every 10px and a longer one every 50px, counted from the divider */
+.split-tape {
+  right: 0; bottom: auto; height: 10px; will-change: clip-path;
+  --tick: color-mix(in srgb, var(--hue) 75%, var(--ink));
+  background-image:
+    repeating-linear-gradient(to right, var(--tick) 0 1px, transparent 1px 50px),
+    repeating-linear-gradient(to right, var(--tick) 0 1px, transparent 1px 10px);
+  background-size: 50px 10px, 10px 5px;
+  background-repeat: repeat-x;
+}
+/* the two panes' shares, hung from the line under the tape */
+.split-label {
+  top: 16px; bottom: auto; translate: calc(3px - 50%) 0;
+  padding: 2px 7px; border-radius: var(--radius-sm);
+  background: var(--hue); color: var(--hue-ink);
+  font: 500 var(--fs-micro)/16px var(--mono); white-space: nowrap;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .18);
+}
+.split-label.snapped { box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue) 30%, transparent); }
+/* the same box as #divider, lit as it is on hover: hue inside its hairlines */
+.split-ghost {
+  width: 6px; background: var(--hue) padding-box;
+  border-inline: var(--hairline) solid transparent;
+}
 .split-band {
   width: 100px; transform-origin: left;
   background: linear-gradient(to right,

@@ -2064,35 +2064,50 @@ function init(config) {
 
   /* Dragging the divider moves only a line: a copy of the divider that
      follows the pointer, and between it and where the divider is now a band
-     in the tool's colour, light at the divider and deep at the line. Both
-     move by transform, which costs no layout and no repaint. The panes stay as they are until the pointer lets go, and then
-     take their new widths once. On a large document every new width lays
-     out the editor's ten thousand lines and the tree's thousands of rows,
-     50–70 ms, so resizing them live made the divider lag the pointer. */
+     in the tool's colour, light at the divider and deep at the line. Along
+     the band's top runs a tape measure counted from the divider, and a label
+     on the line reads the two panes' shares. Near the middle the line snaps
+     to half. All of it moves by transform or repaints a strip a few pixels
+     tall, so none of it lays out the panes. They stay as they are
+     until the pointer lets go, and then take their new widths once. On a
+     large document every new width lays out the editor's ten thousand lines
+     and the tree's thousands of rows, 50–70 ms, so resizing them live made
+     the divider lag the pointer. */
+  var SNAP = 12;   /* px either side of the middle that snap to half */
   divider.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     divider.setPointerCapture(e.pointerId);
     var box = split.getBoundingClientRect();
-    var min = 240, max = box.width - 280;
+    var min = 240, max = box.width - 280, half = box.width / 2;
     var at = editorPane.getBoundingClientRect().width;
     var from = at;
-    var band = document.createElement('div');
-    band.className = 'split-band';
-    var ghost = document.createElement('div');
-    ghost.className = 'split-ghost';
-    split.appendChild(band);
-    split.appendChild(ghost);
+    function part(name) {
+      var el = document.createElement('div');
+      el.className = name;
+      split.appendChild(el);
+      return el;
+    }
+    var band = part('split-band'), tape = part('split-tape');
+    var ghost = part('split-ghost'), label = part('split-label');
+    /* the tape is the split's whole width, its ticks counted from the
+       divider, and clipped to the gap */
+    tape.style.backgroundPositionX = from + 'px';
     /* the band is 100px wide, stretched to the gap and turned to face it */
     function paint() {
-      ghost.style.transform = 'translateX(' + at + 'px)';
       var left = Math.min(from, at), gap = Math.abs(at - from);
+      ghost.style.transform = label.style.transform = 'translateX(' + at + 'px)';
       band.classList.toggle('leftward', at < from);
       band.style.transform = 'translateX(' + left + 'px) scaleX(' + (gap / 100) + ')';
+      tape.style.clipPath = 'inset(0 ' + (box.width - left - gap) + 'px 0 ' + left + 'px)';
+      var share = Math.round(at / box.width * 100);
+      label.textContent = share + '% · ' + (100 - share) + '%';
+      label.classList.toggle('snapped', at === half);
     }
     paint();
     var frame = 0, done = false;
     function move(ev) {
       at = Math.min(Math.max(ev.clientX - box.left, min), max);
+      if (Math.abs(at - half) < SNAP) at = half;
       if (!frame) frame = requestAnimationFrame(function () { frame = 0; paint(); });
     }
     /* on release, or if the pointer is taken away mid-drag */
@@ -2103,8 +2118,7 @@ function init(config) {
       divider.removeEventListener('pointerup', up);
       divider.removeEventListener('lostpointercapture', up);
       cancelAnimationFrame(frame);
-      ghost.remove();
-      band.remove();
+      [band, tape, ghost, label].forEach(function (el) { el.remove(); });
       setSplit(at, true, box.width);
     }
     divider.addEventListener('pointermove', move);
