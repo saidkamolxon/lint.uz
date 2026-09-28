@@ -1126,7 +1126,54 @@ function Tree(opts) {
 
   this.query = function () { return searchBox.value.trim().toLowerCase(); };
 
+  /* A search is a detour: when it is cleared the tree comes back as it was
+     before, with the branches the reader had opened, and with the row they
+     reached — the one they selected, or else the one at the top of the view
+     — opened to and held at the same height on screen. */
+  var lastQuery = '';
+  var openBefore = null;       // chains of the branches open when a search began
+
+  function chainsOpen() {
+    var out = [], open = el.querySelectorAll('.node.open');
+    for (var i = 0; i < open.length && out.length < ROW_BUDGET; i++) {
+      var c = chains.get(open[i].querySelector(':scope > .row'));
+      if (c) out.push(c);
+    }
+    return out;
+  }
+
+  function placeHeld() {
+    var top = el.getBoundingClientRect().top;
+    var row = selected && el.contains(selected) ? selected : null;
+    if (!row) {
+      var rows = el.querySelectorAll('.row');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getBoundingClientRect().bottom > top + 1) { row = rows[i]; break; }
+      }
+    }
+    var chain = row && chains.get(row);
+    return chain ? { chain: chain, pick: row === selected, offset: row.getBoundingClientRect().top - top } : null;
+  }
+
+  function comeBack(opened, held) {
+    (opened || []).slice().sort(function (a, b) { return a.length - b.length; }).forEach(function (c) {
+      var row = reveal(c);
+      if (row) toggle(row.parentElement, true);
+    });
+    if (!held) return;
+    var row = reveal(held.chain);
+    if (!row) return;
+    if (held.pick) selectRow(row);
+    el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - held.offset;
+  }
+
   this.render = function () {
+    var q = self.query();
+    var cleared = !q && lastQuery;
+    if (q && !lastQuery) openBefore = self.hasData ? chainsOpen() : null;
+    var held = cleared ? placeHeld() : null;
+    lastQuery = q;
+
     el.innerHTML = '';
     el.classList.remove('stale');
     selected = null;
@@ -1137,14 +1184,17 @@ function Tree(opts) {
       matchCount.textContent = '';
       return;
     }
-    var q = self.query();
     hits = []; hitIdx = -1;
     stepNav.hidden = true;
     if (q && !stepMode) { renderFiltered(q); return; }
     matchCount.textContent = '';
     var node = makeNode(adapter.rootEntry(root), q, []);
     el.appendChild(node);
-    autoExpand(node, autoDepth);
+    /* back from a search: exactly the branches that were open before it,
+       not the default depth, so one the reader had closed stays closed */
+    if (cleared && openBefore) comeBack(openBefore, held);
+    else { autoExpand(node, autoDepth); if (cleared) comeBack(null, held); }
+    if (cleared) openBefore = null;
     if (q) {
       collectHits(q);
       stepNav.hidden = !hits.length;
