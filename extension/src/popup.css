@@ -89,7 +89,7 @@ main { padding: var(--s3) var(--s4); display: grid; gap: var(--s3); }
 
 /* ---------- tools ---------- */
 .tools { display: grid; gap: var(--s2); }
-.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); }
+.grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s1); }
 .tool-btn {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 6px var(--s1);

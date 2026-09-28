@@ -10,19 +10,23 @@
    loaded first, so the landing page and the tools share one copy. */
 var THEMES = LintTheme.THEMES;
 
-/* ---------- the eight tools, for the suite switcher ---------- */
+/* ---------- the ten tools, for the suite switcher, most used first ---------- */
 /* Paths on one domain rather than a subdomain each: a search engine pools a
    site's authority across its paths, but treats subdomains as separate sites
    and splits it. Relative hrefs also keep local development working. */
 var SUITE = [
   { id: 'json', name: 'JSON', host: '/json' },
-  { id: 'xml',  name: 'XML',  host: '/xml'  },
   { id: 'yaml', name: 'YAML', host: '/yaml' },
   { id: 'csv',  name: 'CSV',  host: '/csv'  },
+  { id: 'env', name: 'ENV', host: '/env' },
+  { id: 'log',  name: 'LOG',  host: '/log'  },
+  { id: 'har',  name: 'HAR',  host: '/har'  },
+  { id: 'xml',  name: 'XML',  host: '/xml'  },
+  { id: 'cert', name: 'CERT', host: '/cert' },
+  { id: 'sqlite', name: 'SQLite', host: '/sqlite' },
   { id: 'pdf',  name: 'PDF',  host: '/pdf'  },
-  { id: 'log',  name: 'Logs', host: '/log'  },
-  { id: 'audio', name: 'Audio', host: '/audio' },
-  { id: 'sqlite', name: 'SQLite', host: '/sqlite' }
+  { id: 'parquet', name: 'Parquet', host: '/parquet' },
+  { id: 'audio', name: 'Audio', host: '/audio' }
 ];
 
 /* ---------- small helpers ---------- */
@@ -257,6 +261,21 @@ function copyText(text, label) {
   } else fallbackCopy(text, done);
 }
 
+/* Save text or bytes as a file on the device: an object URL on a
+   throwaway link, so nothing is uploaded anywhere. */
+function download(data, name, type) {
+  var url = URL.createObjectURL(data instanceof Blob ? data
+    : new Blob([data], { type: type || 'text/plain' }));
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  showToast('Saved ' + name);
+}
+
 function fallbackCopy(text, done) {
   var ta = document.createElement('textarea');
   ta.value = text;
@@ -281,6 +300,77 @@ function highlightInto(el, text, q) {
   }
   if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
 }
+
+/* ---------- quick tooltips ----------
+   An icon says little on its own, and a browser's own tooltip waits about
+   a second, which reads as nothing there. A button with no text of its own
+   shows its title at once below it (above, near the bottom of the page),
+   on hover and on keyboard focus; moving along a row of icons keeps it up.
+   The title is lifted off while the tip shows, so the two never stack,
+   and put back after unless the page gave the button a new one meanwhile.
+   Any other element can ask for one with data-quick-tip="…". */
+(function () {
+  var tip = null, timer = null, cur = null, warmUntil = 0;
+
+  function target(el) {
+    var q = el && el.closest ? el.closest('[data-quick-tip]') : null;
+    if (q) return q;
+    var b = el && el.closest ? el.closest('button, [role="button"]') : null;
+    if (!b || b.disabled || b.closest('.menu')) return null;
+    if (!b.title && !b.dataset.tipText) return null;
+    return (b.textContent || '').trim() ? null : b;
+  }
+
+  function show(b) {
+    if (cur && cur !== b) hide();
+    cur = b;
+    if (b.title && !b.dataset.quickTip) { b.dataset.tipText = b.title; b.removeAttribute('title'); }
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'quick-tip';
+      tip.setAttribute('role', 'tooltip');
+      document.body.appendChild(tip);
+    }
+    tip.textContent = b.dataset.quickTip || b.dataset.tipText;
+    tip.hidden = false;
+    var r = b.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    var left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, window.innerWidth - t.width - 6));
+    var top = r.bottom + 6;
+    if (top + t.height > window.innerHeight - 6) top = r.top - t.height - 6;
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
+  function hide() {
+    clearTimeout(timer);
+    if (cur) {
+      if (!cur.title && cur.dataset.tipText) cur.title = cur.dataset.tipText;
+      delete cur.dataset.tipText;
+      warmUntil = Date.now() + 400;
+      cur = null;
+    }
+    if (tip) tip.hidden = true;
+  }
+
+  document.addEventListener('pointerover', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    var b = target(e.target);
+    if (b === cur) return;
+    if (!b) { if (cur) hide(); return; }
+    clearTimeout(timer);
+    if (Date.now() < warmUntil || cur) show(b);
+    else timer = setTimeout(function () { show(b); }, 300);
+  });
+  document.addEventListener('focusin', function (e) {
+    var b = target(e.target);
+    if (b && b.matches(':focus-visible')) show(b);
+  });
+  document.addEventListener('focusout', function () { if (cur) hide(); });
+  document.addEventListener('pointerdown', hide, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('blur', hide);
+})();
 
 /* ---------- menus ---------- */
 function closeAllMenus(except) {
@@ -420,6 +510,83 @@ function buildSuiteMark(activeId) {
   wireMenu(btn, menu);
 }
 
+/* ---------- Convert to ▾ and Export ▾ ----------
+   Every way out of a document, in the same two places in every tool. The
+   editor tools get them from init(); LOG, HAR, SQLite and Parquet put
+   toolMenuHTML in their own toolbar and call wireToolMenus. Before each
+   opening a menu hides the items a tool has said do not apply, so it never
+   offers what would only answer with "that does not work here". A tool
+   says so with LintApp.when(id, fn) from its own script, where its state
+   lives; fn gets the editor text and returns whether to show the item. */
+var itemRules = {};
+function when(id, fn) { itemRules[id] = fn; }
+
+/* The markup of one of them. The items keep the ids a tool binds, so a
+   handler cannot tell a menu item from the toolbar button it replaced.
+   `fold` hides it on a phone, where the ⋮ lists its items instead. */
+function toolMenuHTML(id, label, items, fold) {
+  if (!items.length) return '';
+  return '<div class="menu-wrap tool-menu' + (fold ? ' hide-sm' : '') + '">' +
+    '<button id="' + id + '" class="menu-btn" aria-haspopup="true">' +
+      label + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>' +
+    '</button>' +
+    '<div class="menu menu-start" role="menu" aria-label="' + label + '">' +
+    items.map(function (it) {
+      if (it.sep) return '<div class="menu-sep"></div>';
+      return '<button id="' + it.id + '" class="menu-item" role="menuitem"' +
+        (it.key ? ' data-key="' + it.key + '"' : '') +
+        (it.title ? ' title="' + esc(it.title).replace(/"/g, '&quot;') + '"' : '') + '>' +
+        esc(it.label) + '</button>';
+    }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function wireToolMenus(getText) {
+  var wraps = document.querySelectorAll('.toolbar .tool-menu');
+  for (var i = 0; i < wraps.length; i++) (function (wrap) {
+    var btn = wrap.querySelector('.menu-btn'), menu = wrap.querySelector('.menu');
+    wireMenu(btn, menu);
+    menu.addEventListener('click', function (e) {
+      if (e.target.closest('.menu-item')) closeAllMenus();
+    });
+    menu._refresh = function () { refreshToolMenu(menu, itemRules, getText()); };
+    btn.addEventListener('click', menu._refresh, true);
+    /* hung from the right of its button, unless that runs off the page */
+    btn.addEventListener('click', function () {
+      if (!menu.classList.contains('open')) return;
+      menu.classList.add('menu-start');
+      if (menu.getBoundingClientRect().right > window.innerWidth - 8) menu.classList.remove('menu-start');
+    });
+  })(wraps[i]);
+}
+
+function refreshToolMenu(menu, specs, text) {
+  var items = menu.querySelectorAll('.menu-item');
+  for (var i = 0; i < items.length; i++) {
+    var fn = specs[items[i].id], show = true;
+    /* a rule that fails leaves its item showing: the handler still answers */
+    if (fn) try { show = !!fn(text); } catch (e) { show = true; }
+    items[i].hidden = !show;
+  }
+  /* a separator only between two groups that both still show something */
+  var kids = menu.children, lastShown = null;
+  for (var k = 0; k < kids.length; k++) {
+    var el = kids[k];
+    if (el.classList.contains('menu-sep')) {
+      el.hidden = !lastShown || lastShown.classList.contains('menu-sep');
+      if (!el.hidden) lastShown = el;
+    } else if (!el.hidden) lastShown = el;
+  }
+  if (lastShown && lastShown.classList.contains('menu-sep')) lastShown.hidden = true;
+  /* nothing applies: say so, rather than open an empty box */
+  var note = menu.querySelector('.menu-empty');
+  if (!lastShown) {
+    if (!note) menu.appendChild(Object.assign(document.createElement('div'),
+      { className: 'menu-label menu-empty', textContent: 'Nothing here for this document' }));
+  } else if (note) note.remove();
+}
+
 /* ---------- more menu ----------
    The ⋮ every tool ends its toolbar with, just before the suite and theme
    menus. It holds the tool's quieter commands (`items`), and on narrow
@@ -461,32 +628,58 @@ function buildOverflowMenu(container, items) {
 
   function rebuild() {
     mirror.innerHTML = '';
-    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md');
+    var hidden = document.querySelectorAll('.toolbar button.hide-sm, .toolbar button.hide-md, ' +
+      '.toolbar .tool-menu.hide-sm, .toolbar .tool-menu.hide-md');
     var added = 0;
     for (var i = 0; i < hidden.length; i++) {
       var src = hidden[i];
       if (src.offsetParent !== null) continue;   /* still visible — skip */
-      (function (source) {
-        var item = document.createElement('button');
-        item.className = 'menu-item';
-        item.setAttribute('role', 'menuitem');
-        /* the label only — not any icon markup rendered after it */
-        item.textContent = source.firstChild && source.firstChild.nodeType === 3
-          ? source.firstChild.textContent : source.textContent || source.title;
-        item.title = source.title || '';
-        item.addEventListener('click', function () {
-          closeAllMenus();
-          source.click();
-        });
-        if (!added && items.length) {
+      /* a folded Convert to or Export brings its items, under its name */
+      if (src.classList.contains('tool-menu')) {
+        if (added || items.length) {
           mirror.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
         }
-        mirror.appendChild(item);
-      })(src);
+        mirror.appendChild(Object.assign(document.createElement('div'), {
+          className: 'menu-label', textContent: src.querySelector('.menu-btn').textContent
+        }));
+        var subs = src.querySelectorAll('.menu .menu-item');
+        for (var j = 0; j < subs.length; j++) mirror.appendChild(mirrorItem(subs[j]));
+        added++;
+        continue;
+      }
+      if (!added && items.length) {
+        mirror.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
+      }
+      mirror.appendChild(mirrorItem(src));
       added++;
     }
     wrap.style.display = added || items.length ? '' : 'none';
   }
+
+  /* a stand-in that clicks the real control, which keeps its handlers */
+  function mirrorItem(source) {
+    var item = document.createElement('button');
+    item.className = 'menu-item';
+    item.setAttribute('role', 'menuitem');
+    /* the label only — not any icon markup rendered after it */
+    item.textContent = source.firstChild && source.firstChild.nodeType === 3
+      ? source.firstChild.textContent : source.textContent || source.title;
+    item.title = source.title || '';
+    item.hidden = source.hidden;
+    item.addEventListener('click', function () {
+      closeAllMenus();
+      source.click();
+    });
+    return item;
+  }
+
+  /* folded menus check what applies each time the ⋮ opens, as they would */
+  btn.addEventListener('click', function () {
+    if (!document.querySelector('.toolbar .tool-menu.hide-sm, .toolbar .tool-menu.hide-md')) return;
+    var ms = document.querySelectorAll('.toolbar .tool-menu .menu');
+    for (var i = 0; i < ms.length; i++) if (ms[i]._refresh) ms[i]._refresh();
+    rebuild();
+  }, true);
 
   rebuild();
   var t;
@@ -650,6 +843,14 @@ window.addEventListener('keydown', function (e) {
   if (shortcutsOpen()) e.stopImmediatePropagation();
 }, true);
 
+/* The first screen of every tool says where the shortcuts are; its key is
+   Ctrl/⌘+/, since a ? typed into an editor is text. A click opens it too. */
+var SHORTCUTS_HINT = '<p class="shortcuts-hint"><button type="button" data-shortcuts>' +
+  'Keyboard shortcuts ' + kbd('mod+/') + '</button></p>';
+document.addEventListener('click', function (e) {
+  if (e.target.closest && e.target.closest('[data-shortcuts]')) showShortcuts();
+});
+
 /* ? opens the panel wherever a ? is not being typed; Ctrl/⌘+/ anywhere */
 document.addEventListener('keydown', function (e) {
   if (keyMatches(e, 'mod+/') || (keyMatches(e, '?') && !isTyping(e.target))) {
@@ -710,6 +911,8 @@ function Editor(opts) {
   this.onChange = opts.onChange;
   this.highlighter = opts.highlighter;
   this._errLine = null;
+  this._marks = {};       // line -> { kind: 'err' | 'warn', title }, from tools that find more than one
+  this._errTitle = '';
   this._lineCount = 0;
   this._curLine = 1;
 
@@ -739,22 +942,69 @@ function Editor(opts) {
 
   this.paintGutter = function (count) {
     if (count === self._lineCount && self._paintedErr === self._errLine &&
-        self._paintedCur === self._curLine) return;
+        self._paintedCur === self._curLine && self._paintedMarks === self._marks) return;
     self._lineCount = count;
     self._paintedErr = self._errLine;
     self._paintedCur = self._curLine;
+    self._paintedMarks = self._marks;
     var out = '';
     for (var i = 1; i <= count; i++) {
-      var cls = 'ln';
-      if (i === self._errLine) cls += ' err';
+      var cls = 'ln', mark = self._marks[i];
+      /* the message rides on the line number, where a pointer finds it as
+         it would in any code editor */
+      var title = i === self._errLine ? self._errTitle : mark ? mark.title : '';
+      if (i === self._errLine || (mark && mark.kind === 'err')) cls += ' err';
+      else if (mark && mark.kind === 'warn') cls += ' warn' + (i === self._curLine ? ' cur' : '');
       else if (i === self._curLine) cls += ' cur';
-      out += '<span class="' + cls + '">' + i + '</span>';
+      out += '<span class="' + cls + '"' + (title ? ' data-tip="' + esc(title) + '"' : '') + '>' + i + '</span>';
     }
     gutter.innerHTML = out;
   };
 
-  this.setErrorLine = function (line) {
+  /* several lines at once, for a tool whose findings are not one error */
+  this.setMarks = function (marks) {
+    self._marks = marks || {};
+    self.paintGutter(self._lineCount);
+  };
+
+  /* The message of a marked line shows the moment the pointer is on its
+     number, beside it, as a code editor's does: a browser's own tooltip
+     waits a second first, which here reads as nothing happening. */
+  var tip = null;
+  function hideTip() { if (tip) tip.hidden = true; }
+  function showTip(e) {
+    var ln = e.target.closest ? e.target.closest('.ln[data-tip]') : null;
+    if (!ln) { hideTip(); return; }
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'gutter-tip';
+      tip.setAttribute('role', 'tooltip');
+      document.body.appendChild(tip);
+    }
+    tip.textContent = ln.dataset.tip;
+    tip.className = 'gutter-tip' + (ln.classList.contains('err') ? ' err' : ' warn');
+    tip.hidden = false;
+    var r = ln.getBoundingClientRect();
+    var g = gutter.parentElement.getBoundingClientRect();
+    tip.style.left = Math.round(g.right + 6) + 'px';
+    tip.style.top = Math.round(r.top - 2) + 'px';
+    /* kept on screen when the line is near the bottom */
+    var over = tip.getBoundingClientRect().bottom - window.innerHeight + 8;
+    if (over > 0) tip.style.top = Math.round(r.top - 2 - over) + 'px';
+  }
+  gutter.addEventListener('mouseover', showTip);
+  /* a tap shows it too, where there is no pointer to hover */
+  gutter.addEventListener('click', showTip);
+  gutter.addEventListener('mouseleave', hideTip);
+  document.addEventListener('pointerdown', function (e) {
+    if (tip && !tip.hidden && !gutter.contains(e.target)) hideTip();
+  });
+  input.addEventListener('scroll', hideTip, { passive: true });
+
+  this.setErrorLine = function (line, title) {
     self._errLine = line;
+    self._errTitle = title || '';
+    self._paintedErr = undefined;
     self.paintGutter(self._lineCount);
   };
 
@@ -847,32 +1097,104 @@ function Tree(opts) {
   var root = null;
   this.hasData = false;
 
+  /* A document that arrives — into an empty viewer, from a file, a sample
+     or a paste that replaces most of the text — unfolds from the top, as a
+     branch does when opened. Typing, formatting and searching redraw the
+     tree in place. */
+  var arriving = false;
+  this.arrive = function () { arriving = true; };
   this.setData = function (value, has) {
+    var fresh = has && (arriving || !self.hasData);
+    arriving = false;
     root = value;
     self.hasData = has;
     self.render();
+    if (fresh) unveil();
   };
+
+  /* A clip, not a height: it costs no layout, so a long tree unfolds as
+     smoothly as a short one. */
+  function unveil() {
+    var first = el.firstElementChild;
+    if (!first || !first.animate || (still && still.matches)) return;
+    var ms = Math.round(Math.min(420, 240 + first.getBoundingClientRect().height * 0.06));
+    first.animate(
+      [{ clipPath: 'inset(0 0 100% 0)', opacity: 0.3, transform: 'translateY(-6px)' },
+       { clipPath: 'inset(0 0 0 0)', opacity: 1, transform: 'none' }],
+      { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+  }
 
   this.query = function () { return searchBox.value.trim().toLowerCase(); };
 
+  /* A search is a detour: when it is cleared the tree comes back as it was
+     before, with the branches the reader had opened, and with the row they
+     reached — the one they selected, or else the one at the top of the view
+     — opened to and held at the same height on screen. */
+  var lastQuery = '';
+  var openBefore = null;       // chains of the branches open when a search began
+
+  function chainsOpen() {
+    var out = [], open = el.querySelectorAll('.node.open');
+    for (var i = 0; i < open.length && out.length < ROW_BUDGET; i++) {
+      var c = chains.get(open[i].querySelector(':scope > .row'));
+      if (c) out.push(c);
+    }
+    return out;
+  }
+
+  function placeHeld() {
+    var top = el.getBoundingClientRect().top;
+    var row = selected && el.contains(selected) ? selected : null;
+    if (!row) {
+      var rows = el.querySelectorAll('.row');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getBoundingClientRect().bottom > top + 1) { row = rows[i]; break; }
+      }
+    }
+    var chain = row && chains.get(row);
+    return chain ? { chain: chain, pick: row === selected, offset: row.getBoundingClientRect().top - top } : null;
+  }
+
+  function comeBack(opened, held) {
+    (opened || []).slice().sort(function (a, b) { return a.length - b.length; }).forEach(function (c) {
+      var row = reveal(c);
+      if (row) toggle(row.parentElement, true);
+    });
+    if (!held) return;
+    var row = reveal(held.chain);
+    if (!row) return;
+    if (held.pick) selectRow(row);
+    el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - held.offset;
+  }
+
   this.render = function () {
+    var q = self.query();
+    var cleared = !q && lastQuery;
+    if (q && !lastQuery) openBefore = self.hasData ? chainsOpen() : null;
+    var held = cleared ? placeHeld() : null;
+    lastQuery = q;
+
     el.innerHTML = '';
     el.classList.remove('stale');
     selected = null;
     pathBox.textContent = '';
+    paintRowCopy(null);
     if (!self.hasData) {
       el.innerHTML = emptyHTML;
       matchCount.textContent = '';
       return;
     }
-    var q = self.query();
     hits = []; hitIdx = -1;
     stepNav.hidden = true;
     if (q && !stepMode) { renderFiltered(q); return; }
     matchCount.textContent = '';
     var node = makeNode(adapter.rootEntry(root), q, []);
     el.appendChild(node);
-    autoExpand(node, autoDepth);
+    /* back from a search: exactly the branches that were open before it,
+       not the default depth, so one the reader had closed stays closed */
+    if (cleared && openBefore) comeBack(openBefore, held);
+    else { autoExpand(node, autoDepth); if (cleared) comeBack(null, held); }
+    if (cleared) openBefore = null;
     if (q) {
       collectHits(q);
       stepNav.hidden = !hits.length;
@@ -898,20 +1220,6 @@ function Tree(opts) {
     row.appendChild(caret);
 
     adapter.decorate(row, entry, q, { highlightInto: highlightInto, STR_TRUNC: STR_TRUNC });
-
-    var actions = document.createElement('span');
-    actions.className = 'row-actions';
-    adapter.actions(entry).forEach(function (a) {
-      var b = document.createElement('button');
-      b.textContent = a.label;
-      b.title = a.title;
-      b.addEventListener('click', function (e) {
-        e.stopPropagation();
-        copyText(a.get(), a.toastLabel || a.label);
-      });
-      actions.appendChild(b);
-    });
-    row.appendChild(actions);
 
     node.appendChild(row);
     return node;
@@ -943,15 +1251,130 @@ function Tree(opts) {
     node.dataset.loaded = '1';
   }
 
-  function toggle(node, force) {
-    var row = node.querySelector(':scope > .row');
-    var entry = info.get(row);
-    if (!entry || adapter.childCount(entry) === 0) return;
+  /* ---------- opening and closing branches ----------
+     Every branch the reader opens or closes, one or many at once, goes
+     through change(): Expand all, Collapse all, a click, the arrow keys,
+     Alt/Option-click and the row menu alike. Only the outermost blocks that
+     change move; whatever changes inside them goes with them. Drawing the
+     tree for a document, a search or a match opens branches with toggle()
+     unanimated: the arriving tree unveils as one (see unveil). */
+  function change(nodes, open, animate) {
+    var moving = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var entry = info.get(node.querySelector(':scope > .row'));
+      if (!entry || adapter.childCount(entry) === 0) continue;
+      if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
+      var box = node.querySelector(':scope > .children');
+      /* a fold still running is overtaken by whatever comes next */
+      if (box && box._fold) {
+        box._fold.cancel(); box._fold = null;
+        box.classList.remove('drawing', 'retracting');
+        /* a close cut short still finishes its work, inner branches too */
+        var close = box._close;
+        box._close = null;
+        if (close) close();
+      }
+      if (node.classList.contains('open') !== open) moving.push(node);
+    }
+    if (!moving.length) return;
+    var inSet = new Set(moving);
+    var outer = moving.filter(function (n) {
+      for (var p = n.parentElement; p && p !== el; p = p.parentElement) if (inSet.has(p)) return false;
+      return true;
+    });
+    if (open) {
+      moving.forEach(function (n) { n.classList.add('open'); });
+      if (animate) outer.forEach(function (n) { slide(n.querySelector(':scope > .children'), true); });
+      return;
+    }
+    outer.forEach(function (n) {
+      /* the branches inside close with it, once it has gone */
+      var inner = moving.filter(function (m) { return m !== n && n.contains(m); });
+      function shut() {
+        n.classList.remove('open');
+        inner.forEach(function (m) { m.classList.remove('open'); });
+      }
+      if (!animate || !slide(n.querySelector(':scope > .children'), false, shut)) shut();
+    });
+  }
+
+  function toggle(node, force, animate) {
     var open = force !== undefined ? force : !node.classList.contains('open');
-    if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
-    node.classList.toggle('open', open);
+    change([node], open, animate);
   }
   this.toggle = toggle;
+
+  /* A block slides down from under its row as it opens, its guide line
+     growing with it, and back up as it closes; the same time and curve both
+     ways. A block too tall to slide smoothly is unveiled or veiled with a
+     clip instead, which costs no layout. Nothing moves for a reader who asks
+     for less motion. Returns whether it moves, and calls `done` once it has. */
+  var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
+  var TALL = 1600;
+  function slide(box, opening, done) {
+    if (!box || !box.animate || (still && still.matches)) return false;
+    var h = box.getBoundingClientRect().height;
+    if (!h) return false;
+    var ms = Math.round(Math.min(opening ? 300 : 260, 150 + Math.min(h, TALL) * 0.1));
+    var frames;
+    if (h > TALL || box.childElementCount > 150) {
+      var hid = { clipPath: 'inset(0 0 100% 0)', opacity: 0.3 }, all = { clipPath: 'inset(0 0 0 0)', opacity: 1 };
+      frames = opening ? [hid, all] : [all, hid];
+    } else {
+      var shut = { height: '0px', opacity: 0.2, overflow: 'hidden' };
+      var full = { height: h + 'px', opacity: 1, overflow: 'hidden' };
+      frames = opening ? [shut, full] : [full, shut];
+    }
+    var anim = box.animate(frames, { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
+    box._fold = anim;
+    box._close = opening ? null : done;
+    box.style.setProperty('--draw-ms', ms + 'ms');
+    box.classList.remove('drawing', 'retracting');
+    void box.offsetWidth;
+    box.classList.add(opening ? 'drawing' : 'retracting');
+    /* finished once, by the animation or, where a hidden tab holds it
+       still, by the clock */
+    var ended = false;
+    function finish() {
+      if (ended || box._fold !== anim) return;
+      ended = true;
+      box._fold = null;
+      box._close = null;
+      box.classList.remove('drawing', 'retracting');
+      if (done) done();
+    }
+    anim.onfinish = finish;
+    setTimeout(finish, ms + 120);
+    return true;
+  }
+
+  /* every branch in and under `nodes`, rendered as it goes, to the row
+     budget Expand all has always kept */
+  function branchesUnder(nodes) {
+    var out = [], budget = ROW_BUDGET;
+    (function walk(list) {
+      for (var i = 0; i < list.length && budget > 0; i++) {
+        var n = list[i];
+        var entry = info.get(n.querySelector(':scope > .row'));
+        if (!entry || adapter.childCount(entry) === 0) continue;
+        budget--;
+        out.push(n);
+        if (!n.dataset.loaded) renderChildren(n, entry, self.query());
+        var box = n.querySelector(':scope > .children');
+        if (box) walk(box.querySelectorAll(':scope > .node'));
+      }
+    })(nodes);
+    if (budget <= 0) showToast('Opened the first ' + fmtNum(ROW_BUDGET) + ' rows');
+    return out;
+  }
+  function openAll(node) { change(branchesUnder([node]), true, true); }
+  function closeInside(node) { change(Array.prototype.slice.call(node.querySelectorAll('.node.open')), false, true); }
+  function closeAll(node) { change([node].concat(Array.prototype.slice.call(node.querySelectorAll('.node.open'))), false, true); }
+  function isBranch(node) {
+    var e = info.get(node.querySelector(':scope > .row'));
+    return !!e && adapter.childCount(e) > 0;
+  }
 
   function autoExpand(node, levels) {
     if (levels <= 0) return;
@@ -1144,6 +1567,14 @@ function Tree(opts) {
       sep.className = 'menu-sep';
       ctxMenu.appendChild(sep);
     }
+    var node = row.parentElement;
+    if (isBranch(node)) {
+      item('Expand everything inside', function () { openAll(node); });
+      item('Collapse everything inside', function () { toggle(node, true, true); closeInside(node); });
+      var sep2 = document.createElement('div');
+      sep2.className = 'menu-sep';
+      ctxMenu.appendChild(sep2);
+    }
     adapter.actions(entry).forEach(function (a) {
       item(a.title, function () { copyText(a.get(), a.toastLabel || a.label); });
     });
@@ -1162,27 +1593,53 @@ function Tree(opts) {
   el.addEventListener('scroll', function () { closeAllMenus(); }, { passive: true });
 
   /* interaction */
+  var rowCopy = $('rowCopy');
   function selectRow(row) {
     if (selected) selected.classList.remove('selected');
     selected = row;
     row.classList.add('selected');
     var entry = info.get(row);
     pathBox.textContent = entry ? adapter.path(entry) : '';
+    paintRowCopy(entry);
   }
+
+  /* the path is the status bar's own; every other copy a row offers sits
+     beside it as a small button */
+  function paintRowCopy(entry) {
+    if (!rowCopy) return;
+    rowCopy.innerHTML = '';
+    if (!entry) return;
+    adapter.actions(entry).slice(1).forEach(function (a) {
+      var b = document.createElement('button');
+      var what = a.toastLabel || a.label;
+      b.textContent = 'Copy ' + (what === 'Value' ? 'value' : what);
+      b.title = a.title;
+      b.addEventListener('click', function () { copyText(a.get(), what); });
+      rowCopy.appendChild(b);
+    });
+  }
+
 
   el.addEventListener('click', function (e) {
     var row = e.target.closest('.row');
     if (!row || !el.contains(row) || e.target.closest('button')) return;
+    var node = row.parentElement;
+    /* Alt/Option-click takes the whole branch: open everything inside, or
+       close it with everything inside */
+    if (e.altKey && isBranch(node)) {
+      if (node.classList.contains('open')) closeAll(node); else openAll(node);
+    } else toggle(node, undefined, true);
     selectRow(row);
-    toggle(row.parentElement);
   });
 
   el.addEventListener('keydown', function (e) {
     var row = e.target.closest('.row');
     if (!row) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); toggle(row.parentElement, true); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); toggle(row.parentElement, false); }
+    else if (e.key === 'ArrowRight' && e.altKey) { e.preventDefault(); openAll(row.parentElement); }
+    else if (e.key === 'ArrowLeft' && e.altKey) { e.preventDefault(); closeAll(row.parentElement); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); toggle(row.parentElement, true, true); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); toggle(row.parentElement, false, true); }
     else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       var rows = Array.prototype.slice.call(el.querySelectorAll('.row'));
@@ -1197,24 +1654,15 @@ function Tree(opts) {
   });
 
   $('btnExpand').addEventListener('click', function () {
-    var budget = ROW_BUDGET;
-    (function walk(container) {
-      var nodes = container.querySelectorAll(':scope > .node');
-      for (var i = 0; i < nodes.length; i++) {
-        if (budget-- <= 0) return;
-        toggle(nodes[i], true);
-        var box = nodes[i].querySelector(':scope > .children');
-        if (box) walk(box);
-      }
-    })(el);
-    if (budget <= 0) showToast('Expanded the first ' + fmtNum(ROW_BUDGET) + ' rows');
+    change(branchesUnder(el.querySelectorAll(':scope > .node')), true, true);
   });
 
+  /* everything closes but the top, which stays open to show what it holds */
   $('btnCollapse').addEventListener('click', function () {
-    var open = el.querySelectorAll('.node.open');
-    for (var i = 0; i < open.length; i++) open[i].classList.remove('open');
     var first = el.querySelector(':scope > .node');
-    if (first) toggle(first, true);
+    if (!first) return;
+    toggle(first, true, true);
+    closeInside(first);
   });
 
   /* wrap toggle */
@@ -1268,10 +1716,22 @@ function init(config) {
   /* a tool's own quieter commands (LINT_CONFIG.more) come first; closing
      the document is the chip's job, not an item here */
   var lc = global.LINT_CONFIG || {};
+  /* every way out of the document, in the same two places in every tool;
+     Copy and Download are everyone's, so Export exists in each */
+  var exportItems = lc.export || [];
+  document.querySelector('.toolbar .group.tool-actions').insertAdjacentHTML('beforeend',
+    toolMenuHTML('menuConvert', 'Convert to', lc.convert || [], true) +
+    toolMenuHTML('menuExport', 'Export', exportItems.concat(exportItems.length ? [{ sep: true }] : [], [
+      { id: 'btnCopy', label: 'Copy ' + config.label, title: 'Copy the editor contents' },
+      { id: 'btnDownload', label: 'Download', key: 'mod+s', title: 'Save the editor contents as a file' }
+    ]), true));
   var refreshOverflow = buildOverflowMenu(slot, (lc.more || []).concat([
-    { id: 'btnCopy', label: 'Copy ' + config.label, title: 'Copy the editor contents' },
     { id: 'btnSample', label: 'Load a sample', title: 'Replace the editor contents with a sample document' }
   ]));
+  wireToolMenus(function () { return $('input').value; });
+  /* the first screen says where the shortcuts are */
+  var promptActions = document.querySelector('#emptyPrompt .empty-actions');
+  if (promptActions) promptActions.insertAdjacentHTML('afterend', SHORTCUTS_HINT);
 
   /* the document's text follows the reader's text size */
   textZoom();
@@ -1369,11 +1829,12 @@ function init(config) {
       /* a tool's stats come as one "a · b" string; each part becomes its
          own item so the status bar can space them */
       var st = String(config.stats(res.value) || '').split(' · ');
-      setStatus('ok', ['Valid', fmtBytes(size)].concat(st.filter(Boolean)));
+      /* okLabel: a tool whose documents are never simply valid names it, or leaves it out with null */
+      setStatus('ok', [config.okLabel === undefined ? 'Valid' : config.okLabel, fmtBytes(size)].concat(st).filter(Boolean));
       config.onParsed && config.onParsed(res.value, true);
     } else {
       errorPos = res.pos != null ? res.pos : null;
-      editor.setErrorLine(res.line || null);
+      editor.setErrorLine(res.line || null, res.message);
       errorMsg.textContent = res.message;
       errorLoc.textContent = res.line ? 'line ' + res.line + ':' + (res.col || 1) : '';
       errorBar.classList.add('show');
@@ -1382,6 +1843,14 @@ function init(config) {
       config.onParsed && config.onParsed(null, false);
     }
   }
+
+  /* a paste that brings most of the text is a new document arriving */
+  editor.input.addEventListener('paste', function (e) {
+    var pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    var inp = editor.input;
+    var after = inp.value.length - (inp.selectionEnd - inp.selectionStart) + pasted.length;
+    if (pasted.length && pasted.length >= after * 0.5) tree.arrive();
+  });
 
   errorBar.addEventListener('click', function () {
     if (errorPos !== null) editor.jumpTo(errorPos);
@@ -1397,6 +1866,16 @@ function init(config) {
     var v = editor.getValue();
     if (v) copyText(v, config.label);
   });
+  /* the open file's own name when there is one; pasted text and samples
+     are named after the tool (pasted.json, sample.yaml) */
+  on('btnDownload', function () {
+    var v = editor.getValue();
+    if (!v) return;
+    var ext = lc.ext || config.id;
+    var name = docName && /\.[A-Za-z0-9]{1,12}$/.test(docName) ? docName
+      : (/^Sample/.test(docName || '') ? 'sample' : 'pasted') + '.' + ext;
+    download(v, name);
+  });
 
   /* Closing the document: the chip's × or Alt+W. Back to the empty prompt,
      with the search cleared so the next document starts fresh. */
@@ -1407,6 +1886,7 @@ function init(config) {
   }
 
   on('btnSample', function () {
+    tree.arrive();
     docName = 'Sample ' + config.label;
     editor.setValue(config.sample.trim());
   });
@@ -1438,12 +1918,22 @@ function init(config) {
       showToast('That file is over 50 MB — too large to open here');
       return;
     }
-    var reader = new FileReader();
-    reader.onload = function () {
+    var opened = function (text) {
       docName = file.name;
-      editor.setValue(String(reader.result));
+      tree.arrive();
+      editor.setValue(String(text));
       showToast('Opened ' + file.name + ' (' + fmtBytes(file.size) + ')');
     };
+    /* a tool whose files can be binary (a DER certificate) turns them into
+       the text it edits itself */
+    if (config.fileToText) {
+      config.fileToText(file).then(opened, function (err) {
+        showToast((err && err.message) || 'Could not read that file');
+      });
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () { opened(reader.result); };
     reader.onerror = function () { showToast('Could not read that file'); };
     reader.readAsText(file);
   }
@@ -1524,7 +2014,14 @@ function init(config) {
      by naming it in its config and nothing here needs to change. The same
      key goes into the button's tooltip and the shortcuts panel. */
   var keyed = Array.prototype.slice.call(document.querySelectorAll('.toolbar button[data-key]'));
-  keyed.forEach(function (b) { b.title += ' (' + keyText(b.dataset.key) + ')'; });
+  keyed.forEach(function (b) {
+    b.title += ' (' + keyText(b.dataset.key) + ')';
+    /* inside a menu the key is also shown, where the eye already is */
+    if (b.classList.contains('menu-item')) {
+      b.appendChild(Object.assign(document.createElement('span'),
+        { className: 'menu-key', textContent: keyText(b.dataset.key) }));
+    }
+  });
 
   /* every declared toolbar action except Open, which General lists; Format
      keeps Ctrl/⌘+Enter as a second key */
@@ -1542,6 +2039,8 @@ function init(config) {
     { keys: ['mod+shift+['], label: 'Collapse all' },
     { keys: ['enter', 'f3'], label: 'Next match' },
     { keys: ['shift+enter', 'shift+f3'], label: 'Previous match' },
+    { keys: ['alt+right'], label: 'Open a branch and everything inside (or ' + keyText('alt') + '-click)' },
+    { keys: ['alt+left'], label: 'Close a branch and everything inside' },
     { keys: ['shift+alt+c'], label: 'Copy the path of the selected row' }
   ]) }]);
 
@@ -1773,6 +2272,50 @@ function openConverted(text, label, from, dest) {
   });
 }
 
+/* The same document, opened in another tool now: for a file that belongs
+   in the other one (JSON Lines that are a log, or a log that is data).
+   It travels as a converted document does, with its own name. */
+function openIn(text, name, to) {
+  var dest = null;
+  for (var i = 0; i < SUITE.length; i++) if (SUITE[i].id === to) dest = SUITE[i];
+  if (!dest) return;
+  var w = window.open('', '_blank');
+  if (w) try { w.opener = null; } catch (e) {}
+  parkHandoff(dest.id, new File([text], name, { type: 'text/plain' }), function () {
+    if (w) w.location.replace(dest.host + '/');
+    else location.href = dest.host + '/';
+  });
+}
+
+/* ---------- JSON Lines: a log, or data? ----------
+   One JSON value per line is two different things in practice: a structured
+   log (pino, zap, structlog, Docker's json-file) or data (a fine-tuning set,
+   an export, a batch of records). The first 30 lines decide: 'log' when most
+   records carry a level, or a time and a message; 'data' otherwise; null
+   when the text is not JSON Lines at all. The landing page and the extension
+   keep a copy of this rule, so a file lands in the same tool whichever way
+   it arrives. */
+var LOG_LEVEL = ['level', 'severity', 'lvl', 'levelname', 'log.level', '@l', 'loglevel'];
+var LOG_TIME = ['time', 'timestamp', 'ts', '@timestamp', '@t', 'date', 'datetime', 'asctime'];
+var LOG_MSG = ['msg', 'message', '@m', '@mt', 'event', 'log'];
+
+function jsonlKind(text) {
+  var lines = String(text).split('\n'), seen = 0, logs = 0, recs = 0;
+  for (var i = 0; i < lines.length && seen < 30; i++) {
+    var l = lines[i].trim();
+    if (!l) continue;
+    seen++;
+    var v;
+    try { v = JSON.parse(l); } catch (e) { if (seen === 1) return null; continue; }
+    if (!v || typeof v !== 'object') continue;
+    recs++;
+    var has = function (keys) { for (var k = 0; k < keys.length; k++) if (keys[k] in v) return true; return false; };
+    if (has(LOG_LEVEL) || (has(LOG_TIME) && has(LOG_MSG))) logs++;
+  }
+  if (seen < 2 || recs < 2) return null;
+  return logs >= recs * 0.6 ? 'log' : 'data';
+}
+
 /* The empty state every tool opens on: a heading saying what to do, one
    sentence on what happens, optional buttons, and the keys. `extra` is raw
    HTML placed between the sentence and the keys (a tool's own choices). */
@@ -1787,7 +2330,7 @@ function emptyState(o) {
 
 /* The chrome every page shares: the lint.one menu in front of the tool's
    brand, and the theme menu in `slot`. init() calls it for the editor
-   tools; Logs, PDF and Audio build their own frame and call it directly. */
+   tools; LOG, PDF and Audio build their own frame and call it directly. */
 function mountChrome(slot, activeId) {
   buildSuiteMark(activeId);
   buildThemeMenu(slot);
@@ -1802,14 +2345,21 @@ global.LintApp = {
   textZoom: textZoom,
   shortcuts: shortcuts,
   showShortcuts: showShortcuts,
+  shortcutsHint: SHORTCUTS_HINT,
   setDocument: setDocument,
   keyText: keyText,
   copyAndOffer: copyAndOffer,
+  openIn: openIn,
+  jsonlKind: jsonlKind,
   takeHandoff: takeHandoff,
   kbd: kbd,
   emptyState: emptyState,
   esc: esc,
   copy: copyText,
+  download: download,
+  wireToolMenus: wireToolMenus,
+  toolMenuHTML: toolMenuHTML,
+  when: when,
   toast: showToast,
   fmtBytes: fmtBytes,
   fmtNum: fmtNum,

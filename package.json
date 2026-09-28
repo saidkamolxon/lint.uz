@@ -23,7 +23,11 @@
     "formatter",
     "pdf",
     "log",
-    "sqlite"
+    "sqlite",
+    "parquet",
+    "dotenv",
+    "har",
+    "x509"
   ],
   "author": "saidkamolxon",
   "license": "MIT"

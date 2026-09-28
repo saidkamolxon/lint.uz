@@ -57,14 +57,14 @@ lint.one in Search Console.
 **Name:** lint.one
 
 **Summary** (132 characters max):
-Open JSON, XML, YAML, CSV, logs, PDFs, SQLite and audio from any page in lint.one. Nothing you open leaves your browser.
+Open JSON, XML, YAML, CSV, logs, PDFs, SQLite, Parquet and audio from any page in lint.one. Nothing you open leaves your browser.
 
 **Description:**
 
 > Right-click a selection, a link or a raw data page and open it in the
 > lint.one viewer that reads it: a JSON tree with errors pinned to the line,
 > XML with XPath, YAML validation, a sortable CSV table, a log reader for
-> millions of lines, PDFs, SQLite databases and audio with a live spectrum.
+> millions of lines, PDFs, SQLite databases, Parquet files and audio with a live spectrum.
 >
 > - Right-click → Open in lint.one, on a selection, a link or a file page
 > - The toolbar button: open this page, paste anything, or pick a tool

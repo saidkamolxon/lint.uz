@@ -118,8 +118,9 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--fs-small); font-weight: 500; color: var(--ink);
 }
+/* 24px: the smallest a pointer target may be (WCAG 2.2, 2.5.8) */
 .doc-close {
-  width: 22px; height: 22px; padding: 0;
+  width: 24px; height: 24px; padding: 0;
   display: grid; place-items: center; flex: none;
   color: var(--muted); border-radius: var(--radius-sm);
 }
@@ -157,6 +158,18 @@ button[aria-pressed="true"] {
 }
 
 .group { display: flex; align-items: center; gap: 2px; }
+
+/* Convert to ▾ and Export ▾: ghost buttons like the actions beside them,
+   with a caret saying a choice follows */
+.menu-btn { display: inline-flex; align-items: center; gap: 3px; padding-right: 6px; }
+.menu-btn svg {
+  width: 14px; height: 14px; flex: none; color: var(--muted);
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--t-fast);
+}
+.menu-btn[aria-expanded="true"] { background: var(--row-hover); }
+.menu-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .menu-btn svg { transition: none; } }
 
 .sep { width: var(--hairline); height: 18px; background: var(--line); margin: 0 var(--s2); flex: none; }
 .spacer { flex: 1 1 auto; min-width: var(--s2); }
@@ -218,10 +231,15 @@ kbd {
 .dot-log   { background: #0369A1; --tile-glyph: url("/shared/glyphs/log.svg"); }
 .dot-audio { background: #C026D3; --tile-glyph: url("/shared/glyphs/audio.svg"); }
 .dot-sqlite { background: #7C3AED; --tile-glyph: url("/shared/glyphs/sqlite.svg"); }
+/* saffron is the one light hue: its glyph is ink */
+.dot-parquet { background: #F7CE46; --tile-glyph: url("/shared/glyphs/parquet.svg"); --tile-ink: #1A1D23; }
+.dot-env   { background: #A32972; --tile-glyph: url("/shared/glyphs/env.svg"); }
+.dot-har   { background: #475569; --tile-glyph: url("/shared/glyphs/har.svg"); }
+.dot-cert  { background: #4ADE80; --tile-glyph: url("/shared/glyphs/cert.svg"); --tile-ink: #1A1D23; }
 .tool-tile { width: 16px; height: 16px; border-radius: var(--radius-sm); flex: none; }
 .tool-tile::before {
   content: ""; display: block; width: 100%; height: 100%;
-  background: #FFFFFF;
+  background: var(--tile-ink, #FFFFFF);
   -webkit-mask: var(--tile-glyph) center / 100% no-repeat;
   mask: var(--tile-glyph) center / 100% no-repeat;
 }
@@ -282,12 +300,44 @@ kbd {
 .gutter-inner { will-change: transform; }
 /* one number per line of text, so its height follows the text's size */
 .gutter .ln { display: block; height: calc(var(--code-size, var(--fs-base)) * 1.6); }
+/* a number with a message on it can be pointed at or tapped */
+.gutter .ln[data-tip] { cursor: help; }
 /* the current line is marked by its number alone; an error stays a filled
    block, because an error should be loud */
 .gutter .ln.cur {
   color: var(--gutter-cur);
   font-weight: 600;
 }
+.gutter .ln.warn {
+  color: var(--warn);
+  font-weight: 700;
+  box-shadow: inset -3px 0 0 var(--warn);
+  margin-right: calc(var(--s2) * -1);
+  padding-right: var(--s2);
+}
+/* an icon button's name, shown at once (see app.js, quick tooltips) */
+.quick-tip {
+  position: fixed; z-index: 70; max-width: min(40ch, 80vw);
+  padding: 3px var(--s2);
+  background: var(--ink); color: var(--surface);
+  border-radius: var(--radius-sm);
+  font: 500 var(--fs-small)/1.4 var(--ui);
+  pointer-events: none;
+}
+.quick-tip[hidden] { display: none; }
+:root[data-contrast="more"] .quick-tip { outline: var(--hairline) solid var(--surface); }
+
+/* a marked line's message, shown beside its number on hover */
+.gutter-tip {
+  position: fixed; z-index: 60; max-width: min(56ch, 70vw);
+  padding: var(--s1) var(--s2);
+  background: var(--raised); color: var(--ink);
+  border: var(--hairline) solid var(--line-strong); border-left: 3px solid var(--warn);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  font: 500 var(--fs-small)/1.45 var(--ui); white-space: pre-line;
+  pointer-events: none;
+}
+.gutter-tip.err { border-left-color: var(--bad); }
 .gutter .ln.err {
   color: var(--hue-ink);
   background: var(--bad);
@@ -315,6 +365,13 @@ kbd {
   pointer-events: none;
   color: var(--ink);
   scrollbar-width: none;
+  /* The textarea over it keeps its scrollbars, which take room it can
+     scroll into; this layer hides its own, so it ended a scrollbar short.
+     At the bottom or the far right the text then sat off the selection
+     and the caret. Room past the end lets it follow the textarea all the
+     way; the extra is never seen, since it only scrolls as far as that. */
+  padding-bottom: calc(var(--ed-pad-y) + 32px);
+  padding-right: calc(var(--ed-pad-x) + 32px);
 }
 #highlight::-webkit-scrollbar { width: 0; height: 0; }
 #input {
@@ -426,7 +483,7 @@ kbd {
 }
 
 /* A heading, one sentence and at most a row of buttons. Built by
-   LintApp.emptyState for the tools without an editor (Logs, PDF, Audio) and
+   LintApp.emptyState for the tools without an editor (LOG, PDF, Audio) and
    for later messages in the tree. It matches the editor tools' prompt below
    in type and in height (measured against it, for a container that starts
    under the toolbar), so moving between tools the first screen does not
@@ -451,12 +508,31 @@ kbd {
 .empty-state .keys { font-size: var(--fs-small); color: var(--faint); margin: 0; }
 
 .children {
-  margin-left: 15px; padding-left: var(--s2);
-  border-left: var(--hairline) solid var(--line);
+  /* under the caret, however large the text */
+  margin-left: calc(15px * var(--code-scale, 1)); padding-left: var(--s2);
+  position: relative;
   display: none;
 }
 .node.open > .children { display: block; }
-.children:hover { border-left-color: color-mix(in srgb, var(--hue) 45%, var(--line)); }
+/* The guide line down a block: one hairline, which grows down as the block
+   opens and back up as it closes. */
+.children::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--hairline); background: var(--line);
+  transform-origin: top;
+  transition: background-color var(--t-mid);
+}
+.children:hover::before { background: color-mix(in srgb, var(--hue) 45%, var(--line)); }
+.children.drawing::before { animation: guide-grow var(--draw-ms, 180ms) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* its own keyframes, not guide-grow reversed: reversing would reverse the
+   curve too, and the line would linger before it went */
+.children.retracting::before { animation: guide-shrink var(--draw-ms, 180ms) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes guide-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes guide-shrink { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .children.drawing::before, .children.retracting::before { animation: none; }
+  .children::before { transition: none; }
+}
 
 .row {
   display: flex; align-items: baseline;
@@ -474,27 +550,29 @@ kbd {
 /* the row menu opens where the pointer is, not under a button */
 .ctx-menu { position: fixed; right: auto; top: 0; left: 0; min-width: 220px; }
 
+/* The caret, the type chip and the counts beside a key grow with the text
+   size (--code-scale), so zooming the tree keeps each row in proportion */
 .caret {
-  flex: none; width: 15px; align-self: center;
+  flex: none; width: calc(15px * var(--code-scale, 1)); align-self: center;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--faint); cursor: pointer;
   transition: transform var(--t-fast);
 }
 .caret::before {
   content: ""; display: block;
-  border-left: 5px solid currentColor;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
+  border-left: calc(5px * var(--code-scale, 1)) solid currentColor;
+  border-top: calc(4px * var(--code-scale, 1)) solid transparent;
+  border-bottom: calc(4px * var(--code-scale, 1)) solid transparent;
 }
 .node.open > .row .caret { transform: rotate(90deg); }
 .caret.leaf { visibility: hidden; cursor: default; }
 
 .ticon {
-  flex: none; width: 17px; height: 15px; border-radius: var(--radius-sm);
+  flex: none; width: calc(17px * var(--code-scale, 1)); height: calc(15px * var(--code-scale, 1)); border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; justify-content: center;
   align-self: center; margin-right: var(--s2);
   /* the one size off the scale: two letters inside a 15px chip */
-  font-family: var(--mono); font-size: calc(var(--fs-micro) - 2px); font-weight: 700;
+  font-family: var(--mono); font-size: calc((var(--fs-micro) - 2px) * var(--code-scale, 1)); font-weight: 700;
   letter-spacing: -0.05em; user-select: none;
 }
 .t-obj  { color: var(--t-key);  background: color-mix(in srgb, var(--t-key) 15%, transparent); }
@@ -527,7 +605,7 @@ kbd {
 
 .badge { color: var(--muted); }
 .badge .cnt {
-  color: var(--faint); font-family: var(--ui); font-size: var(--fs-small);
+  color: var(--faint); font-family: var(--ui); font-size: calc(var(--fs-small) * var(--code-scale, 1));
   margin-left: var(--s2); font-variant-numeric: tabular-nums;
 }
 
@@ -537,32 +615,13 @@ mark {
 }
 
 .more-btn, .trunc-btn {
-  font-family: var(--ui); font-size: var(--fs-small);
+  font-family: var(--ui); font-size: calc(var(--fs-small) * var(--code-scale, 1));
   color: var(--hue); border: none; padding: 1px 6px;
   font-weight: 500;
 }
 .more-btn { margin: 2px 0 2px 20px; }
 .more-btn:hover, .trunc-btn:hover { background: var(--hue-wash); }
 
-.row-actions {
-  display: none; gap: 1px;
-  position: absolute; top: 0; right: 2px;
-  background: inherit; border-radius: var(--radius-sm);
-  padding: 0 2px 0 var(--s3);
-}
-.row:hover .row-actions, .row.selected .row-actions,
-.row:focus-visible .row-actions { display: inline-flex; }
-.row-actions::before {
-  content: ""; position: absolute; left: -18px; top: 0; bottom: 0; width: 18px;
-  background: linear-gradient(to right, transparent, var(--raised));
-  pointer-events: none; opacity: 0;
-}
-.row-actions button {
-  border: none; padding: 1px 6px;
-  font-family: var(--ui); font-size: var(--fs-micro); font-weight: 500;
-  color: var(--muted); border-radius: var(--radius-sm);
-}
-.row-actions button:hover { color: var(--hue); background: var(--hue-wash); }
 
 .notice {
   color: var(--muted); font-family: var(--ui);
@@ -574,8 +633,10 @@ mark {
 #tree.wrap .v { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
 #tree.wrap .k, #tree.wrap .colon, #tree.wrap .badge { flex: 0 0 auto; }
 #tree.wrap .k { max-width: 100%; overflow-wrap: anywhere; }
-#tree.wrap .caret { align-self: flex-start; margin-top: 4px; }
-#tree.wrap .ticon { align-self: flex-start; margin-top: 2px; }
+/* a wrapped row keeps its caret and chip in the middle of its first line,
+   at any text size: half of what the line has to spare above them */
+#tree.wrap .caret { align-self: flex-start; margin-top: calc((var(--code-size, var(--fs-base)) * 1.55 - 8px * var(--code-scale, 1)) / 2); }
+#tree.wrap .ticon { align-self: flex-start; margin-top: calc((var(--code-size, var(--fs-base)) * 1.55 - 15px * var(--code-scale, 1)) / 2); }
 
 /* ==========================================================================
    Status bar
@@ -614,6 +675,15 @@ mark {
 #pathBox:not(:empty)::before, #pathBox:not(:empty)::after { content: "\200E"; }
 #pathBox:hover { color: var(--hue); }
 #pathBox:empty { cursor: default; }
+/* the selected row's other copies, after its path */
+.row-copy { display: inline-flex; gap: 2px; flex: none; }
+.row-copy:empty { display: none; }
+.row-copy button {
+  padding: 1px var(--s2); min-height: 24px;
+  font-size: var(--fs-small); font-weight: 500; color: var(--muted);
+  border: var(--hairline) solid var(--line);
+}
+.row-copy button:hover { color: var(--hue); border-color: color-mix(in srgb, var(--hue) 40%, var(--line)); }
 
 /* ==========================================================================
    Toast
@@ -699,6 +769,16 @@ body.is-empty .tool-actions { visibility: hidden; }
   gap: var(--s2); margin-top: var(--s5);
 }
 .empty-actions button { pointer-events: auto; padding: 7px var(--s4); }
+
+/* under the first screen's buttons: where the shortcuts are (app.js) */
+.shortcuts-hint { margin: var(--s4) 0 0; font-size: var(--fs-small); color: var(--faint); }
+.shortcuts-hint button {
+  pointer-events: auto; padding: 3px var(--s2);
+  font-size: inherit; font-weight: 400; color: var(--muted);
+}
+.shortcuts-hint button:hover { color: var(--ink); }
+/* a phone has no keys to press */
+@media (hover: none) { .shortcuts-hint { display: none; } }
 
 /* arriving from another viewer: what is waiting, and the key that pastes it */
 .empty-note {

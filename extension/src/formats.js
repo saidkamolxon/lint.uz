@@ -9,13 +9,17 @@
   /* the suite's names and hues, as shared/app.js and the README have them */
   var TOOLS = [
     { id: 'json',   name: 'JSON',   hue: '#4F46E5', ext: 'json' },
-    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
     { id: 'yaml',   name: 'YAML',   hue: '#B45309', ext: 'yaml' },
     { id: 'csv',    name: 'CSV',    hue: '#4D7C0F', ext: 'csv' },
+    { id: 'env', name: 'ENV', hue: '#A32972', ext: 'env' },
+    { id: 'log',    name: 'LOG',    hue: '#0369A1', ext: 'log' },
+    { id: 'har',    name: 'HAR',    hue: '#475569', ext: 'har' },
+    { id: 'xml',    name: 'XML',    hue: '#0F766E', ext: 'xml' },
+    { id: 'cert',   name: 'CERT',   hue: '#4ADE80', ext: 'pem' },
+    { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' },
     { id: 'pdf',    name: 'PDF',    hue: '#BE123C', ext: 'pdf' },
-    { id: 'log',    name: 'Logs',   hue: '#0369A1', ext: 'log' },
-    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' },
-    { id: 'sqlite', name: 'SQLite', hue: '#7C3AED', ext: 'db' }
+    { id: 'parquet', name: 'Parquet', hue: '#F7CE46', ext: 'parquet' },
+    { id: 'audio',  name: 'Audio',  hue: '#C026D3', ext: 'mp3' }
   ];
   var BY_ID = {};
   TOOLS.forEach(function (t) { BY_ID[t.id] = t; });
@@ -23,7 +27,9 @@
   /* site/public/index.html's BY_EXT */
   var BY_EXT = {
     json: 'json', geojson: 'json', jsonc: 'json',
-    jsonl: 'log', ndjson: 'log',
+    har: 'har',
+    pem: 'cert', crt: 'cert', cer: 'cert', der: 'cert', p7b: 'cert', p7c: 'cert', csr: 'cert',
+    jsonl: 'log', ndjson: 'log',   // until settle() reads what is in them
     xml: 'xml', svg: 'xml', xsd: 'xml', xsl: 'xml', xslt: 'xml', plist: 'xml',
     rss: 'xml', atom: 'xml', kml: 'xml', gpx: 'xml',
     yaml: 'yaml', yml: 'yaml',
@@ -34,8 +40,51 @@
     opus: 'audio', m4a: 'audio', aac: 'audio', weba: 'audio',
     aif: 'audio', aiff: 'audio',
     db: 'sqlite', sqlite: 'sqlite', sqlite3: 'sqlite', db3: 'sqlite', s3db: 'sqlite',
-    sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite'
+    sl3: 'sqlite', gpkg: 'sqlite', mbtiles: 'sqlite',
+    parquet: 'parquet', parq: 'parquet', pqt: 'parquet',
+    env: 'env'
   };
+
+  /* JSON Lines: a log, or data? The rule shared/app.js keeps as jsonlKind:
+     'log' when most of the first 30 records carry a level, or a time and a
+     message; 'data' otherwise; null when this is not JSON Lines. */
+  var LOG_LEVEL = ['level', 'severity', 'lvl', 'levelname', 'log.level', '@l', 'loglevel'];
+  var LOG_TIME = ['time', 'timestamp', 'ts', '@timestamp', '@t', 'date', 'datetime', 'asctime'];
+  var LOG_MSG = ['msg', 'message', '@m', '@mt', 'event', 'log'];
+  function jsonlKind(text) {
+    var lines = String(text).split('\n'), seen = 0, logs = 0, recs = 0;
+    for (var i = 0; i < lines.length && seen < 30; i++) {
+      var l = lines[i].trim();
+      if (!l) continue;
+      seen++;
+      var v;
+      try { v = JSON.parse(l); } catch (e) { if (seen === 1) return null; continue; }
+      if (!v || typeof v !== 'object') continue;
+      recs++;
+      var has = function (keys) { for (var k = 0; k < keys.length; k++) if (keys[k] in v) return true; return false; };
+      if (has(LOG_LEVEL) || (has(LOG_TIME) && has(LOG_MSG))) logs++;
+    }
+    if (seen < 2 || recs < 2) return null;
+    return logs >= recs * 0.6 ? 'log' : 'data';
+  }
+  /* data goes to JSON only while the JSON viewer can hold it */
+  var JSON_TOOL_LIMIT = 20 * 1048576;
+
+  /* A choice made by name or type, looked at again with the file's start:
+     JSON Lines that are data go to JSON, a log to LOG */
+  /* a HAR is JSON that opens {"log": {"version" | "creator" | …: the
+     browser's own export, which HAR reads better than a tree does */
+  var HAR_HEAD = /^\s*\{\s*"log"\s*:\s*\{\s*"(version|creator|browser|pages|entries|comment)"/;
+
+  function settle(tool, head, size) {
+    if ((tool !== 'log' && tool !== 'json') || head == null) return tool;
+    if (HAR_HEAD.test(String(head).replace(/^\uFEFF/, ''))) return 'har';
+    if (/^-----BEGIN [A-Z0-9 ]+-----/m.test(String(head).slice(0, 4096))) return 'cert';
+    var kind = jsonlKind(head);
+    if (kind === 'log') return 'log';
+    if (kind === 'data') return size > JSON_TOOL_LIMIT ? 'log' : 'json';
+    return tool;
+  }
 
   function extOf(name) {
     var m = /\.([a-z0-9]{1,8})$/i.exec(name || '');
@@ -43,6 +92,8 @@
   }
 
   function byName(name) {
+    /* .env, .env.local, .env.production: the name is the format */
+    if (/(^|[\/\\])\.env(\.[\w-]+)?$/i.test(name || '')) return 'env';
     var e = extOf(name);
     return e && Object.prototype.hasOwnProperty.call(BY_EXT, e) ? BY_EXT[e] : null;
   }
@@ -55,6 +106,8 @@
     if (t === 'application/pdf') return 'pdf';
     if (/^audio\//.test(t)) return 'audio';
     if (/sqlite/.test(t)) return 'sqlite';
+    if (/parquet/.test(t)) return 'parquet';
+    if (/x509|pkix-cert|pem-file|pkcs7|pkcs10/.test(t)) return 'cert';
     if (/(^|[\/+])x?-?ndjson$|jsonl|json-seq/.test(t)) return 'log';
     if (/(^|[\/+])json$/.test(t)) return 'json';
     if (/(^|[\/+])x?-?yaml$|\/yml$/.test(t)) return 'yaml';
@@ -85,16 +138,18 @@
 
     /* "[2024-05-01 10:00] GET /" and "[INFO] ..." open with a bracket too */
     if (c === '[' && (TIMESTAMP.test(lines[0]) || LEVEL.test(lines[0]))) return 'log';
+    if (c === '{' && HAR_HEAD.test(s)) return 'har';
     if (c === '{' || c === '[') {
-      /* one object per line is a log to read, not one document to parse */
-      if (lines.length > 1 && lines.every(function (l) {
-        var t = l.trim();
-        if (t.charAt(0) !== '{' || t.charAt(t.length - 1) !== '}') return false;
-        try { JSON.parse(t); return true; } catch (e) { return false; }
-      })) return 'log';
-      return 'json';
+      /* one record per line: a log to read, or data to see as records */
+      return jsonlKind(s) === 'log' ? 'log' : 'json';
     }
     if (c === '<') return 'xml';
+    if (/^-----BEGIN [A-Z0-9 ]+-----/m.test(s)) return 'cert';
+
+    /* KEY=value on every line that is not a comment: a .env file */
+    var assigns = lines.filter(function (l) { return /^\s*(export\s+)?[A-Za-z_][A-Za-z0-9_.-]*=/.test(l); }).length;
+    var comments = lines.filter(function (l) { return /^\s*#/.test(l); }).length;
+    if (assigns >= 2 && assigns + comments === lines.length) return 'env';
 
     var logLike = lines.filter(function (l) { return TIMESTAMP.test(l) || LEVEL.test(l); }).length;
     if (logLike >= Math.max(1, lines.length * 0.5)) return 'log';
@@ -123,6 +178,7 @@
   function sniffHead(head) {
     var h = String(head || '');
     if (h.slice(0, 16) === 'SQLite format 3\u0000') return 'sqlite';
+    if (h.slice(0, 4) === 'PAR1') return 'parquet';
     if (h.slice(0, 5) === '%PDF-') return 'pdf';
     if (/^(ID3|fLaC|OggS|FORM)/.test(h) || /^RIFF....WAVE/.test(h) ||
         /^....ftypM4A/.test(h)) return 'audio';
@@ -166,6 +222,8 @@
     sniffText: sniffText,
     sniffHead: sniffHead,
     pick: pick,
+    settle: settle,
+    jsonlKind: jsonlKind,
     nameFor: nameFor,
     toolFromWord: toolFromWord
   };

@@ -63,8 +63,7 @@
 }
 
 /* The lift sits on the wrapper, never on the canvas: a filter applies to an
-   element's shadow too, so an inverted page would turn its own dark shadow
-   into a bright halo. On a desk as light as the paper, the hairline is what
+   element's shadow too, so a filtered page would tint its own shadow. On a desk as light as the paper, the hairline is what
    gives the sheet its edge; the shadow lifts it. */
 .page-wrap {
   position: relative; flex: none;
@@ -72,18 +71,26 @@
   outline: var(--hairline) solid var(--line);
   line-height: 0;
 }
-.page-wrap canvas {
+.page-wrap > canvas:not(.pic) {
   /* sized only from script: a max-width here clamped the width of a zoomed
      page while its height stayed put, squashing it */
   display: block;
   background: #fff;
 }
-/* the page treatment — chrome is always themed, the sheet is opt-in */
-body[data-page="dim"] .page-wrap canvas { filter: brightness(0.82) contrast(1.04); }
-body[data-page="invert"] .page-wrap canvas { filter: invert(1) hue-rotate(180deg); }
-/* an inverted page is nearly black, so a dark shadow under it reads as dirt —
-   a hairline edge separates it from the backdrop instead */
-body[data-page="invert"] .page-wrap { box-shadow: none; }
+/* The page treatment — chrome is always themed, the sheet is opt-in, and
+   every one is a filter, so switching is instant. Dim lowers the light and
+   warms it a little, as a reading lamp does. Dark turns paper to the dark
+   theme's surface and ink to its text (--dark-page, from darkTone), and the
+   pictures are laid over it as they were (.pic, see addPictures). */
+body[data-page="dim"] .page-wrap > canvas:not(.pic) { filter: sepia(0.16) brightness(0.8) contrast(1.04); }
+body[data-page="dark"] .page-wrap > canvas:not(.pic),
+body[data-page="dark"] .thumb-img > canvas:not(.pic) { filter: var(--dark-page, invert(1) hue-rotate(180deg)); }
+/* a dark page on a dark desk: a hairline edge, not a shadow, sets it apart */
+body[data-page="dark"] .page-wrap { box-shadow: none; }
+/* a picture kept in its own colours, a little dimmer; sized in percent of
+   the page, so it follows a zoom that stretches the canvas */
+.pic { position: absolute; display: none; pointer-events: none; }
+body[data-page="dark"] .pic { display: block; filter: brightness(0.9); }
 
 /* a slot waiting to be filled should not pretend to be a page */
 .page-wrap.pending {
@@ -107,7 +114,7 @@ body[data-page="invert"] .page-wrap { box-shadow: none; }
   pointer-events: none;
   mix-blend-mode: multiply;
 }
-body[data-page="invert"] .hl-box { mix-blend-mode: screen; }
+body[data-page="dark"] .hl-box { mix-blend-mode: screen; }
 .hl-box.current {
   background: color-mix(in srgb, var(--hue) 45%, transparent);
   outline: 1.5px solid var(--hue);
@@ -250,7 +257,7 @@ body.show-links .lnk {
 #pageNum[hidden] { display: none; }
 
 /* ---------- page appearance: the shared .seg, sized for icons ---------- */
-#pageModeSeg button { width: 26px; height: 22px; padding: 0; display: grid; place-items: center; }
+#pageModeSeg button { width: 28px; height: 24px; padding: 0; display: grid; place-items: center; }
 .zoom-pop .sep { margin: 0 var(--s1); }
 
 /* ---------- zoom, floating near the page ---------- */
@@ -263,29 +270,66 @@ body.show-links .lnk {
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  opacity: 0.45;
-  transition: opacity var(--t-mid);
 }
+/* always at full strength: faded, its icons fell below the 3:1 a control
+   needs against what is behind it; the glass is what keeps it light */
 .zoom-pop[hidden] { display: none; }
-.zoom-pop:hover, .zoom-pop:focus-within { opacity: 1; }
 .zoom-fit {
   font-size: var(--fs-small); padding: 4px var(--s2);
   color: var(--muted); border-radius: var(--radius);
 }
 .zoom-fit:hover { color: var(--ink); }
 
-/* ---------- contents rail ---------- */
-#contents {
+/* ---------- the left edge: tabs on their side, and the panel they open ---------- */
+.side-tabs {
+  flex: none; width: 30px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  padding: var(--s2) 0;
+  background: var(--raised);
+  border-right: var(--hairline) solid var(--line);
+}
+.side-tabs[hidden], .side-tabs button[hidden] { display: none; }
+/* read from the bottom up, as a book's spine on the left of a shelf is */
+.side-tabs button {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  padding: var(--s3) 5px;
+  font-size: var(--fs-small); font-weight: 500; letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.side-tabs button:hover { color: var(--ink); }
+.side-tabs button[aria-selected="true"] { color: var(--hue); background: var(--hue-wash); font-weight: 600; }
+
+#side {
   width: 276px; flex: none; overflow: auto;
   border-right: var(--hairline) solid var(--line);
   background: var(--raised);
   padding: 0 0 var(--s4);
   display: none;
 }
-#contents.open { display: block; }
+#side.open { display: block; }
+.side-panel { display: none; }
+#side[data-show="contents"] #contents, #side[data-show="pages"] #thumbs { display: block; }
 @media (max-width: 860px) {
-  #contents { position: absolute; inset: 0 auto 0 0; z-index: 30; box-shadow: var(--shadow); }
+  #side { position: absolute; inset: 0 auto 0 30px; z-index: 30; box-shadow: var(--shadow); }
 }
+
+/* ---------- page thumbnails ---------- */
+.thumb-list { display: flex; flex-direction: column; align-items: center; gap: var(--s2); padding: var(--s3) 0 0; }
+.thumb {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  padding: 6px 6px 4px; border-radius: var(--radius);
+}
+.thumb-img {
+  display: block; line-height: 0; position: relative;
+  background: var(--sunken);
+  outline: var(--hairline) solid var(--line);
+}
+.thumb-img > canvas:not(.pic) { display: block; width: 100%; height: 100%; background: #fff; }
+.thumb-n { font-size: var(--fs-micro); color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.4; }
+.thumb.here { background: var(--hue-wash); }
+.thumb.here .thumb-img { outline: 2px solid var(--hue); }
+.thumb.here .thumb-n { color: var(--hue); font-weight: 600; }
+body[data-page="dim"] .thumb-img > canvas:not(.pic) { filter: sepia(0.16) brightness(0.8) contrast(1.04); }
 @media (max-width: 620px) {
   .find-pop { left: var(--s2); right: var(--s2); top: var(--s2); }
   #findInput { width: auto; flex: 1; min-width: 0; }
@@ -317,6 +361,19 @@ body.show-links .lnk {
 .bm button.here {
   background: var(--hue-wash); color: var(--hue); font-weight: 600;
 }
+/* searching the contents: entries that do not match, and hold nothing that
+   does, step aside; the matched words are marked */
+.bm li.miss { display: none; }
+.bm mark { background: var(--mark); color: var(--mark-ink); border-radius: 2px; }
+.side-search {
+  display: block; width: 100%; box-sizing: border-box; margin-top: var(--s2);
+  font: 400 var(--fs-base) var(--ui); color: var(--ink);
+  background: var(--sunken); border: var(--hairline) solid var(--line); border-radius: var(--radius);
+  padding: 5px var(--s2);
+}
+.side-search:focus { outline: 2px solid var(--hue); outline-offset: -1px; }
+.side-search::placeholder { color: var(--faint); }
+.side-none { padding: var(--s3) var(--s4); font-size: var(--fs-small); color: var(--muted); }
 
 /* ---------- the info drawer ---------- */
 #drawer {
@@ -407,7 +464,7 @@ body.dragover #pages::after {
 /* Increase contrast: the sheet gets a firm edge, the floating zoom stops
    fading, and highlights and links stop being tints */
 :root[data-contrast="more"] .page-wrap { outline-color: var(--line-strong); }
-:root[data-contrast="more"] .zoom-pop { opacity: 1; background: var(--raised); backdrop-filter: none; }
+:root[data-contrast="more"] .zoom-pop { background: var(--raised); backdrop-filter: none; }
 :root[data-contrast="more"] .hl-box { background: color-mix(in srgb, var(--mark) 80%, transparent); outline: 1px solid var(--mark-ink); }
 :root[data-contrast="more"] .hl-box.word { background: color-mix(in srgb, var(--mark) 40%, transparent); outline: none; }
 :root[data-contrast="more"] .hl-box.current { background: color-mix(in srgb, var(--hue) 55%, transparent); outline: 2px solid var(--hue); }
@@ -474,8 +531,6 @@ $('app').innerHTML = `
       </span>
     </a>
     <button id="btnOpen" class="primary" title="Open a PDF, or drop one anywhere">Open</button>
-    <button id="btnContents" class="icon-btn needs-doc" title="Contents" aria-label="Contents"
-            aria-pressed="false" disabled></button>
 
     <span class="spacer"></span>
 
@@ -502,7 +557,17 @@ $('app').innerHTML = `
   <main class="pdf-main">
     <div id="progress"></div>
 
-    <aside id="contents" aria-label="Contents"></aside>
+    <!-- The left edge: the ways around the document, as tabs standing on
+         their side. Either one opens the panel beside it; the open one
+         closes it. Contents shows only when the file carries a contents list. -->
+    <nav class="side-tabs needs-doc" id="sideTabs" role="tablist" aria-label="Side panel" aria-orientation="vertical">
+      <button role="tab" id="tabContents" data-side="contents" aria-selected="false" aria-controls="side" hidden>Contents</button>
+      <button role="tab" id="tabPages" data-side="pages" aria-selected="false" aria-controls="side">Pages</button>
+    </nav>
+    <aside id="side" aria-label="Side panel">
+      <div id="contents" class="side-panel"></div>
+      <div id="thumbs" class="side-panel"></div>
+    </aside>
 
     <div class="page-area">
       <div id="pages"></div>
@@ -557,7 +622,6 @@ const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 
 const ICON = {
-  contents: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
   find:     '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/>',
   info:     '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
   up:       '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -568,10 +632,9 @@ const ICON = {
   /* page appearance — one circle, filled three ways */
   normal:   '<circle cx="12" cy="12" r="8"/>',
   dim:      '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" opacity="0.45" stroke="none"/>',
-  invert:   '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="5.6" fill="currentColor" stroke="none"/>'
+  dark:     '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'
 };
 
-$('btnContents').innerHTML = I(ICON.contents);
 $('btnFind').innerHTML = I(ICON.find);
 $('btnInfo').innerHTML = I(ICON.info);
 $('btnPrev').innerHTML = I(ICON.up);
@@ -587,8 +650,8 @@ $('btnIn').innerHTML = I(ICON.plus);
    to the current state, which read as a verb rather than a state. */
 const PAGE_MODES = [
   { id: 'normal', name: 'Normal', hint: 'The page as the author made it' },
-  { id: 'dim',    name: 'Dim',    hint: 'Softened for low light — nothing recoloured' },
-  { id: 'invert', name: 'Invert', hint: 'Dark page — images are recoloured too' }
+  { id: 'dim',    name: 'Dim',    hint: 'Softer and a little warmer for low light, nothing recoloured' },
+  { id: 'dark',   name: 'Dark',   hint: 'A dark page, with photos and colour pictures kept as they are' }
 ];
 
 let pageMode = 'normal';
@@ -598,6 +661,9 @@ try {
   modeExplicit = saved !== null;
   if (saved) pageMode = saved;
 } catch (e) {}
+/* Invert was the dark mode before Dark; a reader who chose it wants Dark */
+if (pageMode === 'invert') pageMode = 'dark';
+if (!PAGE_MODES.some((m) => m.id === pageMode)) pageMode = 'normal';
 
 const DARK_THEMES = ['slate', 'midnight'];
 function isDarkTheme() {
@@ -605,7 +671,7 @@ function isDarkTheme() {
   if (t) return DARK_THEMES.indexOf(t) !== -1;
   return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
 }
-if (!modeExplicit) pageMode = isDarkTheme() ? 'dim' : 'normal';
+if (!modeExplicit) pageMode = isDarkTheme() ? 'dark' : 'normal';
 
 function applyPageMode(id) {
   pageMode = id;
@@ -621,8 +687,12 @@ $('pageModeSeg').innerHTML = PAGE_MODES.map((m) =>
 ).join('');
 $('pageModeSeg').querySelectorAll('button').forEach((b) => {
   b.addEventListener('click', () => {
+    const was = pageMode;
     applyPageMode(b.dataset.mode);
+    darkTone();
     try { localStorage.setItem('lintuz-pdf-page', b.dataset.mode); } catch (e) {}
+    /* the pages drawn before Dark was chosen get their pictures now */
+    if (pageMode === 'dark' && was !== 'dark') pictureAll();
   });
 });
 applyPageMode(pageMode);
@@ -639,7 +709,8 @@ let firstPage = null;    // every slot is laid out from page 1's size
 const EMPTY = LintApp.emptyState({
   title: 'Open a PDF or drop it here',
   body: 'Pages render in your browser and the file never leaves it.',
-  extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>'
+  extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>' +
+    LintApp.shortcutsHint
 });
 
 function showEmpty() {
@@ -660,7 +731,7 @@ function setBusy(pct) {
 
 function enableControls(on) {
   ['btnOut', 'btnFit', 'btnIn', 'btnInfo', 'btnFind',
-   'btnPrev', 'btnNext', 'btnContents']
+   'btnPrev', 'btnNext']
     .forEach((id) => { const b = $(id); if (b) b.disabled = !on; });
   document.querySelectorAll('.needs-doc').forEach((el) => { el.hidden = !on; });
 }
@@ -717,6 +788,7 @@ async function openFile(file) {
 
 async function renderDocument(file) {
   renderedPages.clear();
+  resetThumbs();
   const host = $('pages');
   host.innerHTML = '';
   host.style.display = 'flex';
@@ -752,14 +824,9 @@ async function renderDocument(file) {
   setStatus('ok', `${LintApp.fmtNum(doc.numPages)} page${doc.numPages === 1 ? '' : 's'}, ${size}`);
   $('pathBox').textContent = file.name;
   buildOutline();
+  if (side === 'pages') buildThumbs();
   await buildInfo(file);
 }
-
-/* Fit the page to the window, but never beyond a comfortable reading width —
-   a page stretched across a wide monitor is both hard to read and expensive:
-   at scale 2.3 with a retina buffer each canvas is ~10 megapixels, which is
-   enough to lock the tab up. */
-const MAX_PAGE_WIDTH = 900;    // css px, about a printed page at 100%
 
 /* Render whatever the viewport covers, plus a screen either side. */
 function renderVisible() {
@@ -813,11 +880,144 @@ function sizePageBox(total) {
   $('pageNum').style.width = (w + 40) + 'px';
 }
 
+/* Fit fills the width the page column has, whatever the screen, up to the
+   zoom's own ceiling. The canvas cost of a big page is held down where it
+   is drawn (renderPage keeps each buffer near 4 megapixels). The width is
+   read with the scrollbar counted in, so a scrollbar appearing as pages
+   grow cannot change the fit and set it rocking. */
 function fitScale(page) {
-  const avail = Math.min($('pages').clientWidth - 64, MAX_PAGE_WIDTH);
+  const avail = $('pages').getBoundingClientRect().width - 80;
   const base = page.getViewport({ scale: 1 });
-  return Math.max(0.3, Math.min(2, avail / base.width));
+  return Math.max(MIN_SCALE, Math.min(MAX_SCALE, avail / base.width));
 }
+
+/* ---------- Dark ----------
+   The page canvas is never changed: Dark is a filter on it, so choosing it,
+   leaving it or changing theme costs nothing but a repaint. The filter turns
+   paper to the theme's surface and ink to the theme's text, read from the
+   theme so Increase contrast gets true black and white.
+   A photo filtered that way is a negative, so each picture is laid over the
+   page as it was, cut from the untouched canvas. pdf.js says where each one
+   sits (recordImages). A picture that is really part of the page is left to
+   go dark with it: one covering most of the page (a scan), or one mostly
+   light and colourless (a diagram, a formula, scanned text), which would
+   otherwise glare as a white box. */
+function darkTone() {
+  const root = document.documentElement, css = getComputedStyle(root);
+  const lum = (v) => {
+    const probe = document.createElement('span');
+    probe.style.color = v;
+    document.body.appendChild(probe);
+    const m = getComputedStyle(probe).color.match(/[\d.]+/g) || [0, 0, 0];
+    probe.remove();
+    return (+m[0] + +m[1] + +m[2]) / 765;
+  };
+  let lo = lum(css.getPropertyValue('--surface').trim() || '#15171C');
+  let hi = lum(css.getPropertyValue('--ink').trim() || '#E6E9F0');
+  /* a light theme's surface is the light end: Dark there takes the dark
+     theme's pair, or true black and white under Increase contrast */
+  if (lo > hi) {
+    const more = root.getAttribute('data-contrast') === 'more';
+    lo = more ? 0 : lum('#15171C');
+    hi = more ? 1 : lum('#E6E9F0');
+  }
+  /* invert, keep the hues, then squeeze black-to-white into lo-to-hi:
+     contrast(c) spans 0.5 ± c/2, and brightness(b) scales that span */
+  const b = hi + lo, c = (hi - lo) / b;
+  document.body.style.setProperty('--dark-page',
+    `invert(1) hue-rotate(180deg) contrast(${c.toFixed(3)}) brightness(${b.toFixed(3)})`);
+}
+
+/* true when a picture should stay as it is, rather than go dark */
+function keepPicture(ctx, x0, y0, x1, y1, W, H) {
+  if ((x1 - x0) * (y1 - y0) > W * H * 0.7) return false;          // a scan
+  const w = Math.max(1, Math.round(x1 - x0)), h = Math.max(1, Math.round(y1 - y0));
+  let data;
+  try { data = ctx.getImageData(Math.round(x0), Math.round(y0), w, h).data; } catch (e) { return true; }
+  const step = Math.max(1, Math.floor(Math.sqrt(w * h / 4000)));
+  let n = 0, light = 0, sat = 0;
+  for (let y = 0; y < h; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i + 1], bl = data[i + 2];
+      light += (r + g + bl) / 765;
+      sat += (Math.max(r, g, bl) - Math.min(r, g, bl)) / 255;
+      n++;
+    }
+  }
+  /* mostly light and near grey: line art or text, part of the page */
+  return !n || !(light / n > 0.6 && sat / n < 0.08);
+}
+
+/* Lay the pictures worth keeping over a drawn page (or thumbnail), once. */
+function addPictures(host, canvas, page) {
+  if (canvas.dataset.pics) return;
+  canvas.dataset.pics = '1';
+  const q = page.imageCoordinates;
+  if (!q || !q.length) return;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  const pct = (v, of) => (v / of * 100).toFixed(3) + '%';
+  for (let i = 0; i + 5 < q.length; i += 6) {
+    const p0 = [q[i] * W, q[i + 1] * H], p1 = [q[i + 2] * W, q[i + 3] * H], p2 = [q[i + 4] * W, q[i + 5] * H];
+    const p3 = [p1[0] + p2[0] - p0[0], p1[1] + p2[1] - p0[1]];
+    const xs = [p0[0], p1[0], p2[0], p3[0]], ys = [p0[1], p1[1], p2[1], p3[1]];
+    /* rounded inwards: rounded out, the cut took a pixel of white paper
+       along its edges, which showed as a bright frame on the dark page */
+    const x0 = Math.max(0, Math.ceil(Math.min(...xs) - 0.01)), x1 = Math.min(W, Math.floor(Math.max(...xs) + 0.01));
+    const y0 = Math.max(0, Math.ceil(Math.min(...ys) - 0.01)), y1 = Math.min(H, Math.floor(Math.max(...ys) + 0.01));
+    const w = x1 - x0, h = y1 - y0;
+    if (w < 2 || h < 2 || !keepPicture(ctx, x0, y0, x1, y1, W, H)) continue;
+    /* Laid in percent, the cut cannot meet the page pixel for pixel, and in
+       the seam the filtered page shows the picture's edge as a negative: a
+       light line. So the cut reaches P pixels past each edge, those filled
+       by stretching the picture's own outermost rows and columns. */
+    const P = 2;
+    const pic = document.createElement('canvas');
+    pic.className = 'pic';
+    pic.width = w + 2 * P; pic.height = h + 2 * P;
+    const g = pic.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(canvas, x0, y0, w, h, P, P, w, h);
+    g.drawImage(canvas, x0, y0, w, 1, P, 0, w, P);                 // top
+    g.drawImage(canvas, x0, y1 - 1, w, 1, P, P + h, w, P);         // bottom
+    g.drawImage(canvas, x0, y0, 1, h, 0, P, P, h);                 // left
+    g.drawImage(canvas, x1 - 1, y0, 1, h, P + w, P, P, h);         // right
+    g.drawImage(canvas, x0, y0, 1, 1, 0, 0, P, P);                 // corners
+    g.drawImage(canvas, x1 - 1, y0, 1, 1, P + w, 0, P, P);
+    g.drawImage(canvas, x0, y1 - 1, 1, 1, 0, P + h, P, P);
+    g.drawImage(canvas, x1 - 1, y1 - 1, 1, 1, P + w, P + h, P, P);
+    pic.style.left = pct(x0 - P, W); pic.style.top = pct(y0 - P, H);
+    pic.style.width = pct(w + 2 * P, W); pic.style.height = pct(h + 2 * P, H);
+    /* a turned picture keeps its own outline, not its bounding box */
+    const axial = [p0, p1, p2, p3].every((p) =>
+      (Math.abs(p[0] - x0) < 1.5 || Math.abs(p[0] - x1) < 1.5) && (Math.abs(p[1] - y0) < 1.5 || Math.abs(p[1] - y1) < 1.5));
+    if (!axial) {
+      pic.style.clipPath = 'polygon(' + [p0, p2, p3, p1].map((p) =>
+        pct(p[0] - x0 + P, w + 2 * P) + ' ' + pct(p[1] - y0 + P, h + 2 * P)).join(',') + ')';
+    }
+    canvas.after(pic);
+  }
+}
+
+/* pages and thumbnails drawn before Dark was chosen */
+async function pictureAll() {
+  if (!doc) return;
+  const d = doc;
+  for (const canvas of document.querySelectorAll('.page-wrap > canvas:not(.pic):not([data-pics]), .thumb-img > canvas:not(.pic):not([data-pics])')) {
+    const n = +(canvas.closest('[data-page]') || {}).dataset?.page;
+    if (!n) continue;
+    const page = await d.getPage(n);
+    if (d !== doc || !canvas.isConnected) return;
+    addPictures(canvas.parentElement, canvas, page);
+  }
+}
+
+/* the theme decides Dark's two colours */
+new MutationObserver(darkTone)
+  .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-contrast'] });
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', darkTone);
+darkTone();
 
 async function renderPage(n) {
   if (renderedPages.has(n)) return;
@@ -841,10 +1041,13 @@ async function renderPage(n) {
     canvas.style.width = Math.round(vp.width) + 'px';
     canvas.style.height = Math.round(vp.height) + 'px';
 
+    canvas.getContext('2d', { alpha: false });
+    /* where the pictures sit is recorded every time, so Dark can keep them */
     await page.render({
-      canvasContext: canvas.getContext('2d', { alpha: false }),
+      canvas,
       viewport: vp,
-      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
+      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+      recordImages: true
     }).promise;
     /* zoomed again while this was drawing — a newer render owns the slot */
     if (at !== scale) return;
@@ -854,6 +1057,7 @@ async function renderPage(n) {
     wrap.style.height = '';
     wrap.innerHTML = '';
     wrap.appendChild(canvas);
+    if (pageMode === 'dark') addPictures(wrap, canvas, page);
     if (findTerm.trim()) paintHighlightsFor(n);
     paintLinksFor(n);
   } catch (e) {
@@ -895,8 +1099,9 @@ function rerender(x, y, draw = true) {
     wrap.style.width = w;
     wrap.style.height = h;
     if (canvas) {
-      /* overlays are placed in pixels, so they go and are redrawn after */
-      [...wrap.children].forEach((c) => { if (c !== canvas) c.remove(); });
+      /* overlays are placed in pixels, so they go and are redrawn after;
+         pictures are placed in percent, so they stretch with the page */
+      [...wrap.children].forEach((c) => { if (c !== canvas && !c.classList.contains('pic')) c.remove(); });
       canvas.style.width = w;
       canvas.style.height = h;
     } else {
@@ -928,8 +1133,8 @@ function resetView() {
   $('pageTotal').textContent = '1';
   $('pageCur').textContent = '1';
   $('contents').innerHTML = '';
-  $('contents').classList.remove('open');
-  $('btnContents').setAttribute('aria-pressed', 'false');
+  resetThumbs();
+  openSide(null);
   enableControls(false);
   $('drawer').classList.remove('open');
   $('pathBox').textContent = '';
@@ -1313,12 +1518,22 @@ async function scrollToPage(n, smooth = true) {
 
 function syncPageIndicator(n) {
   if ($('pageNum').hidden) $('pageCur').textContent = String(n);
-  const rail = $('contents');
-  if (!rail.classList.contains('open')) return;
-  /* mark the contents entry covering this page, if we know one */
-  rail.querySelectorAll('.bm button[data-page]').forEach((b) => {
-    b.classList.toggle('here', +b.dataset.page === n);
-  });
+  if (side === 'contents') {
+    /* mark the contents entry covering this page, if we know one */
+    $('contents').querySelectorAll('.bm button[data-page]').forEach((b) => {
+      b.classList.toggle('here', +b.dataset.page === n);
+    });
+  } else if (side === 'pages') {
+    const was = $('thumbs').querySelector('.thumb.here');
+    if (was) was.classList.remove('here');
+    const now = $('thumbs').querySelector(`.thumb[data-page="${n}"]`);
+    if (now) {
+      now.classList.add('here');
+      /* keep the reader's page in sight in the list */
+      const box = $('side'), r = now.getBoundingClientRect(), b = box.getBoundingClientRect();
+      if (r.top < b.top + 40 || r.bottom > b.bottom) box.scrollTop += r.top - b.top - box.clientHeight / 3;
+    }
+  }
 }
 
 /* ---------- cross-reference links ----------
@@ -1413,8 +1628,8 @@ async function buildOutline() {
       '<div class="rail-head">Contents</div>' +
       '<p class="hint">This document carries no contents list. Use the page ' +
       'number or find to move around.</p>';
-    $('btnContents').disabled = true;
-    $('btnContents').hidden = true;
+    $('tabContents').hidden = true;
+    if (side === 'contents') openSide(null);
     return;
   }
 
@@ -1424,7 +1639,7 @@ async function buildOutline() {
     items.forEach((it) => {
       const li = document.createElement('li');
       const b = document.createElement('button');
-      b.textContent = it.title || '(untitled)';
+      b.textContent = b.dataset.title = it.title || '(untitled)';
       b.addEventListener('click', () => jumpToDest(it.dest));
       /* resolve lazily so the rail opens instantly on a 958-entry book */
       resolveDestPage(it.dest).then((n) => { if (n) b.dataset.page = String(n); });
@@ -1435,10 +1650,69 @@ async function buildOutline() {
     return ul;
   };
 
-  panel.innerHTML = '<div class="rail-head">Contents</div>';
+  panel.innerHTML = '<div class="rail-head">Contents' +
+    '<input type="search" class="side-search" id="contentsSearch" placeholder="Search the contents" ' +
+    'aria-label="Search the contents" spellcheck="false" autocomplete="off"></div>' +
+    '<p class="side-none" id="contentsNone" hidden>No entry matches.</p>';
   panel.appendChild(build(outline));
-  $('btnContents').disabled = false;
+  /* shown again: a document without contents opened before hid it */
+  $('tabContents').hidden = false;
 }
+
+/* ---------- searching the contents ----------
+   Every word typed must appear in an entry's title, in any order and case.
+   A match keeps its parents in view, so the reader sees where it sits. */
+function filterContents(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const list = $('contents').querySelector('.bm');
+  if (!list) return;
+  let any = false;
+  (function walk(ul) {
+    let shown = false;
+    ul.querySelectorAll(':scope > li').forEach((li) => {
+      const b = li.querySelector(':scope > button');
+      const title = b.dataset.title;
+      const low = title.toLowerCase();
+      const hit = words.length > 0 && words.every((w) => low.includes(w));
+      const sub = li.querySelector(':scope > ul');
+      const kids = sub ? walk(sub) : false;
+      li.classList.toggle('miss', words.length > 0 && !hit && !kids);
+      b.innerHTML = hit ? markWords(title, words) : LintApp.esc(title);
+      if (hit) any = true;
+      if (hit || kids || !words.length) shown = true;
+    });
+    return shown;
+  })(list);
+  $('contentsNone').hidden = !words.length || any;
+}
+
+function markWords(title, words) {
+  const low = title.toLowerCase(), on = new Uint8Array(title.length);
+  words.forEach((w) => { for (let i = low.indexOf(w); i >= 0; i = low.indexOf(w, i + 1)) on.fill(1, i, i + w.length); });
+  let out = '', open = false;
+  for (let i = 0; i < title.length; i++) {
+    if (on[i] && !open) { out += '<mark>'; open = true; }
+    if (!on[i] && open) { out += '</mark>'; open = false; }
+    out += LintApp.esc(title[i]);
+  }
+  return out + (open ? '</mark>' : '');
+}
+
+$('contents').addEventListener('input', (e) => {
+  if (e.target.id === 'contentsSearch') filterContents(e.target.value);
+});
+$('contents').addEventListener('keydown', (e) => {
+  if (e.target.id !== 'contentsSearch') return;
+  if (e.key === 'Enter') {
+    /* the first match, as a click would */
+    const first = $('contents').querySelector('.bm button mark');
+    if (first) first.closest('button').click();
+  } else if (e.key === 'Escape' && e.target.value) {
+    e.stopPropagation();
+    e.target.value = '';
+    filterContents('');
+  }
+});
 
 async function jumpToDest(dest) {
   try {
@@ -1648,10 +1922,113 @@ $('btnFit').addEventListener('click', async () => {
 });
 
 /* ---------- navigation controls ---------- */
-$('btnContents').addEventListener('click', () => {
-  const open = $('contents').classList.toggle('open');
-  $('btnContents').setAttribute('aria-pressed', String(open));
-  if (open) syncPageIndicator(currentPage());
+/* ---------- the side panel: Contents or Pages ---------- */
+let side = null;                    // 'contents', 'pages', or null when closed
+function openSide(which) {
+  side = which;
+  $('side').classList.toggle('open', !!which);
+  $('side').dataset.show = which || '';
+  $('sideTabs').querySelectorAll('[data-side]').forEach((b) =>
+    b.setAttribute('aria-selected', String(b.dataset.side === which)));
+  if (!which || !doc) return;
+  if (which === 'pages') buildThumbs();
+  syncPageIndicator(currentPage());
+}
+$('sideTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-side]');
+  if (b) openSide(side === b.dataset.side ? null : b.dataset.side);
+});
+
+/* ---------- page thumbnails ----------
+   One slot per page, sized from the first page as the reading column is,
+   and drawn only while in or near view: one at a time, newest view first,
+   so a thousand-page book never renders a thousand canvases at once. */
+const THUMB_W = 132;
+let thumbsBuilt = false;
+const thumbDone = new Set();
+let thumbQueue = [];
+let thumbBusy = false;
+let thumbTick = null;
+
+function resetThumbs() {
+  thumbsBuilt = false;
+  thumbDone.clear();
+  thumbQueue = [];
+  $('thumbs').innerHTML = '';
+}
+
+function buildThumbs() {
+  if (thumbsBuilt || !doc || !firstPage) return;
+  thumbsBuilt = true;
+  const vp = firstPage.getViewport({ scale: 1 });
+  const h = Math.round(THUMB_W * vp.height / vp.width);
+  let html = '<div class="rail-head">Pages</div><div class="thumb-list">';
+  for (let n = 1; n <= doc.numPages; n++) {
+    html += `<button class="thumb" data-page="${n}" aria-label="Page ${n}">` +
+      `<span class="thumb-img" style="width:${THUMB_W}px;height:${h}px"></span>` +
+      `<span class="thumb-n">${n}</span></button>`;
+  }
+  $('thumbs').innerHTML = html + '</div>';
+  requestAnimationFrame(queueVisibleThumbs);
+}
+
+function queueVisibleThumbs() {
+  if (side !== 'pages' || !thumbsBuilt) return;
+  const box = $('side');
+  const top = box.scrollTop - box.clientHeight, bottom = box.scrollTop + box.clientHeight * 2;
+  const want = [];
+  $('thumbs').querySelectorAll('.thumb').forEach((el) => {
+    if (el.offsetTop < bottom && el.offsetTop + el.offsetHeight > top && !thumbDone.has(+el.dataset.page)) {
+      want.push(+el.dataset.page);
+    }
+  });
+  thumbQueue = want;
+  pumpThumbs();
+}
+
+async function pumpThumbs() {
+  if (thumbBusy) return;
+  thumbBusy = true;
+  const d = doc;
+  while (thumbQueue.length && d === doc) {
+    const n = thumbQueue.shift();
+    if (thumbDone.has(n)) continue;
+    thumbDone.add(n);
+    try {
+      const page = await d.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const vp = page.getViewport({ scale: THUMB_W / base.width * dpr });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(vp.width);
+      canvas.height = Math.floor(vp.height);
+      canvas.getContext('2d', { alpha: false });
+      await page.render({ canvas, viewport: vp, recordImages: true }).promise;
+      if (d !== doc) break;
+      const slot = $('thumbs').querySelector(`.thumb[data-page="${n}"] .thumb-img`);
+      if (!slot) continue;
+      /* a page of another size takes its own shape */
+      slot.style.height = Math.round(THUMB_W * base.height / base.width) + 'px';
+      slot.replaceChildren(canvas);
+      if (pageMode === 'dark') addPictures(slot, canvas, page);
+    } catch (e) {
+      thumbDone.delete(n);
+    }
+  }
+  thumbBusy = false;
+}
+
+$('side').addEventListener('scroll', () => {
+  clearTimeout(thumbTick);
+  thumbTick = setTimeout(queueVisibleThumbs, 90);
+}, { passive: true });
+
+$('thumbs').addEventListener('click', (e) => {
+  const t = e.target.closest('.thumb');
+  if (!t) return;
+  scrollToPage(+t.dataset.page);
+  /* over the page on a narrow screen, so out of the way once used */
+  if (window.matchMedia('(max-width: 860px)').matches) openSide(null);
 });
 
 $('btnPrev').addEventListener('click', () => scrollToPage(currentPage() - 1));
@@ -1800,24 +2177,25 @@ if (LintApp.shortcuts) LintApp.shortcuts([{ title: 'PDF', items: [
   { keys: ['alt'], label: 'Hold to show every link on the page' }
 ] }]);
 
-/* refit on resize while in fit mode */
-let resizeTimer;
-window.addEventListener('resize', () => {
-  if (!doc || !fitMode) return;
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(async () => {
-    scale = fitScale(await doc.getPage(1));
-    rerender();
-  }, 220);
-});
-
-/* the page position sits over the page column (see .pdf-toolbar .pagebox);
-   clientWidth leaves out the scrollbar, as the centred pages do */
+/* The page column changes width with the window, and when a side panel or
+   the details drawer opens or closes. The page position follows it at once
+   (see .pdf-toolbar .pagebox; clientWidth leaves out the scrollbar, as the
+   centred pages do), and in fit mode the pages refit once it settles. */
+let refitTimer;
 new ResizeObserver(() => {
   const pages = $('pages');
   const left = pages.getBoundingClientRect().left;
   document.querySelector('.pdf-toolbar').style
     .setProperty('--page-center', (left + pages.clientWidth / 2) + 'px');
+  if (!doc || !fitMode) return;
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => {
+    if (!doc || !fitMode || !firstPage) return;
+    const next = fitScale(firstPage);
+    if (Math.abs(next - scale) / scale < 0.005) return;
+    scale = next;
+    rerender();
+  }, 160);
 }).observe($('pages'));
 
 resetView();
