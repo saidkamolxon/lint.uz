@@ -1846,10 +1846,14 @@ function init(config) {
 
   /* A paste that brings most of the text is a new document arriving: its
      tree unfolds, and, where the tool can (config.formatPaste), it lands
-     formatted. The paste goes in as the browser makes it, then is replaced
-     in the same moment through the browser's own editing, so nothing
-     flickers and Ctrl/⌘+Z takes back the formatting alone. */
+     formatted, replaced in the same moment the browser makes the paste, so
+     nothing flickers. It is set as the value, not typed in through the
+     browser's editing: that path slows with every line (4,000 lines take
+     seven seconds), and a large minified file would freeze the tab. So the
+     way back is kept here: Ctrl/⌘+Z restores the text as it
+     was pasted, until the next edit. */
   var formatNext = false;
+  var asPasted = null;          // { raw, formatted } while the way back is open
   editor.input.addEventListener('paste', function (e) {
     var pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
     var inp = editor.input;
@@ -1859,21 +1863,35 @@ function init(config) {
     formatNext = !!config.formatPaste;
   });
   editor.input.addEventListener('input', function (e) {
+    asPasted = null;
     if (!formatNext || e.inputType !== 'insertFromPaste') { formatNext = false; return; }
     formatNext = false;
     var text = editor.getValue();
     var out = null;
     try { out = config.formatPaste(text); } catch (err) { out = null; }
     if (!out || out === text) return;
-    var inp = editor.input;
-    inp.setSelectionRange(0, text.length);
-    if (!document.execCommand('insertText', false, out)) {
-      inp.setRangeText(out, 0, text.length, 'end');
-      inp.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    inp.setSelectionRange(0, 0);
-    inp.scrollTop = 0;
+    editor.setValue(out);
+    editor.input.setSelectionRange(0, 0);
+    editor.input.scrollTop = 0;
+    editor.syncScroll();
+    asPasted = { raw: text, formatted: out };
+    /* no button on the toast: its Enter would take the formatting back
+       from someone who only meant a new line */
     showToast('Formatted as it was pasted. ' + keyText('mod+z') + ' keeps it as it came');
+  });
+  function keepAsPasted() {
+    if (!asPasted || editor.getValue() !== asPasted.formatted) { asPasted = null; return; }
+    var raw = asPasted.raw;
+    asPasted = null;
+    tree.arrive();
+    editor.setValue(raw);
+    showToast('Kept as pasted');
+  }
+  editor.input.addEventListener('keydown', function (e) {
+    if (asPasted && keyMatches(e, 'mod+z') && editor.getValue() === asPasted.formatted) {
+      e.preventDefault();
+      keepAsPasted();
+    }
   });
 
   errorBar.addEventListener('click', function () {
