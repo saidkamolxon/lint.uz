@@ -258,22 +258,11 @@ body.show-links .lnk {
 
 /* ---------- page appearance: the shared .seg, sized for icons ---------- */
 #pageModeSeg button { width: 28px; height: 24px; padding: 0; display: grid; place-items: center; }
-.zoom-pop .sep { margin: 0 var(--s1); }
+.zoom-box .sep { margin: 0 var(--s1); }
 
-/* ---------- zoom, floating near the page ---------- */
-.zoom-pop {
-  position: absolute; right: var(--s3); bottom: var(--s3); z-index: 22;
-  display: flex; align-items: center; gap: 2px;
-  padding: var(--s1);
-  background: color-mix(in srgb, var(--raised) 92%, transparent);
-  backdrop-filter: blur(8px);
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-}
-/* always at full strength: faded, its icons fell below the 3:1 a control
-   needs against what is behind it; the glass is what keeps it light */
-.zoom-pop[hidden] { display: none; }
+/* ---------- zoom, in the header ---------- */
+.zoom-box { display: flex; align-items: center; gap: 2px; }
+.zoom-box[hidden] { display: none; }
 .zoom-fit {
   font-size: var(--fs-small); padding: 4px var(--s2);
   color: var(--muted); border-radius: var(--radius);
@@ -332,8 +321,10 @@ body.show-links .lnk {
 body[data-page="dim"] .thumb-img > canvas:not(.pic) { filter: sepia(0.16) brightness(0.8) contrast(1.04); }
 @media (max-width: 620px) {
   .find-pop { left: var(--s2); right: var(--s2); top: var(--s2); }
+  /* no room in a phone's header: a pinch zooms there, and the page follows
+     the theme unless chosen otherwise */
+  .zoom-box, .zoom-box + .sep { display: none; }
   #findInput { width: auto; flex: 1; min-width: 0; }
-  .zoom-pop { bottom: var(--s2); right: var(--s2); }
 }
 .rail-head {
   position: sticky; top: 0; z-index: 1;
@@ -464,7 +455,6 @@ body.dragover #pages::after {
 /* Increase contrast: the sheet gets a firm edge, the floating zoom stops
    fading, and highlights and links stop being tints */
 :root[data-contrast="more"] .page-wrap { outline-color: var(--line-strong); }
-:root[data-contrast="more"] .zoom-pop { background: var(--raised); backdrop-filter: none; }
 :root[data-contrast="more"] .hl-box { background: color-mix(in srgb, var(--mark) 80%, transparent); outline: 1px solid var(--mark-ink); }
 :root[data-contrast="more"] .hl-box.word { background: color-mix(in srgb, var(--mark) 40%, transparent); outline: none; }
 :root[data-contrast="more"] .hl-box.current { background: color-mix(in srgb, var(--hue) 55%, transparent); outline: 2px solid var(--hue); }
@@ -546,6 +536,18 @@ $('app').innerHTML = `
 
     <span class="spacer"></span>
 
+    <!-- zoom and page treatment: in the header, so nothing floats over the
+         page being read -->
+    <div class="zoom-box needs-doc" id="zoomBox">
+      <!-- page treatment: state is the active segment, not the label -->
+      <div class="seg" id="pageModeSeg" role="radiogroup" aria-label="Page appearance"></div>
+      <span class="sep"></span>
+      <button id="btnOut" class="icon-btn" title="Zoom out (${MOD}−)" aria-label="Zoom out"></button>
+      <button id="btnFit" class="zoom-fit" title="Fit page to window (${MOD}0)">Fit</button>
+      <button id="btnIn" class="icon-btn" title="Zoom in (${MOD}+)" aria-label="Zoom in"></button>
+    </div>
+    <span class="sep needs-doc"></span>
+
     <button id="btnFind" class="icon-btn needs-doc" title="Find in this document (${MOD}F)"
             aria-label="Find in this document" aria-pressed="false" disabled></button>
     <button id="btnInfo" class="icon-btn needs-doc" title="Document details (${MOD}I)"
@@ -582,15 +584,6 @@ $('app').innerHTML = `
         <button id="findClose" class="icon-btn" title="Close" aria-label="Close find"></button>
       </div>
 
-      <!-- zoom and page treatment sit near the page, not in the header -->
-      <div class="zoom-pop needs-doc" id="zoomPop">
-        <!-- page treatment: state is the active segment, not the label -->
-        <div class="seg" id="pageModeSeg" role="radiogroup" aria-label="Page appearance"></div>
-        <span class="sep"></span>
-        <button id="btnOut" class="icon-btn" title="Zoom out (${MOD}−)" aria-label="Zoom out"></button>
-        <button id="btnFit" class="zoom-fit" title="Fit page to window (${MOD}0)">Fit</button>
-        <button id="btnIn" class="icon-btn" title="Zoom in (${MOD}+)" aria-label="Zoom in"></button>
-      </div>
     </div>
 
     <aside id="drawer" aria-label="Document details">
