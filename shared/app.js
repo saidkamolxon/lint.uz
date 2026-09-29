@@ -53,10 +53,10 @@ function svg(paths, size) {
 
 var ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-  /* chevrons pointing apart and together — a plus and a minus read as
-     zoom, which the text size now is */
-  expand: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
-  collapse: '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>',
+  /* two chevrons, one over the other: down to open everything, up to shut
+     it — a plus and a minus read as zoom, which the text size now is */
+  expand: '<path d="m7 6.5 5 5 5-5M7 12.5l5 5 5-5"/>',
+  collapse: '<path d="m7 11.5 5-5 5 5M7 17.5l5-5 5 5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   wrap: '<path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-4m0 0 2.5-2.5M12 18l2.5 2.5M3 18h5"/>',
   theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
@@ -1262,6 +1262,12 @@ function Tree(opts) {
       if (open && !node.dataset.loaded) renderChildren(node, entry, self.query());
       if (node.classList.contains('open') !== open) moving.push(node);
     }
+    /* an Expand all still to open below the view: opening anything finishes
+       it first; closing drops what lies inside the branches that close,
+       rather than laying out thousands of rows only to hide them */
+    if (rest && moving.length) {
+      if (open) openRest(); else dropRest(moving);
+    }
     if (!moving.length) return;
     var apply = function () {
       for (var j = 0; j < moving.length; j++) moving[j].classList.toggle('open', open);
@@ -1284,7 +1290,7 @@ function Tree(opts) {
      expanding every one of four thousand costs the same few dozen
      transforms, so it stays smooth on any file. */
   var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)');
-  var MOVE_MS = 240, EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+  var MOVE_MS = 180, EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
   var VIEW_CAP = 160;          // rows looked at on either side of a change
 
   function rowsInView() {
@@ -1302,8 +1308,12 @@ function Tree(opts) {
 
   /* Closing, the rows about to go leave first, up and out, in a moment;
      then the branch closes and the rows that stay glide up into the space.
-     A change that comes before they are gone finishes this one at once. */
-  var LEAVE_MS = 140;
+     A change that comes before they are gone finishes this one at once.
+     Closing many at once (Collapse all) on a large file costs the browser
+     a tenth of a second or more, taking down the layout of every row. So
+     there the rows start leaving at once and the branches close two frames
+     later, while the leaving, which runs off the main thread, carries on. */
+  var LEAVE_MS = 80;
   var pending = null;
   function settle() {
     if (!pending) return;
@@ -1317,22 +1327,23 @@ function Tree(opts) {
   function motion(apply, changed, opening) {
     if (!el.animate || (still && still.matches)) { if (apply) apply(); return; }
     if (apply && !opening && changed) {
+      /* a row goes if a branch closing holds it */
+      var closing = new Set(changed);
       var going = rowsInView().filter(function (v) {
-        for (var i = 0; i < changed.length; i++) {
-          var box = changed[i].querySelector(':scope > .children');
-          if (box && box.contains(v.row)) return true;
+        for (var n = v.row.parentElement.parentElement; n && n !== el; n = n.parentElement) {
+          if (closing.has(n)) return true;
         }
         return false;
       });
       if (going.length) {
         var anims = going.map(function (v, i) {
           return v.row.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-6px)' }],
-            { duration: LEAVE_MS, easing: 'cubic-bezier(0.4, 0, 1, 1)', delay: Math.min((going.length - 1 - i) * 4, 60), fill: 'forwards' });
+            { duration: LEAVE_MS, easing: 'cubic-bezier(0.2, 0, 0.4, 1)', delay: Math.min((going.length - 1 - i) * 2, 20), fill: 'forwards' });
         });
         pending = {
           anims: anims,
           run: function () { anims.forEach(function (a) { a.cancel(); }); place(apply, changed, false); },
-          timer: setTimeout(settle, LEAVE_MS + 70)
+          timer: setTimeout(settle, changed.length > 1 ? 34 : LEAVE_MS + 30)
         };
         return;
       }
@@ -1361,7 +1372,7 @@ function Tree(opts) {
            below as rows close over the space */
         v.row.animate(
           [{ opacity: 0, transform: 'translateY(' + (opening ? -8 : 10) + 'px)' }, { opacity: 1, transform: 'none' }],
-          { duration: MOVE_MS, easing: EASE, delay: Math.min(fresh++ * 12, 220), fill: 'backwards' });
+          { duration: MOVE_MS, easing: EASE, delay: Math.min(fresh++ * 8, 120), fill: 'backwards' });
       }
     });
     if (opening && opened) grow(opened);
@@ -1369,29 +1380,31 @@ function Tree(opts) {
 
   /* the guide line of each block that opened in view grows down */
   function grow(nodes) {
-    var top = el.getBoundingClientRect().bottom, n = 0;
-    for (var i = 0; i < nodes.length && n < 40; i++) {
+    /* every rect is read before any class is touched: a write between two
+       reads lays out the whole tree again, forty times on Expand all */
+    var top = el.getBoundingClientRect().bottom, boxes = [];
+    for (var i = 0; i < nodes.length && boxes.length < 40; i++) {
       var box = nodes[i].querySelector(':scope > .children');
       if (!box) continue;
       var r = box.getBoundingClientRect();
-      if (!r.height || r.top > top) continue;
-      n++;
-      box.style.setProperty('--draw-ms', MOVE_MS + 'ms');
-      box.classList.remove('drawing');
-      void box.offsetWidth;
-      box.classList.add('drawing');
-      (function (b) { setTimeout(function () { b.classList.remove('drawing'); }, MOVE_MS + 60); })(box);
+      if (r.height && r.top <= top) boxes.push(box);
     }
+    if (!boxes.length) return;
+    boxes.forEach(function (b) { b.style.setProperty('--draw-ms', MOVE_MS + 'ms'); b.classList.remove('drawing'); });
+    void el.offsetWidth;
+    boxes.forEach(function (b) { b.classList.add('drawing'); });
+    setTimeout(function () { boxes.forEach(function (b) { b.classList.remove('drawing'); }); }, MOVE_MS + 60);
   }
 
   /* every branch in and under `nodes`, rendered as it goes, to the row
      budget Expand all has always kept */
-  function branchesUnder(nodes) {
-    var out = [], budget = ROW_BUDGET;
+  function branchesUnder(nodes, rowAt) {
+    var out = [], budget = ROW_BUDGET, seen = 0;
     (function walk(list) {
       for (var i = 0; i < list.length && budget > 0; i++) {
         var n = list[i];
         var entry = info.get(n.querySelector(':scope > .row'));
+        if (rowAt) rowAt.set(n, seen++);   /* its row's place once all is open */
         if (!entry || adapter.childCount(entry) === 0) continue;
         budget--;
         out.push(n);
@@ -1403,9 +1416,43 @@ function Tree(opts) {
     if (budget <= 0) showToast('Opened the first ' + fmtNum(ROW_BUDGET) + ' rows');
     return out;
   }
-  function openAll(node) { change(branchesUnder([node]), true, true); }
-  function closeInside(node) { change(Array.prototype.slice.call(node.querySelectorAll('.node.open')), false, true); }
-  function closeAll(node) { change([node].concat(Array.prototype.slice.call(node.querySelectorAll('.node.open'))), false, true); }
+  /* Opening thousands of rows costs the browser one layout of all of them,
+     half a second on a large file, before the first frame can move. So the
+     branches whose rows fill the view open first, animated, and the rest,
+     all below the view, open once the motion is over, where nothing on
+     screen moves. The branches opened first are a prefix in document order,
+     so the rows they show are exactly those the whole expansion would. */
+  var rest = null;
+  function openRest() {
+    if (!rest) return;
+    var r = rest;
+    rest = null;
+    clearTimeout(r.timer);
+    change(r.nodes, true, false);
+  }
+  function dropRest(closing) {
+    var gone = new Set(closing);
+    rest.nodes = rest.nodes.filter(function (n) {
+      for (var p = n.parentElement; p && p !== el; p = p.parentElement) if (gone.has(p)) return false;
+      return true;
+    });
+    if (!rest.nodes.length) { clearTimeout(rest.timer); rest = null; }
+  }
+  function expand(nodes) {
+    var rowAt = new Map(), all = branchesUnder(nodes, rowAt);
+    var seen = rowsInView(), from = 0;
+    if (seen.length && rowAt.has(seen[0].row.parentElement)) from = rowAt.get(seen[0].row.parentElement);
+    var rowH = seen.length ? seen[0].row.offsetHeight || 20 : 20;
+    var upTo = from + Math.ceil(el.clientHeight / rowH) + 20, cut = 0;
+    while (cut < all.length && rowAt.get(all[cut]) < upTo) cut++;
+    change(all.slice(0, cut), true, true);
+    if (cut < all.length) rest = { nodes: all.slice(cut), timer: setTimeout(openRest, MOVE_MS + 200) };
+  }
+  function openAll(node) { expand([node]); }
+  /* whatever of an Expand all is still to open under the node is dropped
+     too, even a branch not inside one that closes: it was never opened */
+  function closeInside(node) { if (rest) dropRest([node]); change(Array.prototype.slice.call(node.querySelectorAll('.node.open')), false, true); }
+  function closeAll(node) { if (rest) dropRest([node]); change([node].concat(Array.prototype.slice.call(node.querySelectorAll('.node.open'))), false, true); }
   function isBranch(node) {
     var e = info.get(node.querySelector(':scope > .row'));
     return !!e && adapter.childCount(e) > 0;
@@ -1689,7 +1736,7 @@ function Tree(opts) {
   });
 
   $('btnExpand').addEventListener('click', function () {
-    change(branchesUnder(el.querySelectorAll(':scope > .node')), true, true);
+    expand(el.querySelectorAll(':scope > .node'));
   });
 
   /* everything closes but the top, which stays open to show what it holds */
@@ -2067,8 +2114,9 @@ function init(config) {
      in the tool's colour, light at the divider and deep at the line. Along
      the band's top runs a tape measure counted from the divider, and a label
      on the line reads the two panes' shares. Near the middle the line snaps
-     to half. All of it moves by transform or repaints a strip a few pixels
-     tall, so none of it lays out the panes. They stay as they are
+     to half, and with Shift held to every 5%. All of it moves by transform
+     or repaints a strip a few pixels tall, so none of it lays out the
+     panes. They stay as they are
      until the pointer lets go, and then take their new widths once. On a
      large document every new width lays out the editor's ten thousand lines
      and the tree's thousands of rows, 50–70 ms, so resizing them live made
@@ -2106,7 +2154,16 @@ function init(config) {
     paint();
     var frame = 0, done = false;
     function move(ev) {
-      at = Math.min(Math.max(ev.clientX - box.left, min), max);
+      at = ev.clientX - box.left;
+      /* Shift steps by 5%, as Alt+Shift+←/→ does; inward if a step is past the clamp */
+      split.classList.toggle('stepping', ev.shiftKey);
+      if (ev.shiftKey) {
+        var step = box.width / 20, n = Math.round(at / step);
+        if (n * step < min) n++;
+        if (n * step > max) n--;
+        at = n === 10 ? half : n * step;
+      }
+      at = Math.min(Math.max(at, min), max);
       if (Math.abs(at - half) < SNAP) at = half;
       if (!frame) frame = requestAnimationFrame(function () { frame = 0; paint(); });
     }
@@ -2119,6 +2176,7 @@ function init(config) {
       divider.removeEventListener('lostpointercapture', up);
       cancelAnimationFrame(frame);
       [band, tape, ghost, label].forEach(function (el) { el.remove(); });
+      split.classList.remove('stepping');
       setSplit(at, true, box.width);
     }
     divider.addEventListener('pointermove', move);
