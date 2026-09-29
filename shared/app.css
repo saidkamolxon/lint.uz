@@ -273,6 +273,11 @@ kbd {
   position: absolute; top: 0; bottom: 0; left: 0; z-index: 30;
   pointer-events: none; will-change: transform;
 }
+/* with Shift held the line steps by 5%, and glides to each step */
+.split.stepping > :is(.split-ghost, .split-band, .split-tape, .split-label) {
+  transition: transform var(--t-fast) cubic-bezier(0.2, 0.7, 0.2, 1),
+              clip-path var(--t-fast) cubic-bezier(0.2, 0.7, 0.2, 1);
+}
 /* a tick every 10px and a longer one every 50px, counted from the divider */
 .split-tape {
   right: 0; bottom: auto; height: 10px; will-change: clip-path;
