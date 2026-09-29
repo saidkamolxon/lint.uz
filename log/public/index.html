@@ -339,7 +339,7 @@ body.dragover #viewport::after {
 <script>
 window.LINT_CONFIG = {
   id: 'log',
-  name: 'Logs',
+  name: 'LOG',
   host: 'lint.one/log',
   label: 'log',
   hue: '#0369A1',
@@ -387,11 +387,12 @@ $('app').innerHTML = `
             aria-label="Wrap long lines" aria-pressed="false" disabled></button>
     <button id="btnTail" class="icon-btn needs-file" title="Jump to the end (${MOD}End)"
             aria-label="Jump to the end" disabled></button>
-    <div class="menu-wrap needs-file">
-      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
-      <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnCopyVisible" role="menuitem" disabled>Copy filtered lines</button>
-      </div>
+    <!-- Export is where every tool keeps its ways out -->
+    <div class="group needs-file">
+      ${LintApp.toolMenuHTML('menuExport', 'Export', [
+        { id: 'btnCopyVisible', label: 'Copy the lines shown', title: 'The lines the filters leave, up to 50,000' },
+        { id: 'btnSaveVisible', label: 'Download the lines shown', title: 'The lines the filters leave, all of them, as a .log file' }
+      ])}
     </div>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
@@ -406,7 +407,7 @@ $('app').innerHTML = `
     <div id="viewport">
       <div id="spacer"><div id="rows"></div></div>
     </div>
-    <div id="density" class="needs-file" title="Click to jump — red marks are errors">
+    <div id="density" class="needs-file" aria-label="The whole file: red marks errors, amber warnings. Click to jump">
       <canvas id="densityCanvas"></canvas>
       <div id="densityThumb"></div>
     </div>
@@ -436,10 +437,7 @@ const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 $('btnWrap').innerHTML = I('<path d="M4 6h16M4 12h11a3 3 0 0 1 0 6h-3m0 0 2.5-2.5M12 18l2.5 2.5M4 18h4"/>');
 $('btnTail').innerHTML = I('<path d="M12 5v14M6 13l6 6 6-6"/>');
-$('btnMore').innerHTML = I('<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
-  '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
-  '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>');
-LintApp.wireMenu($('btnMore'), $('moreMenu'));
+LintApp.wireToolMenus(() => '');
 $('detailPrev').innerHTML = I('<path d="M6 15l6-6 6 6"/>');
 $('detailNext').innerHTML = I('<path d="M6 9l6 6 6-6"/>');
 $('detailCopy').innerHTML = I('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>');
@@ -719,11 +717,25 @@ async function openFile(file) {
     applyFilters();
     drawDensity();
     $('viewport').scrollTop = 0;
+    offerJson(file);
   } catch (e) {
     $('progress').style.width = '0';
     setStatus('err', 'Could not read that file');
     LintApp.toast('Could not read that file');
   }
+}
+
+/* JSON Lines that are data, not a log (records with no level, nor a time
+   and a message), read better as a tree: offered, not forced. Past 20 MB
+   they stay here, where a file of any size opens. */
+const JSON_TOOL_LIMIT = 20 * 1048576;
+function offerJson(file) {
+  if (!LintApp.jsonlKind || file.size > JSON_TOOL_LIMIT) return;
+  if (LintApp.jsonlKind(lines.slice(0, 60).join('\n')) !== 'data') return;
+  LintApp.toast('These look like data records, not a log', {
+    label: 'Open in JSON viewer', href: '/json/',
+    onFollow: () => file.text().then((t) => LintApp.openIn(t, file.name, 'json'))
+  });
 }
 
 /* one pass: severity per line, and which lines belong to the event above */
@@ -780,7 +792,7 @@ function reset() {
 }
 
 function enable(v) {
-  ['btnWrap', 'btnTail', 'btnCopyVisible']
+  ['btnWrap', 'btnTail', 'btnCopyVisible', 'btnSaveVisible']
     .forEach((id) => { $(id).disabled = !v; });
   document.querySelectorAll('.needs-file').forEach((el) => { el.hidden = !v; });
   if (!v) showEmpty();
@@ -1008,6 +1020,38 @@ function positionThumb() {
   thumb.style.top = top + 'px';
   thumb.style.height = h + 'px';
 }
+
+/* The strip says what is under the pointer: the line it maps to, and the
+   errors and warnings in the few pixels around it, which is what a mark
+   there stands for. Shown in the tooltip style every icon uses. */
+let densityTip = null;
+$('density').addEventListener('mousemove', (e) => {
+  if (!lines.length) return;
+  const box = $('density').getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e.clientY - box.top) / box.height));
+  const span = Math.max(1, Math.ceil(lines.length / box.height * 3));
+  const at = Math.floor(frac * lines.length);
+  const from = Math.max(0, at - span), to = Math.min(lines.length, at + span + 1);
+  let errs = 0, warns = 0;
+  for (let i = from; i < to; i++) { if (sev[i] === 1) errs++; else if (sev[i] === 2) warns++; }
+  const bits = [];
+  /* lines, not entries: a stack trace's lines count with its error */
+  if (errs) bits.push(LintApp.fmtNum(errs) + (errs === 1 ? ' error line' : ' error lines'));
+  if (warns) bits.push(LintApp.fmtNum(warns) + (warns === 1 ? ' warning line' : ' warning lines'));
+  if (!densityTip) {
+    densityTip = document.createElement('div');
+    densityTip.className = 'quick-tip';
+    densityTip.setAttribute('role', 'tooltip');
+    document.body.appendChild(densityTip);
+  }
+  densityTip.textContent = 'Line ' + LintApp.fmtNum(at + 1) + (bits.length ? ': ' + bits.join(', ') + ' nearby' : '') +
+    '. Click to jump' + (bits.length ? '' : ' (red marks errors, amber warnings)');
+  densityTip.hidden = false;
+  const t = densityTip.getBoundingClientRect();
+  densityTip.style.left = Math.round(box.left - t.width - 6) + 'px';
+  densityTip.style.top = Math.round(Math.max(6, Math.min(e.clientY - t.height / 2, window.innerHeight - t.height - 6))) + 'px';
+});
+$('density').addEventListener('mouseleave', () => { if (densityTip) densityTip.hidden = true; });
 
 $('density').addEventListener('click', (e) => {
   if (!visible.length) return;
@@ -1325,6 +1369,18 @@ $('btnCopyVisible').addEventListener('click', () => {
     ? 'First ' + LintApp.fmtNum(LIMIT) + ' lines' : LintApp.fmtNum(take.length) + ' lines');
 });
 
+/* the whole of what is shown, however long: no clipboard stands in the way.
+   Named after the file, with .filtered when a filter hides some lines. */
+$('btnSaveVisible').addEventListener('click', () => {
+  if (!visible.length) return;
+  const base = (fileName || 'log').replace(/\.(log|txt|jsonl|ndjson)$/i, '');
+  const ext = (/\.(log|txt|jsonl|ndjson)$/i.exec(fileName) || [, 'log'])[1];
+  const name = base + (visible.length < lines.length ? '.filtered.' : '.') + ext;
+  const parts = [];
+  for (let i = 0; i < visible.length; i++) parts.push(lines[visible[i]], '\n');
+  LintApp.download(new Blob(parts, { type: 'text/plain' }), name);
+});
+
 /* drag and drop */
 ['dragover', 'dragenter'].forEach((ev) =>
   document.addEventListener(ev, (e) => { e.preventDefault(); document.body.classList.add('dragover'); }));
@@ -1370,7 +1426,7 @@ if (LintApp.textZoom) LintApp.textZoom((s) => {
   draw();
 });
 
-if (LintApp.shortcuts) LintApp.shortcuts([{ title: 'Logs', items: [
+if (LintApp.shortcuts) LintApp.shortcuts([{ title: 'LOG', items: [
   { keys: ['mod+g'], label: 'Go to line' },
   { keys: ['alt+z'], label: 'Wrap long lines' },
   { keys: ['mod+home', 'home'], label: 'Jump to the start' },
@@ -1409,10 +1465,54 @@ function showEmpty() {
   $('rows').innerHTML = LintApp.emptyState({
     title: 'Open a log or drop it here',
     body: 'It never leaves your browser, even at a gigabyte.',
-    extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button></div>'
+    extra: '<div class="empty-actions"><button class="primary" id="emptyOpen">Open a file</button>' +
+      '<button class="bordered" id="emptySample">Load a sample</button></div>' +
+      LintApp.shortcutsHint
   });
   $('emptyOpen').addEventListener('click', () => $('fileInput').click());
+  $('emptySample').addEventListener('click', () => openFile(new File([sampleLog()], 'checkout-api.log', { type: 'text/plain' })));
   $('spacer').style.height = '0px';
+}
+
+/* A few minutes of a checkout service, made here rather than shipped: every
+   level, a slow patch, retries, and exceptions with their stack traces, so
+   the filters, the folding and the density strip all have something to do.
+   Seeded, so it is the same log every time. */
+function sampleLog() {
+  let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const routes = ['GET /v2/cart', 'POST /v2/cart/items', 'GET /v2/products', 'POST /v2/checkout', 'GET /v2/orders', 'GET /health'];
+  const out = [];
+  let t = Date.UTC(2026, 8, 14, 9, 31, 0);
+  const at = () => new Date(t += Math.floor(rnd() * 1400) + 80).toISOString();
+  const line = (lvl, msg) => out.push(at() + ' ' + lvl.padEnd(5) + ' [checkout-api] ' + msg);
+  line('INFO', 'Starting checkout-api 2.4.1 on port 8080 (environment: production)');
+  line('INFO', 'Connected to postgres at db-eu-1a:5432, pool 4..32');
+  line('DEBUG', 'Loaded 12 feature flags from config service');
+  for (let i = 0; i < 260; i++) {
+    const r = rnd(), route = pick(routes), user = 1000 + Math.floor(rnd() * 90);
+    const slow = i > 150 && i < 190;
+    const ms = Math.floor((slow ? 900 : 20) + rnd() * (slow ? 2400 : 180));
+    if (r < 0.62) line('INFO', route + ' ' + (route.startsWith('POST') ? 201 : 200) + ' in ' + ms + 'ms user=' + user);
+    else if (r < 0.8) line('DEBUG', 'Cache ' + (rnd() < 0.7 ? 'hit' : 'miss') + ' cart:' + user);
+    else if (r < 0.9 || slow) line('WARN', slow ? 'Slow query on orders: ' + ms + 'ms (threshold 500ms)' : 'Retrying payment provider, attempt ' + (1 + Math.floor(rnd() * 2)) + ' of 3');
+    else if (r < 0.95) {
+      line('ERROR', 'POST /v2/checkout 500 in ' + ms + 'ms user=' + user);
+      out.push('System.InvalidOperationException: Cart ' + user + ' has no items to check out',
+        '   at Shop.Checkout.CheckoutHandler.Handle(CheckoutRequest request) in /src/Checkout/CheckoutHandler.cs:line 58',
+        '   at Shop.Pipeline.RequestPipeline`1.RunAsync(TRequest request) in /src/Pipeline/RequestPipeline.cs:line 31',
+        '   at Microsoft.AspNetCore.Routing.EndpointMiddleware.Invoke(HttpContext httpContext)');
+    } else {
+      line('ERROR', 'Payment provider did not answer: user=' + user);
+      out.push('System.Net.Http.HttpRequestException: The SSL connection could not be established',
+        ' ---> System.TimeoutException: The operation has timed out.',
+        '   at Shop.Payments.StripeClient.ChargeAsync(Charge charge) in /src/Payments/StripeClient.cs:line 112',
+        '   at Shop.Checkout.CheckoutHandler.Handle(CheckoutRequest request) in /src/Checkout/CheckoutHandler.cs:line 71');
+    }
+  }
+  line('INFO', 'Draining connections before shutdown');
+  return out.join('\n') + '\n';
 }
 
 enable(false);

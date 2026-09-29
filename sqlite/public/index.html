@@ -31,7 +31,7 @@
 <link rel="stylesheet" href="/shared/app.css">
 <style>
 /* ==========================================================================
-   SQLite builds its own frame, as PDF and Logs do: a database is a set of
+   SQLite builds its own frame, as PDF and LOG do: a database is a set of
    tables rather than one text, so there is no source to sit beside it.
    Everything below is scoped to this tool and uses the shared tokens.
    ========================================================================== */
@@ -94,8 +94,6 @@
   flex: none; font-size: var(--fs-micro); color: var(--faint);
   text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500;
 }
-.rail-item.query { color: var(--hue); font-weight: 550; margin-bottom: var(--s1); }
-.rail-item.query svg { width: 14px; height: 14px; align-self: center; flex: none; }
 
 /* ---------- the view: one table, its schema, or a query ---------- */
 #view { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); position: relative; }
@@ -251,6 +249,9 @@
 }
 .drawer-tabs { display: flex; gap: 2px; flex: none; padding: var(--s2); border-bottom: var(--hairline) solid var(--line); }
 .drawer-tabs button { flex: 1; padding: 5px var(--s2); border-radius: var(--radius); color: var(--muted); font-size: var(--fs-small); }
+.drawer-tabs .drawer-close { flex: none; width: 30px; padding: 0; display: grid; place-items: center; }
+.drawer-tabs .drawer-close:hover { color: var(--ink); background: var(--row-hover); }
+.drawer-tabs .drawer-close svg { width: 16px; height: 16px; }
 .drawer-tabs button[aria-selected="true"] { background: var(--hue-wash); color: var(--hue); font-weight: 600; }
 .drawer-body { flex: 1; overflow: auto; padding: var(--s3); }
 .drawer-panel { display: none; }
@@ -370,15 +371,15 @@ $('app').innerHTML = `
     <button id="btnRail" class="icon-btn needs-db" title="Tables" aria-label="Tables" aria-pressed="false"></button>
     <span class="spacer"></span>
     <button id="btnQuery" class="bordered needs-db" title="Run SQL on this database (${MOD}E)">SQL</button>
-    <button id="btnInfo" class="icon-btn needs-db" title="About this file (${MOD}I)"
-            aria-label="About this file" aria-pressed="false"></button>
-    <div class="menu-wrap needs-db">
-      <button id="btnMore" class="icon-btn" title="More actions" aria-label="More actions" aria-haspopup="true"></button>
-      <div class="menu" id="moreMenu" role="menu">
-        <button class="menu-item" id="btnCsv" role="menuitem">Copy rows as CSV</button>
-        <button class="menu-item" id="btnJson" role="menuitem">Copy rows as JSON</button>
-        <button class="menu-item" id="btnCreate" role="menuitem">Copy the CREATE statement</button>
-      </div>
+    <button id="btnInfo" class="icon-btn needs-db" title="Details: the chosen value, and the file (${MOD}I)"
+            aria-label="Details" aria-pressed="false"></button>
+    <!-- Export is where every tool keeps its ways out -->
+    <div class="group needs-db">
+      ${LintApp.toolMenuHTML('menuExport', 'Export', [
+        { id: 'btnCsv', label: 'Copy rows as CSV', title: 'The rows shown, sorted and filtered as they are' },
+        { id: 'btnJson', label: 'Copy rows as JSON', title: 'The rows shown, as an array of records' },
+        { id: 'btnCreate', label: 'Copy the CREATE statement', title: 'The SQL that makes this table or view' }
+      ])}
     </div>
     <div class="group" id="chromeSlot"></div>
     <input type="file" id="fileInput" accept="${c.accept}" hidden>
@@ -425,6 +426,7 @@ $('app').innerHTML = `
       <div class="drawer-tabs" role="tablist">
         <button id="tabValue" role="tab" aria-selected="true">Value</button>
         <button id="tabFile" role="tab" aria-selected="false">File</button>
+        <button id="btnCloseDrawer" class="drawer-close" title="Close the panel (Esc)" aria-label="Close the panel"></button>
       </div>
       <div class="drawer-body">
         <div class="drawer-panel active" id="panelValue"></div>
@@ -441,23 +443,21 @@ $('app').innerHTML = `
 `;
 
 LintApp.mountChrome($('chromeSlot'), 'sqlite');
-LintApp.wireMenu($('btnMore'), $('moreMenu'));
+LintApp.wireToolMenus(() => '');
+/* a query result has no CREATE statement of its own */
+LintApp.when('btnCreate', () => state.mode !== 'query');
 
 const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
 const ICON = {
   rail: '<path d="M4 6h3M4 12h3M4 18h3M10 6h10M10 12h10M10 18h10"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.4"/>',
-  more: '<circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>' +
-        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>' +
-        '<circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
   prev: '<path d="M15 6l-6 6 6 6"/>',
-  next: '<path d="M9 6l6 6-6 6"/>',
-  query: '<path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12"/>'
+  next: '<path d="M9 6l6 6-6 6"/>'
 };
 $('btnRail').innerHTML = I(ICON.rail);
 $('btnInfo').innerHTML = I(ICON.info);
-$('btnMore').innerHTML = I(ICON.more);
+$('btnCloseDrawer').innerHTML = I('<path d="M6 6l12 12M18 6 6 18"/>');
 $('btnPrev').innerHTML = I(ICON.prev);
 $('btnNext').innerHTML = I(ICON.next);
 
@@ -643,7 +643,8 @@ const EMPTY = LintApp.emptyState({
   body: 'Tables, schema and your queries all run in this tab. The file never leaves it.',
   extra: '<div class="empty-actions">' +
     '<button class="primary" data-empty="open">Open a file</button>' +
-    '<button class="bordered" data-empty="sample">Load a sample</button></div>'
+    '<button class="bordered" data-empty="sample">Load a sample</button></div>' +
+    LintApp.shortcutsHint
 });
 
 function showEmpty() {
@@ -673,7 +674,8 @@ function buildRail() {
        so folded until asked for */
     ['Internal', t.filter((x) => x.kind === 'internal' || x.kind === 'shadow'), false]
   ];
-  let html = `<button class="rail-item query" data-query>${I(ICON.query)}<span class="nm">SQL query</span></button>`;
+  /* SQL is reached from the toolbar, as in Parquet, and not listed here too */
+  let html = '';
   groups.forEach(([title, items, open]) => {
     if (!items.length && title !== 'Tables') return;
     const list = items.map((x) =>
@@ -693,7 +695,7 @@ function buildRail() {
 
 function markRail() {
   $('rail').querySelectorAll('.rail-item').forEach((b) => {
-    const here = b.hasAttribute('data-query') ? state.mode === 'query' : state.mode !== 'query' && b.dataset.name === state.name;
+    const here = state.mode !== 'query' && b.dataset.name === state.name;
     b.setAttribute('aria-current', String(here));
   });
 }
@@ -701,8 +703,7 @@ function markRail() {
 $('rail').addEventListener('click', (e) => {
   const b = e.target.closest('.rail-item');
   if (!b) return;
-  if (b.hasAttribute('data-query')) openQuery();
-  else select(b.dataset.name);
+  select(b.dataset.name);
   if (window.matchMedia('(max-width: 860px)').matches) toggleRail(false);
 });
 
@@ -757,7 +758,10 @@ function showMode() {
   $('pager').hidden = state.mode === 'schema';
   $('grid').hidden = state.mode === 'schema';
   $('schemaView').hidden = state.mode !== 'schema';
-  $('btnCreate').hidden = q;
+  /* one button goes to SQL and back, named for where it goes */
+  const back = q && state.name;
+  $('btnQuery').textContent = back ? 'Table' : 'SQL';
+  $('btnQuery').title = back ? `Back to ${state.name} (${MOD}E)` : `Run SQL on this database (${MOD}E)`;
   $('modeSeg').querySelectorAll('button').forEach((b) =>
     b.setAttribute('aria-checked', String(b.dataset.mode === state.mode)));
 
@@ -818,13 +822,22 @@ function renderGrid() {
   const numeric = grid.columns.map((_, i) => grid.rows.length > 0 &&
     grid.rows.every((r) => r[i] === null || typeof r[i] === 'number' || typeof r[i] === 'bigint'));
 
+  /* SQLite has no date type, so times are often stored as seconds (or
+     milliseconds) since 1970. A column named like a time whose every value
+     is one says so under its name, and each cell shows its date on hover;
+     the number itself stays, since it is what the database holds. */
+  const TIME_NAME = /(^|_)(at|on|time|date|ts|timestamp|created|updated|modified|deleted|expires?)$|(At|On|Time|Date)$/;
+  const timeCol = grid.columns.map((col, i) => numeric[i] && TIME_NAME.test(col.name) &&
+    grid.rows.some((r) => r[i] !== null) && grid.rows.every((r) => r[i] === null || asTime(r[i]) !== null));
+
   let html = '<table class="grid-table"><thead><tr><th class="rn"></th>';
   grid.columns.forEach((col, i) => {
     const arrow = sortable && state.order && state.order.col === col.name
       ? `<span class="sort">${state.order.dir < 0 ? '▼' : '▲'}</span>` : '';
     const sub = col.type !== undefined
-      ? (col.pk ? '<span class="key">key</span> ' : '') + esc((col.type || 'any').toLowerCase())
-      : '';
+      ? (col.pk ? '<span class="key">key</span> ' : '') + esc((col.type || 'any').toLowerCase()) +
+        (timeCol[i] ? ' · unix time' : '')
+      : (timeCol[i] ? 'unix time' : '');
     html += `<th data-col="${i}"${sortable ? ' class="sortable" title="Sort by this column"' : ''}>` +
       esc(col.name) + arrow + (sub ? `<span class="coltype">${sub}</span>` : '') + '</th>';
   });
@@ -834,7 +847,8 @@ function renderGrid() {
     html += `<tr><td class="rn">${fmtNum(grid.offset + r + 1)}</td>`;
     row.forEach((v, ci) => {
       const selected = sel && sel.r === r && sel.c === ci ? ' sel' : '';
-      html += `<td data-r="${r}" data-c="${ci}" class="${cellClass(v, numeric[ci])}${selected}">${cellText(v)}</td>`;
+      const when = timeCol[ci] && v !== null ? ` data-quick-tip="${asTime(v)}"` : '';
+      html += `<td data-r="${r}" data-c="${ci}" class="${cellClass(v, numeric[ci])}${selected}"${when}>${cellText(v)}</td>`;
     });
     html += '</tr>';
   });
@@ -902,7 +916,22 @@ $('grid').addEventListener('click', (e) => {
     return;
   }
   const td = e.target.closest('td[data-c]');
-  if (td) selectCell(+td.dataset.r, +td.dataset.c);
+  if (!td) return;
+  selectCell(+td.dataset.r, +td.dataset.c);
+  /* a cell that shows only part of its value opens it whole, formatted */
+  if (clipped(td) && !$('drawer').classList.contains('open')) openDrawer('value');
+});
+
+/* long text, JSON and anything the column cuts short have more than the
+   cell shows; a blob opens as hex */
+function clipped(td) {
+  return td.classList.contains('blob') || td.scrollWidth > td.clientWidth || /…$/.test(td.textContent);
+}
+/* and say so on hover, in the tooltip style every icon uses */
+$('grid').addEventListener('pointerover', (e) => {
+  const td = e.target.closest('td[data-c]');
+  if (!td || td.dataset.quickTip !== undefined) return;
+  if (clipped(td)) td.dataset.quickTip = 'Click to see the whole value';
 });
 
 let filterTimer;
@@ -929,7 +958,9 @@ $('filter').addEventListener('keydown', (e) => {
 let cellSeq = 0;
 let blobUrl = null;
 
-async function selectCell(r, ci, keepDrawer) {
+/* Choosing a cell fills the details panel, and shows it there if the panel
+   is open. It never opens the panel: that is the person's to switch on. */
+async function selectCell(r, ci) {
   if (!grid || !grid.rows[r]) return;
   sel = { r, c: ci };
   $('grid').querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
@@ -938,7 +969,7 @@ async function selectCell(r, ci, keepDrawer) {
     td.classList.add('sel');
     td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
-  if (!keepDrawer) openDrawer('value');
+  if ($('drawer').classList.contains('open')) openDrawer('value');
 
   const seq = ++cellSeq;
   const v = grid.rows[r][ci];
@@ -956,9 +987,11 @@ async function selectCell(r, ci, keepDrawer) {
 }
 
 let shownValue = null;     // what Copy copies
+let shownName = 'value.json';   // what the JSON viewer names it
 
 function paintValue(col, where, v) {
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  shownName = String(col).replace(/[^\w.-]+/g, '_') + '-' + String(where).replace(/\s+/g, '') + '.json';
   const head = (kind) => `<div class="value-head"><span class="col">${esc(col)}</span>` +
     `<span class="kind">${kind}</span><span class="where">${where}</span></div>`;
   const p = $('panelValue');
@@ -1015,7 +1048,8 @@ function paintValue(col, where, v) {
 
 $('panelValue').addEventListener('click', (e) => {
   if (e.target.id === 'btnCopyValue') copyValue();
-  else if (e.target.id === 'btnToJson') LintApp.copyAndOffer(shownValue, 'JSON', 'sqlite', 'json');
+  /* straight into the JSON viewer: the button already says where it goes */
+  else if (e.target.id === 'btnToJson') LintApp.openIn(shownValue, shownName, 'json');
 });
 
 function copyValue() {
@@ -1273,7 +1307,7 @@ $('btnCreate').addEventListener('click', async () => {
    ========================================================================== */
 function openDrawer(tab) {
   $('drawer').classList.add('open');
-  $('btnInfo').setAttribute('aria-pressed', String(tab === 'file'));
+  $('btnInfo').setAttribute('aria-pressed', 'true');
   [['tabValue', 'panelValue', 'value'], ['tabFile', 'panelFile', 'file']].forEach(([t, p, id]) => {
     $(t).setAttribute('aria-selected', String(id === tab));
     $(p).classList.toggle('active', id === tab);
@@ -1294,9 +1328,10 @@ function closeDrawer() {
 $('tabValue').addEventListener('click', () => openDrawer('value'));
 $('tabFile').addEventListener('click', () => openDrawer('file'));
 $('btnInfo').addEventListener('click', () => {
-  const on = $('drawer').classList.contains('open') && $('tabFile').getAttribute('aria-selected') === 'true';
-  if (on) closeDrawer(); else openDrawer('file');
+  if ($('drawer').classList.contains('open')) closeDrawer();
+  else openDrawer(sel ? 'value' : 'file');
 });
+$('btnCloseDrawer').addEventListener('click', closeDrawer);
 
 /* application_id values that name the format a file really is */
 const APPS = {
@@ -1394,6 +1429,7 @@ document.addEventListener('keydown', (e) => {
   if (typing()) return;
   if (e.key === 'PageDown') { e.preventDefault(); turn(1); return; }
   if (e.key === 'PageUp') { e.preventDefault(); turn(-1); return; }
+  if (e.key === 'Escape' && !sel && $('drawer').classList.contains('open')) { e.preventDefault(); closeDrawer(); return; }
   if (!sel || !grid || $('grid').hidden) return;
 
   /* the arrows walk the grid once a cell is chosen */
@@ -1402,7 +1438,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const r = Math.min(grid.rows.length - 1, Math.max(0, sel.r + moves[e.key][0]));
     const ci = Math.min(grid.columns.length - 1, Math.max(0, sel.c + moves[e.key][1]));
-    selectCell(r, ci, !$('drawer').classList.contains('open'));
+    selectCell(r, ci);
   } else if (mod && k === 'c' && !String(window.getSelection())) {
     e.preventDefault();
     const v = grid.rows[sel.r][sel.c];
@@ -1430,7 +1466,7 @@ LintApp.shortcuts([{ title: 'SQLite', items: [
   { keys: ['pageup'], label: 'Previous rows' },
   { keys: ['up', 'down', 'left', 'right'], label: 'Move between cells' },
   { keys: ['mod+c'], label: 'Copy the chosen cell' },
-  { keys: ['mod+i'], label: 'About this file' }
+  { keys: ['mod+i'], label: 'Details panel: open or close' }
 ] }]);
 
 function ident(name) {

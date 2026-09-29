@@ -8,6 +8,13 @@ const VERSION = '__VERSION__';
 const FILES = __FILES__;
 const CACHE = 'lint-' + VERSION;
 
+/* Files too large to give every visitor — DuckDB, which the Parquet tool
+   loads only for sorting and SQL. Each is saved the first time it is
+   fetched, in a cache of its own that outlives deploys, since its URLs
+   carry its version. Entries no longer listed are dropped on activate. */
+const LAZY = __LAZY__;
+const LAZY_CACHE = 'lint.lazy';
+
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
@@ -18,6 +25,10 @@ self.addEventListener('activate', (e) => {
       .then((keys) => Promise.all(keys
         .filter((k) => k.startsWith('lint-') && k !== CACHE)
         .map((k) => caches.delete(k))))
+      .then(() => caches.open(LAZY_CACHE))
+      .then((c) => c.keys().then((reqs) => Promise.all(reqs
+        .filter((r) => !LAZY.includes(new URL(r.url).pathname))
+        .map((r) => c.delete(r)))))
       .then(() => self.clients.claim())
   );
 });
@@ -26,7 +37,16 @@ self.addEventListener('activate', (e) => {
    API, a format that does not exist yet — goes to the network as usual. */
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== location.origin) return;
+  if (LAZY.includes(url.pathname)) {
+    e.respondWith(caches.open(LAZY_CACHE).then((c) => c.match(req).then((hit) => hit ||
+      fetch(req).then((res) => {
+        if (res.ok) c.put(req, res.clone());
+        return res;
+      }))));
+    return;
+  }
   e.respondWith(
     caches.match(req, { cacheName: CACHE, ignoreSearch: req.mode === 'navigate' })
       .then((hit) => hit || fetch(req))

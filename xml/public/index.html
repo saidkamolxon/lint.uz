@@ -29,6 +29,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/shared/theme.css">
 <link rel="stylesheet" href="/shared/app.css">
+<link rel="stylesheet" href="/shared/compare.css">
 </head>
 <body>
 <div class="app" id="app"></div>
@@ -48,14 +49,18 @@ window.LINT_CONFIG = {
   searchPlaceholder: 'Search elements, attributes and text…',
   actions: [
     { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Put every element on its own line, indented two spaces per level' },
-    { id: 'btnMinify', label: 'Minify', title: 'Remove the whitespace between tags to make the document as small as possible' },
-    { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Copy this document as JSON, ready to open in the JSON viewer' }
-  ]
+    { id: 'btnMinify', label: 'Minify', title: 'Remove the whitespace between tags to make the document as small as possible' }
+  ],
+  convert: [
+    { id: 'btnToJson', label: 'JSON', key: 'mod+shift+j', title: 'Convert this document to JSON and open it in the JSON viewer (also copied)' }
+  ],
+  ext: 'xml'
 };
 </script>
 <script src="/shared/theme-boot.js"></script>
 <script src="/shared/shell.js"></script>
 <script src="/shared/app.js"></script>
+<script src="/shared/compare.js"></script>
 <script>
 (function () {
 'use strict';
@@ -492,7 +497,28 @@ var app = LintApp.init({
     body: 'Elements, attributes and text, each one click away from its XPath.',
     extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
+  /* the editor is Compare's "before", so every edit re-runs the diff */
+  onParsed: function () { if (cmp && cmp.comparing()) cmp.onEditorChanged(); },
+  /* a whole document pasted in lands formatted — unless it was formatted
+     already, or keeps text whose whitespace matters (CDATA, xml:space) */
+  formatPaste: function (text) {
+    if (text.length > 20e6 || /\n[ \t]+</.test(text) || /<!\[CDATA\[|xml:space\s*=\s*["']preserve/.test(text)) return null;
+    if (!parse(text).ok) return null;
+    return formatXml(text).replace(/\s+$/, '');
+  },
   sample: SAMPLE
+});
+
+/* Compare, as in JSON, over the same data To JSON gives: elements as keys,
+   attributes as @name, repeated elements as lists. Attribute order and
+   formatting then never count as changes. */
+var cmp = LintCompare.mount({
+  app: app, parse: parse, label: 'XML',
+  toValue: function (res) {
+    var root = res.value.documentElement, out = {};
+    out[root.nodeName] = xmlToJson(root);
+    return out;
+  }
 });
 
 document.getElementById('btnFormat').addEventListener('click', function () {

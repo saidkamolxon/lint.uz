@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificate Viewer &amp; Decoder (SSL/TLS, X.509, PEM) · lint.one</title>
+<meta name="description" content="A private SSL/TLS certificate decoder. Paste a PEM or open a .crt, .cer, .der or .p7b file: see when it expires, which domains it covers, whether the chain is complete and signed, and whether the key matches. Nothing is uploaded.">
+<link rel="canonical" href="https://lint.one/cert/">
+<!-- one installable app for the whole suite; its file_handlers send each
+     format to its own page, where LintApp.takeHandoff takes the file -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="lint">
+<meta name="theme-color" content="#FBFBFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lint.one">
+<meta property="og:url" content="https://lint.one/cert/">
+<meta property="og:title" content="Certificate Viewer &amp; Decoder (SSL/TLS, X.509, PEM) · lint.one">
+<meta property="og:description" content="A private SSL/TLS certificate decoder. Paste a PEM or open a .crt, .cer, .der or .p7b file: see when it expires, which domains it covers, whether the chain is complete and signed, and whether the key matches. Nothing is uploaded.">
+<meta property="og:image" content="https://lint.one/og/cert.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<!-- the pages carry their own light and dark themes; Dark Reader would
+     repaint them on top and lose the format colours and glyphs -->
+<meta name="darkreader-lock">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/shared/theme.css">
+<link rel="stylesheet" href="/shared/app.css">
+<style>
+/* CERT shows a report instead of a tree, as ENV does: the answer first,
+   what is wrong, then each certificate. It reuses the shared tokens. */
+#tree.cert-mode { padding: 0; font-family: var(--ui); }
+
+/* the PEM text: armour lines stand out, base64 recedes */
+.hl-armor { color: var(--t-key); font-weight: 600; }
+.hl-b64 { color: var(--muted); }
+
+.c-sec { padding: var(--s3) var(--s3) var(--s2); }
+.c-sec + .c-sec { border-top: var(--hairline) solid var(--line); }
+.c-sec h3 {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  margin: 0 0 var(--s2); font-size: var(--fs-small); font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.c-sec h3 .n { font-weight: 400; color: var(--faint); text-transform: none; letter-spacing: 0; }
+.c-sec h3 .hint { font-weight: 400; color: var(--faint); text-transform: none; letter-spacing: 0; margin-left: auto; }
+
+/* the answer to "is this certificate good?", first */
+.verdict { margin: 0; padding: var(--s3) var(--s3) var(--s2); font-size: var(--fs-mid); font-weight: 600; color: var(--ink); line-height: 1.4; }
+.verdict::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: var(--s2); vertical-align: 1px; background: var(--ok); }
+.verdict.risk::before { background: var(--warn); }
+.verdict.break::before { background: var(--bad); }
+
+/* the domain typed in the search box, checked against the names */
+.domain { margin: 0 var(--s3) var(--s2); padding: var(--s2) var(--s3); border-radius: var(--radius); font-size: var(--fs-base); line-height: 1.45; }
+.domain.ok { background: color-mix(in srgb, var(--ok) 10%, transparent); color: var(--ink); }
+.domain.bad { background: color-mix(in srgb, var(--bad) 9%, transparent); color: var(--ink); }
+.domain b { font-family: var(--mono); font-weight: 600; }
+.domain .mark { font-weight: 700; margin-right: var(--s1); }
+.domain.ok .mark { color: var(--ok); }
+.domain.bad .mark { color: var(--bad); }
+
+.finds { list-style: none; margin: 0 0 var(--s1); padding: 0; }
+.find {
+  display: flex; gap: var(--s2); align-items: baseline;
+  padding: 3px var(--s2); margin: 0 calc(var(--s2) * -1);
+  border-radius: var(--radius); font-size: var(--fs-base); line-height: 1.45; color: var(--ink);
+}
+.find[data-line] { cursor: pointer; }
+.find[data-line]:hover { background: var(--row-hover); }
+.find .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; background: var(--faint); }
+.find.risk .dot { background: var(--warn); }
+.find.break .dot { background: var(--bad); }
+.find.fyi { color: var(--muted); }
+.find .msg { flex: 1; min-width: 0; }
+.find .fix { flex: none; min-height: 24px; padding: 1px var(--s2); font-size: var(--fs-small); background: var(--raised); }
+
+/* the chain: one row a certificate, the signature between */
+.crt { border: var(--hairline) solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.crt-head {
+  display: grid; grid-template-columns: 16px auto 1fr auto; gap: var(--s2); align-items: baseline;
+  width: 100%; padding: var(--s2) var(--s3) var(--s2) var(--s2); text-align: left;
+  border: none; border-radius: var(--radius); font-weight: 400; cursor: pointer;
+}
+.crt-head:hover { background: var(--row-hover); }
+.crt-head .chev { color: var(--faint); transition: transform var(--t-fast); display: inline-block; }
+.crt.open .crt-head .chev { transform: rotate(90deg); }
+.crt-head .num { font-family: var(--mono); font-size: var(--fs-small); color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted)); }
+.crt-head .nm { font-family: var(--mono); font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crt-head .role { font-family: var(--ui); font-weight: 400; color: var(--muted); font-size: var(--fs-small); margin-left: var(--s2); }
+.crt-head .until { font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+.crt-head .until.risk { color: var(--warn); font-weight: 600; }
+.crt-head .until.break { color: var(--bad); font-weight: 600; }
+.link {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: 3px 0 3px 26px; font-size: var(--fs-small); color: var(--muted);
+}
+.link .ln { width: 1px; height: 14px; background: var(--line-strong); margin-right: var(--s1); }
+.link.ok b { color: var(--ok); font-weight: 600; }
+.link.bad b { color: var(--bad); font-weight: 600; }
+.link.unknown b { color: var(--muted); font-weight: 600; }
+.chain-end { font-size: var(--fs-small); color: var(--muted); padding: var(--s1) 0 0 26px; line-height: 1.5; }
+
+.crt-body { padding: 0 var(--s3) var(--s3); }
+.meta { margin: 0; font-size: var(--fs-base); }
+.meta div {
+  display: grid; grid-template-columns: 104px 1fr; gap: var(--s3);
+  padding: 5px 0; border-bottom: var(--hairline) solid var(--line);
+  align-items: baseline;
+}
+.meta div:last-child { border-bottom: none; }
+.meta dt { color: var(--muted); font-size: var(--fs-small); }
+.meta dd { margin: 0; font-family: var(--mono); font-size: calc(var(--code-size, var(--fs-base)) * 0.9); overflow-wrap: anywhere; color: var(--ink); line-height: 1.5; }
+.meta dd small { display: block; font-family: var(--ui); color: var(--muted); font-size: var(--fs-small); margin-top: 1px; }
+.meta dd.bad { color: var(--bad); }
+/* 24px high at least, the smallest a pointer target may be */
+.meta dd .copy {
+  min-height: 24px; margin-left: var(--s1); padding: 0 6px; font-family: var(--ui); font-size: var(--fs-micro);
+  color: var(--muted); border: var(--hairline) solid var(--line); border-radius: var(--radius-sm); vertical-align: 1px;
+}
+.meta dd .copy:hover { color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips span { font-family: var(--mono); font-size: var(--fs-small); padding: 0 7px; border-radius: var(--radius-sm); border: var(--hairline) solid var(--line); background: var(--raised); }
+.chips span.hit { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.actions { display: flex; gap: var(--s1); flex-wrap: wrap; margin: var(--s2) 0 0; }
+.actions button { font-size: var(--fs-small); padding: 3px var(--s2); }
+
+/* keys and requests */
+.item { padding: var(--s2) 0; border-bottom: var(--hairline) solid var(--line); font-size: var(--fs-base); line-height: 1.5; }
+.item:last-child { border-bottom: none; }
+.item .what { font-weight: 600; }
+.item .where { color: var(--faint); font-size: var(--fs-small); margin-left: var(--s1); cursor: pointer; }
+.item .ok { color: var(--ok); }
+.item .bad { color: var(--bad); }
+.item .muted { color: var(--muted); }
+.none { color: var(--faint); font-size: var(--fs-small); margin: 0 0 var(--s2); }
+.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.LINT_CONFIG = {
+  id: 'cert',
+  name: 'CERT',
+  host: 'lint.one/cert',
+  label: 'PEM',
+  emptyLine: 'PEM text, or a .crt, .cer, .der, .p7b, .csr or .key file. You will see when it expires, what it covers and whether the chain holds.',
+  hue: '#4ADE80',
+  /* a light hue, like Parquet's: its marks and the Open button are ink */
+  hueInk: '#1A1D23',
+  accept: '.pem,.crt,.cer,.der,.p7b,.p7c,.csr,.key,.pub,.cert,.ca-bundle,.txt,application/x-x509-ca-cert,application/pkix-cert,application/x-pem-file,application/pkcs7-mime',
+  placeholder: 'Paste a certificate, a chain, a CSR or a key…',
+  searchPlaceholder: 'Check a domain, e.g. api.example.com',
+  actions: [
+    { id: 'btnOrder', label: 'Put in order', primary: true, title: 'The certificate first, then each issuer: the order servers send them in' }
+  ],
+  convert: [
+    { id: 'btnToJson', label: 'JSON', title: 'Every field of every certificate as JSON, to open in the JSON viewer (also copied)' }
+  ],
+  /* the parts people send on: each one copied */
+  export: [
+    { id: 'btnLeafOnly', label: 'Copy the certificate only', title: 'Just the server certificate, without the chain or the key' },
+    { id: 'btnNoRoot', label: 'Copy the chain without the root', title: 'What a server should send: the certificate and its intermediates' },
+    { id: 'btnNoKey', label: 'Copy without the private key', title: 'The same text with every private key taken out, safe to share' }
+  ],
+  ext: 'pem'
+};
+</script>
+<script src="/shared/theme-boot.js"></script>
+<script src="/shared/shell.js"></script>
+<script src="/shared/app.js"></script>
+<script src="x509.js"></script>
+<script src="checks.js"></script>
+<script>
+(function () {
+'use strict';
+
+var esc = LintApp.esc;
+var X = window.CertX509, C = window.CertChecks;
+var DAY = 86400000;
+
+/* ==========================================================================
+   Highlighting: the armour lines, headers, base64, and text around it
+   ========================================================================== */
+function highlight(text) {
+  var inside = false;
+  return text.split('\n').map(function (line) {
+    if (/^-----BEGIN [A-Z0-9 #]+-----\s*$/.test(line)) { inside = true; return '<span class="hl-armor">' + esc(line) + '</span>'; }
+    if (/^-----END [A-Z0-9 #]+-----\s*$/.test(line)) { inside = false; return '<span class="hl-armor">' + esc(line) + '</span>'; }
+    if (inside) return /^[A-Za-z-]+:/.test(line) ? '<span class="hl-cmt">' + esc(line) + '</span>' : '<span class="hl-b64">' + esc(line) + '</span>';
+    return line.trim() ? '<span class="hl-cmt">' + esc(line) + '</span>' : esc(line);
+  }).join('\n');
+}
+
+/* ==========================================================================
+   Reading: the quick part at once, the checks (signatures, fingerprints)
+   when WebCrypto answers
+   ========================================================================== */
+var current = null;      // the last analysis
+var seq = 0;
+var open = {};           // certificate numbers shown open
+var opened = false;      // the first certificate was opened for this document
+
+/* base64 with no armour (an x5c entry, a copied field) is read as DER */
+function armour(text) {
+  if (/-----BEGIN /.test(text)) return text;
+  var t = text.replace(/\s+/g, '');
+  if (t.length < 100 || !/^[A-Za-z0-9+/]+={0,2}$/.test(t)) return text;
+  try { return X.derToPem(X.fromBase64(t)); } catch (e) { return text; }
+}
+
+function parse(text) {
+  var items = X.read(armour(text));
+  if (!items.length) {
+    return { ok: false, message: 'No certificate here: paste text with a -----BEGIN CERTIFICATE----- line, or open a .crt, .cer or .der file', line: 1, col: 1 };
+  }
+  return { ok: true, value: items };
+}
+
+function stats(items) {
+  var n = { cert: 0, key: 0, req: 0 };
+  items.forEach(function (it) {
+    if (it.kind === 'certificate') n.cert++;
+    else if (it.kind === 'bundle') n.cert += it.certs.length;
+    else if (/key/.test(it.kind || '')) n.key++;
+    else if (it.kind === 'request') n.req++;
+  });
+  var out = [];
+  if (n.cert) out.push(n.cert + (n.cert === 1 ? ' certificate' : ' certificates'));
+  if (n.req) out.push(n.req + (n.req === 1 ? ' request' : ' requests'));
+  if (n.key) out.push(n.key + (n.key === 1 ? ' key' : ' keys'));
+  return out.join(' · ');
+}
+
+function analyse() {
+  var text = armour(app.editor.getValue());
+  var mine = ++seq;
+  C.analyze(text).then(function (a) {
+    if (mine !== seq) return;
+    current = a;
+    /* the server's certificate opens by itself, once a document */
+    if (!opened && a.path.length) { open = {}; open[a.path[0].n] = true; opened = true; }
+    var marks = {};
+    a.problems.forEach(function (p) {
+      if (!p.line || p.impact === 'fyi') return;
+      var m = marks[p.line] || (marks[p.line] = { kind: 'warn', title: '' });
+      if (p.impact === 'break') m.kind = 'err';
+      m.title += (m.title ? '\n' : '') + p.message;
+    });
+    if (app.editor.setMarks) app.editor.setMarks(marks);
+    render();
+  }, function (err) {
+    if (mine !== seq) return;
+    current = null;
+    document.getElementById('tree').innerHTML = '<p class="verdict break">' + esc(err.message || String(err)) + '</p>';
+  });
+}
+
+/* ==========================================================================
+   The report
+   ========================================================================== */
+function fmtDate(t) {
+  return t == null ? '—' : new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function fmtDateTime(t) {
+  return t == null ? '—' : new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many || one + 's'); }
+
+function left(c, now) {
+  if (c.notAfter < now) return { cls: 'break', text: 'expired ' + fmtDate(c.notAfter) };
+  if (c.notBefore > now) return { cls: 'break', text: 'from ' + fmtDate(c.notBefore) };
+  var d = Math.round((c.notAfter - now) / DAY);
+  return { cls: d < 30 ? 'risk' : '', text: d < 30 ? plural(d, 'day') + ' left' : 'until ' + fmtDate(c.notAfter) };
+}
+
+function role(x, a) {
+  if (x === a.leaf && !x.ca) return x.selfSigned ? 'self-signed' : 'server certificate';
+  if (x.selfSigned) return 'root';
+  if (x.ca) return 'intermediate';
+  return 'certificate';
+}
+
+function findItem(p, i) {
+  return '<li class="find ' + p.impact + '"' + (p.line ? ' data-line="' + p.line + '"' : '') + ' title="' + (p.line ? 'Go to line ' + p.line : '') + '">' +
+    '<span class="dot"></span><span class="msg">' + esc(p.message) + '</span>' +
+    (p.fix === 'order' ? '<button class="fix" data-fix="order">Put in order</button>' : '') + '</li>';
+}
+
+function copyBtn(value, label) {
+  return '<button class="copy" data-copy="' + esc(value) + '" data-what="' + esc(label) + '">Copy</button>';
+}
+
+function certBody(x, a, hit) {
+  var c = x.c, now = a.now;
+  var life = Math.round((c.notAfter - c.notBefore) / DAY);
+  var l = left(c, now);
+  var validity = fmtDateTime(c.notBefore) + ' → ' + fmtDateTime(c.notAfter) +
+    '<small>' + (c.notAfter < now ? 'Expired ' + plural(Math.round((now - c.notAfter) / DAY), 'day') + ' ago'
+      : c.notBefore > now ? 'Starts in ' + plural(Math.round((c.notBefore - now) / DAY), 'day')
+      : C.span(Math.round((c.notAfter - now) / DAY)) + ' left') + ' of ' + C.span(life) + '</small>';
+  var up = x.issuers.filter(function (k) { return k.by !== x; });
+  var self = x.issuers.find(function (k) { return k.by === x; });
+  var signed = self ? (self.ok === true ? 'Signed by its own key (self-signed)' : self.ok === false ? 'Names itself as issuer, but did not sign itself' : 'Self-signed; this browser cannot check the signature')
+    : up.length ? up.map(function (k) { return (k.ok === true ? 'Signed by' : k.ok === false ? 'Not signed by' : 'Not checked against') + ' #' + k.by.n + ' ' + k.by.name; }).join('; ')
+    : 'Its issuer is not in this file';
+  var e = c.ext;
+  var sans = e.san.map(function (s) {
+    return '<span class="' + (hit && hit.by === s.value ? 'hit' : '') + '" title="' + esc(s.type) + '">' + esc(s.type === 'DNS' ? s.value : s.type + ': ' + s.value) + '</span>';
+  }).join('');
+  var rows = [
+    ['Subject', esc(c.subject.text || '(empty)')],
+    ['Issuer', esc(c.issuer.text || '(empty)')],
+    ['Valid', validity, l.cls === 'break' ? 'bad' : ''],
+    e.san.length ? ['Names', '<span class="chips">' + sans + '</span>'] : ['Names', '<span class="muted">none</span>'],
+    ['Key', esc(c.key.label) + (c.key.exponent ? '<small>exponent ' + c.key.exponent + '</small>' : '')],
+    ['Signature', esc(c.sigAlg.name) + '<small>' + esc(signed) + '</small>', up.some(function (k) { return k.ok === false; }) ? 'bad' : ''],
+    ['Serial', esc(c.serial) + copyBtn(c.serial.replace(/:/g, ''), 'Serial')],
+    e.keyUsage || e.extKeyUsage ? ['Usage', esc([].concat(e.keyUsage || [], e.extKeyUsage || []).join(', '))] : null,
+    e.ca !== null ? ['CA', !e.ca ? 'No' : e.pathLen === 0 ? 'Yes, for server certificates only<small>It may not sign another CA</small>'
+      : e.pathLen != null ? 'Yes<small>At most ' + plural(e.pathLen, 'more CA') + ' below it</small>' : 'Yes'] : null,
+    e.policies.length ? ['Policy', esc(e.policies.join(', '))] : null,
+    e.scts != null ? ['Logged', 'In ' + plural(e.scts, 'certificate transparency log') + '<small>Browsers want two or more for a public certificate</small>'] : null,
+    e.ocsp.length ? ['OCSP', esc(e.ocsp.join(' ')) + (e.mustStaple ? '<small>Must-staple: the server has to send an OCSP answer</small>' : '')] : null,
+    e.caIssuers.length ? ['Issuer file', esc(e.caIssuers.join(' ')) + '<small>Where clients can fetch a missing intermediate</small>'] : null,
+    e.crl.length ? ['CRL', esc(e.crl.join(' '))] : null,
+    e.ski ? ['Key ID', esc(e.ski) + (e.aki ? '<small>Issuer’s key ID ' + esc(e.aki) + '</small>' : '')] : null,
+    x.sha256 ? ['SHA-256', esc(x.sha256) + copyBtn(x.sha256, 'SHA-256 fingerprint')] : null,
+    x.sha1 ? ['SHA-1', esc(x.sha1) + copyBtn(x.sha1, 'SHA-1 fingerprint')] : null,
+    x.pin ? ['Key pin', esc(x.pin) + copyBtn(x.pin, 'Key pin') + '<small>SHA-256 of the public key, base64: what pinning compares</small>'] : null,
+    ['Extensions', esc(e.list.map(function (t) { return t.name + (t.critical ? ' (critical)' : ''); }).join(', ') || 'none')]
+  ].filter(Boolean);
+  return '<div class="crt-body"><dl class="meta">' + rows.map(function (r) {
+    return '<div><dt>' + r[0] + '</dt><dd' + (r[2] ? ' class="' + r[2] + '"' : '') + '>' + r[1] + '</dd></div>';
+  }).join('') + '</dl><div class="actions">' +
+    '<button class="bordered" data-pem="' + x.n + '">Copy PEM</button>' +
+    '<button class="bordered" data-der="' + x.n + '">Save as .cer</button>' +
+    '<button class="bordered" data-goto="' + x.line + '">Show in the text</button></div></div>';
+}
+
+/* a key: what it is, whether it is whole, its public half in the forms
+   people compare, which certificate it belongs to, and its other encodings */
+function keyCard(k, a) {
+  var id = 'k' + k.line;
+  if (k.kind === 'encrypted-key') {
+    return '<div class="crt"><div class="crt-head" style="cursor:default"><span></span><span class="num">L' + k.line + '</span>' +
+      '<span class="nm">Encrypted private key</span><span class="until">needs its password</span></div></div>';
+  }
+  var isOpen = open[id] !== undefined ? open[id] : !a.certs.length;
+  var match = k.matches.length
+    ? '<span class="ok">✓ Belongs to #' + k.matches.map(function (x) { return x.n + ' ' + esc(x.name); }).join(', #') + '</span>'
+    : k.matchesRequest.length ? '<span class="ok">✓ Belongs to the request</span>'
+    : a.certs.length ? (k.material ? '<span class="bad">✕ Belongs to none of the certificates here</span>' : '<span class="muted">Could not be compared in this browser</span>')
+    : '<span class="muted">No certificate here to compare it with. Paste its certificate after it, or compare the pin with a certificate’s “Key pin”.</span>';
+  var head = '<button class="crt-head" data-open="' + id + '" aria-expanded="' + isOpen + '">' +
+    '<span class="chev" aria-hidden="true">›</span><span class="num">L' + k.line + '</span>' +
+    '<span class="nm">' + esc(k.label) + '<span class="role">' + (k.kind === 'private-key' ? 'private key' : 'public key') + '</span></span>' +
+    '<span class="until ' + (k.intact === false ? 'break' : '') + '">' + (k.intact === false ? 'damaged' : k.format ? esc(k.format) : '') + '</span></button>';
+  if (!isOpen) return '<div class="crt">' + head + '</div>';
+  var rows = [
+    ['Matches', match],
+    k.intact !== null && k.intact !== undefined ? ['Whole', k.intact ? 'Yes<small>Its parts agree with one another, so it was not cut short or edited</small>' : 'No<small>Its parts do not agree: the key is damaged</small>', k.intact ? '' : 'bad'] : null,
+    k.strength ? ['Strength', esc(k.strength.text), k.strength.level === 'break' ? 'bad' : ''] : null,
+    k.format ? ['Format', esc(k.format) + '<small>' + (k.format === 'PKCS#8' ? 'The modern form, “BEGIN PRIVATE KEY”' : 'The older OpenSSL form, “BEGIN ' + (k.alg === 'EC' ? 'EC' : 'RSA') + ' PRIVATE KEY”') + '</small>'] : null,
+    k.pin ? ['Key pin', esc(k.pin) + copyBtn(k.pin, 'Key pin') + '<small>SHA-256 of the public key: the same as a certificate’s key pin when they belong together</small>'] : null,
+    k.sshFp ? ['SSH', esc(k.sshFp) + copyBtn(k.sshFp, 'SSH fingerprint') + '<small>What ssh-keygen -l, GitHub and servers show for this key</small>'] : null
+  ].filter(Boolean);
+  var acts = [];
+  if (k.spki) acts.push('<button class="bordered" data-key="pub" data-k="' + k.line + '">Copy public key</button>');
+  if (k.ssh) acts.push('<button class="bordered" data-key="ssh" data-k="' + k.line + '">Copy for SSH</button>');
+  if (k.kind === 'private-key' && k.pkcs8Der && k.traditional) {
+    acts.push(k.format === 'PKCS#8'
+      ? '<button class="bordered" data-key="trad" data-k="' + k.line + '">Copy as ' + (k.alg === 'EC' ? 'SEC 1' : 'PKCS#1') + '</button>'
+      : '<button class="bordered" data-key="pkcs8" data-k="' + k.line + '">Copy as PKCS#8</button>');
+  }
+  if (k.jwk) acts.push('<button class="bordered" data-key="jwk" data-k="' + k.line + '">Copy public JWK</button>');
+  acts.push('<button class="bordered" data-goto="' + k.line + '">Show in the text</button>');
+  return '<div class="crt open">' + head + '<div class="crt-body"><dl class="meta">' + rows.map(function (r) {
+    return '<div><dt>' + r[0] + '</dt><dd' + (r[2] ? ' class="' + r[2] + '"' : '') + '>' + r[1] + '</dd></div>';
+  }).join('') + '</dl><div class="actions">' + acts.join('') + '</div></div></div>';
+}
+
+function certRow(x, a, hit) {
+  var l = left(x.c, a.now);
+  return '<div class="crt' + (open[x.n] ? ' open' : '') + '">' +
+    '<button class="crt-head" data-open="' + x.n + '" aria-expanded="' + !!open[x.n] + '">' +
+    '<span class="chev" aria-hidden="true">›</span><span class="num">#' + x.n + '</span>' +
+    '<span class="nm" title="' + esc(x.c.subject.text) + '">' + esc(x.name) + '<span class="role">' + role(x, a) + '</span></span>' +
+    '<span class="until ' + l.cls + '">' + esc(l.text) + '</span></button>' +
+    (open[x.n] ? certBody(x, a, hit) : '') + '</div>';
+}
+
+function render() {
+  var el = document.getElementById('tree');
+  el.classList.add('cert-mode');
+  var a = current;
+  if (!a || !app.editor.getValue().trim()) { el.innerHTML = EMPTY; return; }
+  var host = document.getElementById('search').value;
+  var html = '';
+
+  if (a.verdict) html += '<p class="verdict ' + a.level + '">' + esc(a.verdict) + '</p>';
+
+  /* the domain typed in the search box */
+  var hit = null;
+  if (C.cleanHost(host) && a.leaf) {
+    hit = C.covers(a.leaf.c, host);
+    html += '<p class="domain ' + (hit.ok ? 'ok' : 'bad') + '"><span class="mark">' + (hit.ok ? '✓' : '✕') + '</span>' +
+      '<b>' + esc(hit.host) + '</b> ' + (hit.ok ? 'is covered' + (hit.by !== hit.host ? ' by <b>' + esc(hit.by) + '</b>' : '')
+        : hit.cnOnly ? 'matches only the common name, which browsers ignore'
+        : 'is not covered by this certificate' + (a.leaf.c.ext.san.length ? '' : ': it lists no names')) + '.</p>';
+  }
+
+  if (a.problems.length) {
+    html += '<section class="c-sec"><h3>To look at<span class="n">' + a.problems.length + '</span></h3><ul class="finds">' +
+      a.problems.map(findItem).join('') + '</ul></section>';
+  }
+
+  /* the chain, the server's certificate first */
+  if (a.path.length) {
+    html += '<section class="c-sec"><h3>' + (a.path.length > 1 ? 'Chain<span class="n">' + a.path.length + '</span><span class="hint">the certificate first, each signed by the next</span>' : 'Certificate') + '</h3>';
+    a.path.forEach(function (x, i) {
+      html += certRow(x, a, i === 0 ? hit : null);
+      var l = a.links[i];
+      if (l) {
+        html += '<div class="link ' + (l.ok === true ? 'ok' : l.ok === false ? 'bad' : 'unknown') + '"><span class="ln"></span>' +
+          (l.ok === true ? '<b>✓</b> signed by #' + l.to.n : l.ok === false ? '<b>✕</b> not signed by #' + l.to.n + ', though it has the name'
+            : '<b>?</b> named as issuer: #' + l.to.n + ' (this browser cannot check this signature)') + '</div>';
+      }
+    });
+    var top = a.top;
+    if (top && !top.selfSigned) {
+      html += '<p class="chain-end">#' + top.n + ' was issued by <b>' + esc(top.c.issuer.label) + '</b>, which is not in the file' +
+        (a.path.length > 1 ? ': as it should be, since clients carry their own roots.' : '.') + '</p>';
+    }
+    html += '</section>';
+  }
+  if (a.extras.length) {
+    html += '<section class="c-sec"><h3>Other certificates<span class="n">' + a.extras.length + '</span><span class="hint">not in the chain above</span></h3>' +
+      a.extras.map(function (x) { return certRow(x, a, null); }).join('<div style="height:6px"></div>') + '</section>';
+  }
+
+  if (a.keys.length) {
+    html += '<section class="c-sec"><h3>' + (a.keys.length > 1 ? 'Keys<span class="n">' + a.keys.length + '</span>' : 'Key') + '</h3>' +
+      a.keys.map(function (k) { return keyCard(k, a); }).join('<div style="height:6px"></div>') + '</section>';
+  }
+
+  if (a.requests.length) {
+    html += '<section class="c-sec"><h3>Certificate request' + (a.requests.length > 1 ? 's<span class="n">' + a.requests.length + '</span>' : '') + '</h3>' + a.requests.map(function (r) {
+      return '<dl class="meta">' +
+        '<div><dt>Subject</dt><dd>' + esc(r.subject.text || '(empty)') + '</dd></div>' +
+        '<div><dt>Names</dt><dd>' + (r.ext.san.length ? '<span class="chips">' + r.ext.san.map(function (s) { return '<span>' + esc(s.value) + '</span>'; }).join('') + '</span>' : 'none<small>A CA will take the names from here; without them only the common name is asked for</small>') + '</dd></div>' +
+        '<div><dt>Key</dt><dd>' + esc(r.key.label) + '</dd></div>' +
+        '<div><dt>Signature</dt><dd' + (r.sigOk === false ? ' class="bad"' : '') + '>' + esc(r.sigAlg.name) + '<small>' +
+          (r.sigOk === true ? 'Signed by its own key, as a CA requires' : r.sigOk === false ? 'Not signed by its own key' : 'Not checked in this browser') + '</small></dd></div>' +
+        (r.ext.extKeyUsage ? '<div><dt>Usage</dt><dd>' + esc(r.ext.extKeyUsage.join(', ')) + '</dd></div>' : '') +
+        '</dl>';
+    }).join('') + '</section>';
+  }
+
+  var keep = el.scrollTop;
+  el.innerHTML = html || '<p class="verdict">Nothing to show.</p>';
+  el.scrollTop = keep;
+}
+
+var EMPTY = LintApp.emptyState({
+  title: 'Paste a certificate to check it',
+  body: 'When it expires, which domains it covers, whether each link of the chain is signed, and whether the key matches.',
+  extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
+});
+
+/* ==========================================================================
+   Files: PEM is text; DER, .cer and .p7b are bytes, turned into PEM
+   ========================================================================== */
+function fileToText(file) {
+  return file.arrayBuffer().then(function (buf) {
+    var bytes = new Uint8Array(buf);
+    var head = bytes.subarray(0, 64);
+    var text = null;
+    /* DER starts with a SEQUENCE; text has no control bytes */
+    if (bytes[0] === 0x30 && (bytes[1] & 0x80)) {
+      try { return X.derToPem(bytes); } catch (e) {}
+    }
+    for (var i = 0; i < head.length; i++) if (head[i] === 0) { text = false; break; }
+    if (text === false) return X.derToPem(bytes);
+    return new TextDecoder().decode(bytes);
+  });
+}
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+var SAMPLE = "# shop.example: what the server is given. A sample made for lint.one;\n# its key signs nothing anywhere.\n\n-----BEGIN CERTIFICATE-----\nMIICojCCAimgAwIBAgIDWhfjMAoGCCqGSM49BAMDMEcxCzAJBgNVBAYTAlVaMRow\nGAYDVQQKDBFMaW50IFNhbXBsZSBUcnVzdDEcMBoGA1UEAwwTTGludCBTYW1wbGUg\nUm9vdCBDQTAeFw0yNjAxMDEwMDAwMDBaFw0zNjAxMDEwMDAwMDBaMEUxCzAJBgNV\nBAYTAlVaMRowGAYDVQQKDBFMaW50IFNhbXBsZSBUcnVzdDEaMBgGA1UEAwwRTGlu\ndCBTYW1wbGUgQ0EgUjMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASmkJS3Romc\nNPkjxl7oQky+sBY9cChkNtj3IGBri7vIAX/KXu50aPPP1kwo4NJDGd8hbDNNYE1u\nuaGZbyRHEBdxo4IBBDCCAQAwEgYDVR0TAQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8E\nBAMCAYYwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMB0GA1UdDgQWBBR6\niOdfHHzxKefVQsFEoVIDtZrNiDAfBgNVHSMEGDAWgBRPXvnC6CGhSYOVZCosljOF\n7f5aXDBCBggrBgEFBQcBAQQ2MDQwMgYIKwYBBQUHMAKGJmh0dHA6Ly9jYS5saW50\nLXNhbXBsZS5leGFtcGxlL3Jvb3QuY3J0MDcGA1UdHwQwMC4wLKAqoCiGJmh0dHA6\nLy9jYS5saW50LXNhbXBsZS5leGFtcGxlL3Jvb3QuY3JsMAoGCCqGSM49BAMDA2cA\nMGQCMHCQH3ZXssczY632Ofj7lN+yVW+H8mca4T9O/tPe+9Gln1BFFHtHumRokegl\nGlNUVgIwaKR8j/keWbw8DHd3BorXhLn6DlSJkT0KJ87W3IYl8v0qJKf0w2xWZoHQ\nboV8+inJ\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIICizCCAjCgAwIBAgIIA/HCqU57ENUwCgYIKoZIzj0EAwIwRTELMAkGA1UEBhMC\nVVoxGjAYBgNVBAoMEUxpbnQgU2FtcGxlIFRydXN0MRowGAYDVQQDDBFMaW50IFNh\nbXBsZSBDQSBSMzAeFw0yNjA2MDEwMDAwMDBaFw0zNjA2MDEwMDAwMDBaMBcxFTAT\nBgNVBAMMDHNob3AuZXhhbXBsZTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJcT\nC6sCjtt6APhtftRRCvT8FwIxfoofYY7pD/pR0p+aiF3SB4aNezVZIrjE9SS9HTLQ\nMm9xObYh4wahnoiaRWKjggE2MIIBMjAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB/wQE\nAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDATA5BgNVHREEMjAwggxzaG9wLmV4YW1w\nbGWCDiouc2hvcC5leGFtcGxlghBzaG9wLWNkbi5leGFtcGxlMB0GA1UdDgQWBBRT\nK9d2LxkOO6DWG72QDiwN0+WrUzAfBgNVHSMEGDAWgBR6iOdfHHzxKefVQsFEoVID\ntZrNiDBtBggrBgEFBQcBAQRhMF8wKwYIKwYBBQUHMAGGH2h0dHA6Ly9vY3NwLmxp\nbnQtc2FtcGxlLmV4YW1wbGUwMAYIKwYBBQUHMAKGJGh0dHA6Ly9jYS5saW50LXNh\nbXBsZS5leGFtcGxlL3IzLmNydDATBgNVHSAEDDAKMAgGBmeBDAECATAKBggqhkjO\nPQQDAgNJADBGAiEAm6xetKIktvsTeSJxaSQ2e3TW7sWNtphHZs0FaEPhijACIQC9\njOvfUHHL3/ecBvuP8vwMpqKS/PCywzsQ5utmZSvguA==\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIICDzCCAZWgAwIBAgIUP5JUEurJXyXXYL8aRm36fYqjThgwCgYIKoZIzj0EAwMw\nRzELMAkGA1UEBhMCVVoxGjAYBgNVBAoMEUxpbnQgU2FtcGxlIFRydXN0MRwwGgYD\nVQQDDBNMaW50IFNhbXBsZSBSb290IENBMB4XDTI2MDEwMTAwMDAwMFoXDTQ2MDEw\nMTAwMDAwMFowRzELMAkGA1UEBhMCVVoxGjAYBgNVBAoMEUxpbnQgU2FtcGxlIFRy\ndXN0MRwwGgYDVQQDDBNMaW50IFNhbXBsZSBSb290IENBMHYwEAYHKoZIzj0CAQYF\nK4EEACIDYgAE+eenYdVnPGp7umxnDu77noYhLQ1trgtXhoCy0YwOfT5MLJnl85AM\n8mcapAE6gX1xIQcmFoOfUkRzrRkLFE6kxRpztjDIHvnZqEDQI6NWYnSXWVNbzhbG\nC0CVI0/tK20vo0IwQDAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAd\nBgNVHQ4EFgQUT175wughoUmDlWQqLJYzhe3+WlwwCgYIKoZIzj0EAwMDaAAwZQIw\nLTjPNdWA0NadsW1sKSVqCFUlotQVFeDQLGHNE6qL/79526etN5VNeNQnHbiVE4+T\nAjEAmX8jfoZ/eBFn+fhYvyHpfeOf7l1vLGw9IFsadZBVHJCYbg/uYOaKSVgCF7/F\nVkwH\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgXaAC+6tqSvPBqBgn\nsuPIQ/7qFhx51sxVraNoSSVxYvihRANCAASXEwurAo7begD4bX7UUQr0/BcCMX6K\nH2GO6Q/6UdKfmohd0geGjXs1WSK4xPUkvR0y0DJvcTm2IeMGoZ6ImkVi\n-----END PRIVATE KEY-----\n";
+
+var app = LintApp.init({
+  id: 'cert',
+  label: 'PEM',
+  parse: parse,
+  stats: stats,
+  highlighter: highlight,
+  autoDepth: 1,
+  ownsPane: true,
+  okLabel: null,
+  emptyHTML: EMPTY,
+  fileToText: fileToText,
+  adapter: {
+    pathLabel: 'Field',
+    rootEntry: function () { return { key: undefined, value: null, path: [] }; },
+    children: function () { return []; },
+    childCount: function () { return 0; },
+    matches: function () { return false; },
+    path: function () { return ''; },
+    decorate: function () {},
+    actions: function () { return []; }
+  },
+  onParsed: function (items, ok) {
+    if (!items) { current = null; seq++; opened = false; render(); return; }
+    analyse();
+  },
+  sample: SAMPLE
+});
+
+render();
+['btnExpand', 'btnCollapse', 'btnWrap'].forEach(function (id) { document.getElementById(id).style.display = 'none'; });
+var search = document.getElementById('search');
+search.setAttribute('aria-label', 'Check a domain');
+search.setAttribute('autocapitalize', 'off');
+search.setAttribute('spellcheck', 'false');
+var searchTimer;
+search.addEventListener('input', function () { clearTimeout(searchTimer); searchTimer = setTimeout(render, 120); });
+
+function lineOffset(text, line) {
+  var pos = 0;
+  for (var n = 1; n < line; n++) {
+    var nl = text.indexOf('\n', pos);
+    if (nl === -1) return pos;
+    pos = nl + 1;
+  }
+  return pos;
+}
+function jump(line) {
+  var text = app.editor.getValue();
+  app.editor.jumpTo(Math.min(lineOffset(text, line), text.length));
+  if (window.matchMedia('(max-width: 760px)').matches) document.getElementById('tabText').click();
+}
+
+/* the whole text replaced as one step, so Cmd+Z brings it back */
+function replaceAll(text) {
+  var el = app.editor.input;
+  el.focus();
+  el.setSelectionRange(0, el.value.length);
+  if (!document.execCommand('insertText', false, text)) {
+    el.value = text;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+function certByN(n) { return current && current.certs.find(function (x) { return x.n === n; }); }
+function pemOf(x) { return X.toPem(x.c.der, 'CERTIFICATE'); }
+
+function saveDer(x) {
+  var name = (x.c.subject.cn || x.name || 'certificate').replace(/[^\w.-]+/g, '_').replace(/^\*/, 'wildcard') + '.cer';
+  LintApp.download(new Blob([x.c.der], { type: 'application/pkix-cert' }), name);
+}
+
+function copyKey(what, line) {
+  var k = current && current.keys.find(function (x) { return x.line === line; });
+  if (!k) return;
+  if (what === 'pub') LintApp.copy(X.toPem(k.spki, 'PUBLIC KEY'), 'Public key');
+  else if (what === 'ssh') LintApp.copy(k.ssh + '\n', 'SSH public key');
+  else if (what === 'pkcs8') LintApp.copy(X.toPem(k.pkcs8Der, 'PRIVATE KEY'), 'Private key as PKCS#8');
+  else if (what === 'trad') LintApp.copy(X.toPem(k.traditional, k.alg === 'EC' ? 'EC PRIVATE KEY' : 'RSA PRIVATE KEY'), 'Private key as ' + (k.alg === 'EC' ? 'SEC 1' : 'PKCS#1'));
+  else if (what === 'jwk') LintApp.copy(JSON.stringify(k.jwk, null, 2), 'Public JWK');
+}
+
+function putInOrder() {
+  if (!current) return;
+  if (!current.outOfOrder) { LintApp.toast(current.path.length > 1 ? 'The chain is already in order' : 'There is no chain to put in order'); return; }
+  /* the numbers change with the order: open the server's certificate again */
+  opened = false;
+  replaceAll(C.reorder(armour(app.editor.getValue()), current));
+  LintApp.toast('Put in order: the certificate first, then each issuer');
+}
+
+document.getElementById('tree').addEventListener('click', function (e) {
+  var t = e.target;
+  var b;
+  if ((b = t.closest('[data-copy]'))) { LintApp.copy(b.dataset.copy, b.dataset.what); return; }
+  if ((b = t.closest('[data-fix]'))) { putInOrder(); return; }
+  if ((b = t.closest('[data-pem]'))) { var x = certByN(+b.dataset.pem); if (x) LintApp.copy(pemOf(x), 'PEM'); return; }
+  if ((b = t.closest('[data-der]'))) { var y = certByN(+b.dataset.der); if (y) saveDer(y); return; }
+  if ((b = t.closest('[data-goto]'))) { jump(+b.dataset.goto); return; }
+  if ((b = t.closest('[data-key]'))) { copyKey(b.dataset.key, +b.dataset.k); return; }
+  if ((b = t.closest('[data-open]'))) {
+    var n = b.dataset.open;
+    if (/^k/.test(n)) open[n] = b.getAttribute('aria-expanded') !== 'true';
+    else if (open[n]) delete open[n]; else open[n] = true;
+    render();
+    return;
+  }
+  if ((b = t.closest('.find[data-line]'))) jump(+b.dataset.line);
+});
+
+document.getElementById('btnOrder').addEventListener('click', putInOrder);
+/* Export ▾ and Convert to ▾ offer only what this text holds */
+LintApp.when('btnLeafOnly', function () { return !!(current && current.leaf); });
+LintApp.when('btnNoRoot', function () {
+  return !!(current && current.path.length > 1 && current.path.some(function (x) { return x.selfSigned; }));
+});
+LintApp.when('btnNoKey', function (text) {
+  return /-----BEGIN (?:RSA |EC |ENCRYPTED |OPENSSH )?PRIVATE KEY-----/.test(text);
+});
+LintApp.when('btnToJson', function () { return !!(current && current.certs.length); });
+
+document.getElementById('btnLeafOnly').addEventListener('click', function () {
+  if (!current || !current.leaf) { LintApp.toast('No certificate here'); return; }
+  LintApp.copy(pemOf(current.leaf), 'The certificate');
+});
+document.getElementById('btnNoRoot').addEventListener('click', function () {
+  if (!current || !current.path.length) { LintApp.toast('No certificate here'); return; }
+  var list = current.path.filter(function (x) { return !(x.selfSigned && current.path.length > 1); });
+  LintApp.copy(list.map(pemOf).join(''), list.length === 1 ? 'The certificate' : 'The chain, ' + list.length + ' certificates');
+});
+document.getElementById('btnNoKey').addEventListener('click', function () {
+  var text = app.editor.getValue();
+  var out = text.replace(/-----BEGIN ((?:RSA |EC |ENCRYPTED |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END \1-----\r?\n?/g, '');
+  if (out === text) { LintApp.toast('There is no private key in this text'); return; }
+  LintApp.copy(out.replace(/\n{3,}/g, '\n\n'), 'The text without the private key');
+});
+document.getElementById('btnToJson').addEventListener('click', function () {
+  if (!current || !current.certs.length) { LintApp.toast('No certificate here'); return; }
+  var out = current.certs.map(function (x) {
+    var c = x.c;
+    return {
+      number: x.n, role: role(x, current), subject: c.subject.text, issuer: c.issuer.text,
+      notBefore: new Date(c.notBefore).toISOString(), notAfter: new Date(c.notAfter).toISOString(),
+      serial: c.serial, key: c.key.label, signature: c.sigAlg.name,
+      names: c.ext.san.map(function (s) { return s.type === 'DNS' ? s.value : s.type + ':' + s.value; }),
+      ca: c.ext.ca, keyUsage: c.ext.keyUsage, extendedKeyUsage: c.ext.extKeyUsage, policies: c.ext.policies,
+      ocsp: c.ext.ocsp, caIssuers: c.ext.caIssuers, crl: c.ext.crl, sct: c.ext.scts,
+      subjectKeyId: c.ext.ski, authorityKeyId: c.ext.aki,
+      sha256: x.sha256, sha1: x.sha1, keyPin: x.pin,
+      extensions: c.ext.list.map(function (t) { return t.name + (t.critical ? ' (critical)' : ''); })
+    };
+  });
+  LintApp.copyAndOffer(JSON.stringify(out.length === 1 ? out[0] : out, null, 2), 'JSON', 'cert', 'json');
+});
+
+LintApp.shortcuts([{ title: 'CERT', items: [
+  { keys: ['mod+f'], label: 'Check a domain' }
+] }]);
+})();
+</script>
+</body>
+</html>

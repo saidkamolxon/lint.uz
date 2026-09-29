@@ -29,6 +29,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/shared/theme.css">
 <link rel="stylesheet" href="/shared/app.css">
+<link rel="stylesheet" href="/shared/compare.css">
 </head>
 <body>
 <div class="app" id="app"></div>
@@ -48,15 +49,22 @@ window.LINT_CONFIG = {
   placeholder: 'Paste YAML or drop a file…',
   searchPlaceholder: 'Search keys and values…',
   actions: [
-    { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Rewrite the document with a consistent two-space indent' },
-    { id: 'btnToYaml', label: 'From JSON', title: 'Replace JSON in the editor with the same data written as YAML' },
-    { id: 'btnToJson', label: 'To JSON', hide: 'md', key: 'mod+shift+j', title: 'Copy this document as JSON, ready to open in the JSON viewer' }
+    { id: 'btnFormat', label: 'Format', primary: true, key: 'shift+alt+f', title: 'Rewrite the document with a consistent two-space indent' }
+  ],
+  convert: [
+    { id: 'btnToJson', label: 'JSON', key: 'mod+shift+j', title: 'Convert this document to JSON and open it in the JSON viewer (also copied)' }
+  ],
+  ext: 'yaml',
+  /* the way in rather than out, so it is not under Convert to */
+  more: [
+    { id: 'btnToYaml', label: 'Rewrite pasted JSON as YAML', title: 'Replace JSON in the editor with the same data written as YAML' }
   ]
 };
 </script>
 <script src="/shared/theme-boot.js"></script>
 <script src="/shared/shell.js"></script>
 <script src="/shared/app.js"></script>
+<script src="/shared/compare.js"></script>
 <script>
 (function () {
 'use strict';
@@ -404,6 +412,7 @@ spec:
    ========================================================================== */
 var lastMulti = null;
 
+var offeredYaml = false;   // rewriting pasted JSON was offered for this document
 var app = LintApp.init({
   id: 'yaml',
   label: 'YAML',
@@ -425,7 +434,31 @@ var app = LintApp.init({
       'Multi-document files load as a list.',
     extra: '<div class="empty-actions"><button class="bordered" data-empty="sample">Load a sample</button></div>'
   }),
+  /* JSON is valid YAML, so it reads fine here, but whoever pastes it
+     usually wants it written as YAML: offered once a document */
+  onParsed: function () {
+    if (!app) return;   /* a document handed over at start parses before init returns */
+    if (cmp && cmp.comparing()) cmp.onEditorChanged();
+    var raw = app.editor.getValue().trim();
+    var isJson = false;
+    if (/^[\[{]/.test(raw) && raw.length < 5e6) try { JSON.parse(raw); isJson = true; } catch (e) {}
+    if (!isJson) { offeredYaml = false; return; }
+    if (offeredYaml) return;
+    offeredYaml = true;
+    LintApp.toast('This is JSON', {
+      label: 'Rewrite as YAML', href: '#',
+      onFollow: function () { document.getElementById('btnToYaml').click(); }
+    });
+  },
   sample: SAMPLE
+});
+
+/* Compare, as in JSON. YAML reads timestamps as Dates, which the diff
+   would see as empty objects, so each side goes through JSON first:
+   a date becomes its ISO text, and two different dates differ. */
+var cmp = LintCompare.mount({
+  app: app, parse: parse, label: 'YAML',
+  toValue: function (res) { return JSON.parse(JSON.stringify(res.value === undefined ? null : res.value)); }
 });
 
 document.getElementById('btnFormat').addEventListener('click', function () {
