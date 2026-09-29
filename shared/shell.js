@@ -80,6 +80,7 @@ document.getElementById('app').innerHTML =
         '</div>' +
       '</div>' +
     '</div>' +
+    '<button id="btnFold" type="button" class="icon-btn" title="Hide the text" aria-label="Hide the text"></button>' +
     '<button id="errorBar" type="button" title="Jump to the problem">' +
       '<span class="emsg" id="errorMsg"></span>' +
       '<span class="loc" id="errorLoc"></span>' +

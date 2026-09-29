@@ -57,6 +57,8 @@ var ICONS = {
      it — a plus and a minus read as zoom, which the text size now is */
   expand: '<path d="m7 6.5 5 5 5-5M7 12.5l5 5 5-5"/>',
   collapse: '<path d="m7 11.5 5-5 5 5M7 17.5l5-5 5 5"/>',
+  /* the same pair turned left: the text folds away toward the edge */
+  fold: '<path d="M11.5 7l-5 5 5 5M17.5 7l-5 5 5 5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   wrap: '<path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-4m0 0 2.5-2.5M12 18l2.5 2.5M3 18h5"/>',
   theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
@@ -2136,6 +2138,8 @@ function init(config) {
     if (localStorage.getItem(FOLD_KEY) === '1' && !errorBar.classList.contains('show')) body.classList.add('editor-folded');
   } catch (e) {}
   $('editorRail').addEventListener('click', function () { fold(false); $('input').focus(); });
+  $('btnFold').innerHTML = svg(ICONS.fold);
+  $('btnFold').addEventListener('click', function () { fold(true); });
   divider.addEventListener('dblclick', function () { fold(true); });
 
   /* Dragging the divider moves only a line: a copy of the divider that

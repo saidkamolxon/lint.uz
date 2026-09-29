@@ -287,6 +287,17 @@ body.editor-folded:not(.is-empty) #editorRail {
   color: var(--muted);
 }
 #editorRail button:hover { color: var(--ink); background: var(--hue-wash); }
+/* and the way to fold it: the editor's top-right corner, on the first
+   line's level and clear of the scrollbar */
+#btnFold {
+  position: absolute; z-index: 3;
+  top: calc(var(--s3) - 3px); right: calc(11px + var(--s1));
+  width: 24px; height: 24px;
+  color: var(--faint); background: var(--raised);
+  border-radius: var(--radius);
+}
+#btnFold:hover { color: var(--ink); background: var(--hue-wash); }
+body.is-empty #btnFold { display: none; }
 /* Where the divider will go, while it is dragged (see app.js): a line in
    the tool's colour, and a band back to where the divider is, light there
    and deepening toward the line. */
@@ -878,7 +889,7 @@ body.dragover .empty-prompt h2 { color: var(--hue); }
   #divider { display: none; }
   #editorPane { width: 100% !important; }
   /* a phone shows one pane at a time already: the Text tab is the way back */
-  body.editor-folded:not(.is-empty) #editorRail { display: none; }
+  body.editor-folded:not(.is-empty) #editorRail, #btnFold { display: none; }
   body.editor-folded:not(.is-empty)[data-view="text"] #editorPane { display: flex; }
   body[data-view="tree"] #editorPane { display: none; }
   body[data-view="text"] #treePane { display: none; }
