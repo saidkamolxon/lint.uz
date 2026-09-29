@@ -9,7 +9,7 @@ body.comparing #compare { display: flex; }
    tree's own buttons for the diff's */
 .cmp-tools { display: none; flex: 1; min-width: 0; align-items: center; gap: var(--s1); font-size: var(--fs-small); color: var(--muted); }
 body.comparing .cmp-tools { display: flex; }
-body.comparing .treebar > :not(.mode-seg):not(.cmp-tools) { display: none !important; }
+body.comparing #treePane .treebar > :not(.mode-seg):not(.cmp-tools) { display: none !important; }
 .cmp-tools .summary { flex: 1; min-width: 0; padding-left: var(--s1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmp-tools .summary b { font-weight: 600; }
 .cmp-tools .n-add { color: var(--ok); }

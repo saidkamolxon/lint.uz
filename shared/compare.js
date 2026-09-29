@@ -311,7 +311,7 @@ $('tree').after(cmpEl);
 
 /* Tree | Compare opens the tree bar; the diff's own controls sit beside it
    and show only while comparing */
-var treebar = document.querySelector('.treebar');
+var treebar = document.querySelector('#treePane .treebar');
 var modeSeg = document.createElement('span');
 modeSeg.className = 'seg mode-seg';
 modeSeg.setAttribute('role', 'group');

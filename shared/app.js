@@ -778,7 +778,7 @@ function generalGroup() {
   ];
   /* only on pages with something to search (Audio has none) */
   if (document.querySelector('#search, #filter, #findInput')) {
-    items.push({ keys: ['mod+f'], label: 'Find' });
+    items.push({ keys: ['mod+f'], label: $('find') ? 'Find — in the text from the text, in the tree from anywhere else' : 'Find' });
   }
   /* only where the text size can actually change */
   if (zoomOn) {
@@ -906,6 +906,7 @@ document.addEventListener('keydown', function (e) {
 function Editor(opts) {
   var input = $('input');
   var highlight = $('highlight');
+  var findLayer = $('findLayer');
   var gutter = $('gutterInner');
   var self = this;
 
@@ -940,11 +941,22 @@ function Editor(opts) {
     }
     self.paintGutter(lines.length);
     self.syncScroll();
+    if (self.onPaint) self.onPaint();
   };
 
   this.paintGutter = function (count) {
     if (count === self._lineCount && self._paintedErr === self._errLine &&
         self._paintedCur === self._curLine && self._paintedMarks === self._marks) return;
+    /* only the caret's line moved: two numbers change, not every one, which
+       on a long document rebuilt thousands of them per step */
+    if (count === self._lineCount && self._paintedErr === self._errLine &&
+        self._paintedMarks === self._marks && gutter.children.length === count) {
+      var was = gutter.children[self._paintedCur - 1], now = gutter.children[self._curLine - 1];
+      if (was) was.classList.remove('cur');
+      if (now && !now.classList.contains('err')) now.classList.add('cur');
+      self._paintedCur = self._curLine;
+      return;
+    }
     self._lineCount = count;
     self._paintedErr = self._errLine;
     self._paintedCur = self._curLine;
@@ -1011,14 +1023,15 @@ function Editor(opts) {
   };
 
   this.syncScroll = function () {
-    highlight.scrollTop = input.scrollTop;
-    highlight.scrollLeft = input.scrollLeft;
+    highlight.scrollTop = findLayer.scrollTop = input.scrollTop;
+    highlight.scrollLeft = findLayer.scrollLeft = input.scrollLeft;
     gutter.style.transform = 'translateY(' + (-input.scrollTop) + 'px)';
   };
 
   this.trackCaret = function () {
     var upto = input.value.slice(0, input.selectionStart);
     var line = upto.split('\n').length;
+    if (self.onCaret) self.onCaret(line, upto.length - upto.lastIndexOf('\n'));
     if (line !== self._curLine) {
       self._curLine = line;
       self.paintGutter(self._lineCount);
@@ -2140,6 +2153,97 @@ function init(config) {
   $('editorRail').addEventListener('click', function () { fold(false); $('input').focus(); });
   $('btnFold').innerHTML = svg(ICONS.fold);
   $('btnFold').addEventListener('click', function () { fold(true); });
+
+  /* ---------- Find in the text ----------
+     Matches are drawn in #findLayer, under the text: the text again,
+     unseen, with a mark around each match, so the marks line up with the
+     text whatever the highlighter makes of it. Stepping selects the match
+     and scrolls the text to it. */
+  var findInput = $('find'), findCount = $('findCount'), findNav = $('findNav'), findLayer = $('findLayer');
+  var FIND_CAP = 10000;
+  var found = [], findAt = -1, findLen = 0, findTimer = 0;
+  $('findIcon').innerHTML = svg(ICONS.search);
+  $('btnFindPrev').innerHTML = svg(ICONS.up);
+  $('btnFindNext').innerHTML = svg(ICONS.down);
+
+  /* keepPlace: the text changed under the same query, so the match stepped
+     to stays and nothing scrolls */
+  function runFind(keepPlace) {
+    var q = findInput.value, text = editor.getValue();
+    found = [];
+    findLen = q.length;
+    if (!q) {
+      findLayer.innerHTML = '';
+      findCount.textContent = '';
+      findNav.hidden = true;
+      findAt = -1;
+      return;
+    }
+    var re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m, html = '', last = 0;
+    while ((m = re.exec(text)) && found.length < FIND_CAP) {
+      found.push(m.index);
+      html += esc(text.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>';
+      last = m.index + m[0].length;
+    }
+    findLayer.innerHTML = html + esc(text.slice(last)) + '\n';
+    editor.syncScroll();
+    findNav.hidden = !found.length;
+    if (!found.length) { findAt = -1; findCount.textContent = 'No results'; return; }
+    /* the first match from the caret on */
+    if (!keepPlace || findAt < 0 || findAt >= found.length) {
+      var from = editor.input.selectionStart;
+      findAt = 0;
+      for (var i = 0; i < found.length; i++) if (found[i] >= from) { findAt = i; break; }
+    }
+    showMatch(!keepPlace);
+  }
+
+  function showMatch(scroll) {
+    var prev = findLayer.querySelector('mark.cur');
+    if (prev) prev.classList.remove('cur');
+    var mk = findLayer.getElementsByTagName('mark')[findAt];
+    if (mk) mk.classList.add('cur');
+    findCount.textContent = (findAt + 1) + ' / ' + fmtNum(found.length) + (found.length >= FIND_CAP ? '+' : '');
+    if (!scroll || !mk) return;
+    var input = editor.input;
+    input.setSelectionRange(found[findAt], found[findAt] + findLen);
+    if (mk.offsetTop < input.scrollTop || mk.offsetTop + mk.offsetHeight > input.scrollTop + input.clientHeight) {
+      input.scrollTop = mk.offsetTop - input.clientHeight / 3;
+    }
+    if (mk.offsetLeft < input.scrollLeft || mk.offsetLeft + mk.offsetWidth > input.scrollLeft + input.clientWidth - 16) {
+      input.scrollLeft = Math.max(0, mk.offsetLeft - input.clientWidth / 2);
+    }
+    editor.syncScroll();
+    editor.trackCaret();
+  }
+
+  function stepFind(dir) {
+    if (!found.length) return;
+    findAt = (findAt + dir + found.length) % found.length;
+    showMatch(true);
+  }
+
+  /* a large text is searched once typing pauses */
+  function findSoon(keepPlace) {
+    clearTimeout(findTimer);
+    findTimer = setTimeout(function () { runFind(keepPlace); }, editor.getValue().length > 200000 ? 150 : 0);
+  }
+  findInput.addEventListener('input', function () { findSoon(false); });
+  findInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') {
+      /* back to the text, the match stepped to still selected */
+      e.preventDefault();
+      e.stopPropagation();
+      findInput.value = '';
+      runFind(false);
+      editor.input.focus();
+    }
+  });
+  $('btnFindPrev').addEventListener('click', function () { stepFind(-1); });
+  $('btnFindNext').addEventListener('click', function () { stepFind(1); });
+  editor.onPaint = function () { if (findInput.value) findSoon(true); };
+  editor.onCaret = function (line, col) { $('caretPos').textContent = 'Ln ' + fmtNum(line) + ', Col ' + col; };
   divider.addEventListener('dblclick', function () { fold(true); });
 
   /* Dragging the divider moves only a line: a copy of the divider that
@@ -2295,6 +2399,15 @@ function init(config) {
       if (fmtBtn) { e.preventDefault(); fmtBtn.click(); }
     } else if (keyMatches(e, 'mod+f')) {
       e.preventDefault();
+      /* from the text, Find searches the text, what is selected in it first;
+         anywhere else, the tree */
+      if (e.target === editor.input || e.target === findInput) {
+        var sel = editor.input.value.slice(editor.input.selectionStart, editor.input.selectionEnd);
+        if (sel && sel.length < 200 && sel.indexOf('\n') === -1) { findInput.value = sel; runFind(false); }
+        findInput.focus();
+        findInput.select();
+        return;
+      }
       if (window.innerWidth <= 720) setView('tree');
       $('search').focus();
       $('search').select();
