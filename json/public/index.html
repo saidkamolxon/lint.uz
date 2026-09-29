@@ -300,11 +300,22 @@ var adapter = {
 
   actions: function (e) {
     return [
-      { label: 'path', title: 'Copy the path to this node', toastLabel: 'Path',
+      { label: 'path', title: 'Copy path', toastLabel: 'Path',
         get: function () { return pathString(e.path); } },
-      { label: 'value', title: 'Copy this value as JSON', toastLabel: 'Value',
-        get: function () { return JSON.stringify(e.value, null, 2); } }
+      /* a string as its text, without the quotes; the rest as JSON */
+      { label: 'value', title: 'Copy value', toastLabel: 'Value',
+        get: function () { return typeof e.value === 'string' ? e.value : JSON.stringify(e.value, null, 2); } }
     ];
+  },
+
+  link: function (e) { return LintApp.linkIn(e.value); },
+
+  /* an object or list inside the document, opened as a document of its own */
+  subtree: function (e) {
+    var t = typeOf(e.value);
+    if (!e.path.length || (t !== 'object' && t !== 'array')) return null;
+    return { title: 'Open in new JSON tab', tool: 'json', name: LintApp.pathName(e.path) + '.json',
+      text: JSON.stringify(e.value, null, 2) };
   }
 };
 

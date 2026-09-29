@@ -56,9 +56,27 @@ document.getElementById('app').innerHTML =
 
 '<main class="split">' +
   '<section class="pane" id="editorPane" aria-label="' + c.label + ' source">' +
+    /* the text's own bar, as the tree has one: find in the text, where the
+       caret is, and the way to fold the text away */
+    '<div class="treebar editbar">' +
+      '<label class="search-wrap">' +
+        '<span id="findIcon"></span>' +
+        '<input id="find" type="search" placeholder="Find in text" aria-label="Find in the text">' +
+      '</label>' +
+      '<span id="findCount"></span>' +
+      '<span class="step-nav" id="findNav" hidden>' +
+        '<button id="btnFindPrev" type="button" class="icon-btn" title="Previous match (Shift+Enter)" aria-label="Previous match"></button>' +
+        '<button id="btnFindNext" type="button" class="icon-btn" title="Next match (Enter)" aria-label="Next match"></button>' +
+      '</span>' +
+      '<span id="caretPos"></span>' +
+      '<button id="btnFold" type="button" class="icon-btn" title="Hide the text" aria-label="Hide the text"></button>' +
+    '</div>' +
     '<div class="editor">' +
       '<div class="gutter" aria-hidden="true"><div class="gutter-inner" id="gutterInner"></div></div>' +
       '<div class="text-layers">' +
+        /* matches of Find, drawn under the text: the same text, unseen, but
+           for a mark behind each match */
+        '<pre id="findLayer" aria-hidden="true"></pre>' +
         '<pre id="highlight" aria-hidden="true"></pre>' +
         '<textarea id="input" spellcheck="false" autocapitalize="off" ' +
           'autocomplete="off" autocorrect="off" aria-label="' + c.label + ' input" ' +
@@ -86,8 +104,13 @@ document.getElementById('app').innerHTML =
     '</button>' +
   '</section>' +
 
+  /* the text folded away leaves this rail on the left edge to bring it back */
+  '<div id="editorRail">' +
+    '<button type="button" title="Show the text">Text</button>' +
+  '</div>' +
+
   '<div id="divider" role="separator" aria-orientation="vertical" ' +
-    'title="Drag to resize"></div>' +
+    'title="Drag to resize · double-click to hide the text"></div>' +
 
   '<section class="pane" id="treePane" aria-label="Structure">' +
     '<div class="treebar">' +

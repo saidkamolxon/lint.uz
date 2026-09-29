@@ -266,6 +266,27 @@ kbd {
   transition: opacity var(--t-fast);
 }
 #divider:hover::after, #divider.dragging::after { opacity: 1; }
+
+/* The text folded away (see fold in app.js): the editor and divider give
+   their room to the tree, and a rail on the left edge brings the text back,
+   as the PDF viewer's side tabs open its panel */
+#editorRail { display: none; }
+body.editor-folded:not(.is-empty) #editorPane,
+body.editor-folded:not(.is-empty) #divider { display: none; }
+body.editor-folded:not(.is-empty) #editorRail {
+  display: flex; flex-direction: column; align-items: center;
+  flex: none; width: 30px; padding: var(--s2) 0;
+  background: var(--raised);
+  border-right: var(--hairline) solid var(--line);
+}
+/* read from the bottom up, as a book's spine on the left of a shelf is */
+#editorRail button {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  padding: var(--s3) 5px;
+  font-size: var(--fs-small); font-weight: 500; letter-spacing: 0.02em;
+  color: var(--muted);
+}
+#editorRail button:hover { color: var(--ink); background: var(--hue-wash); }
 /* Where the divider will go, while it is dragged (see app.js): a line in
    the tool's colour, and a band back to where the divider is, light there
    and deepening toward the line. */
@@ -396,7 +417,7 @@ kbd {
 /* Text layers: highlight underneath, transparent textarea on top */
 .text-layers { position: relative; overflow: hidden; }
 
-#highlight, #input {
+#findLayer, #highlight, #input {
   position: absolute; inset: 0;
   margin: 0; border: 0;
   padding: var(--ed-pad-y) var(--ed-pad-x);
@@ -407,7 +428,7 @@ kbd {
   overflow-wrap: normal;
   word-break: normal;
 }
-#highlight {
+#findLayer, #highlight {
   overflow: auto;
   pointer-events: none;
   color: var(--ink);
@@ -420,7 +441,18 @@ kbd {
   padding-bottom: calc(var(--ed-pad-y) + 32px);
   padding-right: calc(var(--ed-pad-x) + 32px);
 }
-#highlight::-webkit-scrollbar { width: 0; height: 0; }
+#findLayer::-webkit-scrollbar, #highlight::-webkit-scrollbar { width: 0; height: 0; }
+/* the text unseen, a mark behind each match and a stronger one at the
+   match stepped to */
+#findLayer { color: transparent; }
+#findLayer mark {
+  color: transparent; border-radius: 2px;
+  background: color-mix(in srgb, var(--hue) 22%, transparent);
+}
+#findLayer mark.cur {
+  background: color-mix(in srgb, var(--hue) 45%, transparent);
+  box-shadow: 0 0 0 1px var(--hue);
+}
 #input {
   overflow: auto;
   resize: none;
@@ -494,7 +526,7 @@ kbd {
   width: 13px; height: 13px;
   color: var(--faint); pointer-events: none;
 }
-#search {
+#search, #find {
   width: 100%;
   font-family: var(--ui); font-size: var(--fs-base);
   color: var(--ink);
@@ -503,17 +535,22 @@ kbd {
   border-radius: var(--radius);
   padding: 5px var(--s2) 5px 27px;
 }
-#search::placeholder { color: var(--faint); }
-#search:focus { background: var(--raised); }
-#search::-webkit-search-cancel-button { filter: grayscale(1); opacity: 0.5; }
+#search::placeholder, #find::placeholder { color: var(--faint); }
+#search:focus, #find:focus { background: var(--raised); }
+#search::-webkit-search-cancel-button, #find::-webkit-search-cancel-button { filter: grayscale(1); opacity: 0.5; }
 
-#matchCount {
+#matchCount, #findCount, #caretPos {
   font-size: var(--fs-small); color: var(--muted);
   white-space: nowrap; font-variant-numeric: tabular-nums;
   padding: 0 var(--s1);
 }
 .treebar .icon-btn { width: 28px; height: 26px; }
 .step-nav { display: inline-flex; }
+.step-nav[hidden] { display: none; }
+#caretPos { color: var(--faint); }
+/* a narrow editor keeps Find and the fold; where the caret is gives way */
+#editorPane { container-type: inline-size; }
+@container (max-width: 360px) { #caretPos { display: none; } }
 
 #tree {
   flex: 1; overflow: auto;
@@ -771,6 +808,7 @@ body.is-empty #treePane,
 body.is-empty #divider,
 body.is-empty .gutter,
 body.is-empty #errorBar,
+body.is-empty .editbar,
 body.is-empty #statusBar,
 body.is-empty .tabs { display: none; }
 /* !important beats the width the divider drag leaves inline */
@@ -856,6 +894,9 @@ body.dragover .empty-prompt h2 { color: var(--hue); }
   .toolbar .icon-btn { width: 26px; }
   #divider { display: none; }
   #editorPane { width: 100% !important; }
+  /* a phone shows one pane at a time already: the Text tab is the way back */
+  body.editor-folded:not(.is-empty) #editorRail, #btnFold { display: none; }
+  body.editor-folded:not(.is-empty)[data-view="text"] #editorPane { display: flex; }
   body[data-view="tree"] #editorPane { display: none; }
   body[data-view="text"] #treePane { display: none; }
   .hide-sm { display: none; }
