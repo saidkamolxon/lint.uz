@@ -359,7 +359,11 @@ body.is-empty #btnFold { display: none; }
   --ed-font: var(--code-size, var(--fs-base))/1.6 var(--mono);
   --ed-pad-y: var(--s3);
   --ed-pad-x: var(--s3);
+  /* the first line starts below the fold button (#btnFold), so a long one,
+     a minified document's, never runs under it */
+  --ed-pad-top: calc(var(--s3) + 22px);
 }
+body.is-empty .editor { --ed-pad-top: var(--ed-pad-y); }
 
 /* The gutter carries the tool's hue — a faint wash and a hued edge, so a
    tab is recognisable without the gutter being the loudest thing on screen */
@@ -372,7 +376,7 @@ body.is-empty #btnFold { display: none; }
   color: color-mix(in srgb, var(--hue) var(--gutter-ink), var(--muted));
   text-align: right;
   user-select: none;
-  padding: var(--ed-pad-y) var(--s2) var(--ed-pad-y) 0;
+  padding: var(--ed-pad-top) var(--s2) var(--ed-pad-y) 0;
   font-variant-numeric: tabular-nums;
   font-size: calc(var(--fs-small) * var(--code-scale, 1));
 }
@@ -431,7 +435,7 @@ body.is-empty #btnFold { display: none; }
 #highlight, #input {
   position: absolute; inset: 0;
   margin: 0; border: 0;
-  padding: var(--ed-pad-y) var(--ed-pad-x);
+  padding: var(--ed-pad-top) var(--ed-pad-x) var(--ed-pad-y);
   font: var(--ed-font);
   letter-spacing: 0;
   tab-size: 2;
@@ -890,6 +894,7 @@ body.dragover .empty-prompt h2 { color: var(--hue); }
   #editorPane { width: 100% !important; }
   /* a phone shows one pane at a time already: the Text tab is the way back */
   body.editor-folded:not(.is-empty) #editorRail, #btnFold { display: none; }
+  .editor { --ed-pad-top: var(--ed-pad-y); }
   body.editor-folded:not(.is-empty)[data-view="text"] #editorPane { display: flex; }
   body[data-view="tree"] #editorPane { display: none; }
   body[data-view="text"] #treePane { display: none; }
