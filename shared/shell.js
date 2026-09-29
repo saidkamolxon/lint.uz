@@ -86,8 +86,13 @@ document.getElementById('app').innerHTML =
     '</button>' +
   '</section>' +
 
+  /* the text folded away leaves this rail on the left edge to bring it back */
+  '<div id="editorRail">' +
+    '<button type="button" title="Show the text">Text</button>' +
+  '</div>' +
+
   '<div id="divider" role="separator" aria-orientation="vertical" ' +
-    'title="Drag to resize"></div>' +
+    'title="Drag to resize · double-click to hide the text"></div>' +
 
   '<section class="pane" id="treePane" aria-label="Structure">' +
     '<div class="treebar">' +

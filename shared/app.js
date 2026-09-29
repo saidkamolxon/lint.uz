@@ -1928,6 +1928,8 @@ function init(config) {
       errorMsg.textContent = res.message;
       errorLoc.textContent = res.line ? 'line ' + res.line + ':' + (res.col || 1) : '';
       errorBar.classList.add('show');
+      /* the problem is in the text, so a folded text comes back to show it */
+      fold(false);
       if (!config.ownsPane) tree.markStale();
       setStatus('err', 'Invalid ' + config.label);
       config.onParsed && config.onParsed(null, false);
@@ -2117,6 +2119,25 @@ function init(config) {
   try { savedSplit = parseFloat(localStorage.getItem(SPLIT_KEY)); } catch (e) {}
   if (savedSplit > 0 && savedSplit < 1) editorPane.style.width = (savedSplit * 100).toFixed(2) + '%';
 
+  /* The text folded away, for reading the tree alone: the divider dragged
+     past the editor's least width, double-clicked, or Alt+Shift+← pressed
+     at that width. The rail left on the edge, Alt+Shift+→, or a document
+     that no longer parses brings it back. Remembered, as the split is. */
+  var FOLD_KEY = 'lintuz-editor-folded';
+  function fold(on) {
+    if (body.classList.contains('editor-folded') === on) return;
+    if (on && editorPane.contains(document.activeElement)) document.activeElement.blur();
+    body.classList.toggle('editor-folded', on);
+    try { localStorage.setItem(FOLD_KEY, on ? '1' : '0'); } catch (e) {}
+    if (!on) editor.paint();
+  }
+  /* not over a problem already showing in the text */
+  try {
+    if (localStorage.getItem(FOLD_KEY) === '1' && !errorBar.classList.contains('show')) body.classList.add('editor-folded');
+  } catch (e) {}
+  $('editorRail').addEventListener('click', function () { fold(false); $('input').focus(); });
+  divider.addEventListener('dblclick', function () { fold(true); });
+
   /* Dragging the divider moves only a line: a copy of the divider that
      follows the pointer, and between it and where the divider is now a band
      in the tool's colour, light at the divider and deep at the line. Along
@@ -2156,13 +2177,22 @@ function init(config) {
       band.style.transform = 'translateX(' + left + 'px) scaleX(' + (gap / 100) + ')';
       tape.style.clipPath = 'inset(0 ' + (box.width - left - gap) + 'px 0 ' + left + 'px)';
       var share = Math.round(at / box.width * 100);
-      label.textContent = share + '% · ' + (100 - share) + '%';
+      label.textContent = folding ? 'Hide text' : share + '% · ' + (100 - share) + '%';
       label.classList.toggle('snapped', at === half);
     }
+    /* past half the editor's least width, the line goes to the edge and
+       letting go folds the text away */
+    var folding = false;
     paint();
     var frame = 0, done = false;
     function move(ev) {
       at = ev.clientX - box.left;
+      folding = !ev.shiftKey && at < min / 2;
+      if (folding) {
+        at = 0;
+        if (!frame) frame = requestAnimationFrame(function () { frame = 0; paint(); });
+        return;
+      }
       /* Shift steps by 5%, as Alt+Shift+←/→ does; inward if a step is past the clamp */
       split.classList.toggle('stepping', ev.shiftKey);
       if (ev.shiftKey) {
@@ -2185,7 +2215,7 @@ function init(config) {
       cancelAnimationFrame(frame);
       [band, tape, ghost, label].forEach(function (el) { el.remove(); });
       split.classList.remove('stepping');
-      setSplit(at, true, box.width);
+      if (folding) fold(true); else setSplit(at, true, box.width);
     }
     divider.addEventListener('pointermove', move);
     divider.addEventListener('pointerup', up);
@@ -2194,9 +2224,18 @@ function init(config) {
 
   /* Windows Terminal's resize-pane: 5% of the width a press */
   function nudgeSplit(dir) {
+    /* folded, → brings the text back at the width it had */
+    if (body.classList.contains('editor-folded') && !body.classList.contains('is-empty') &&
+        window.innerWidth > 720) {
+      if (dir > 0) fold(false);
+      return true;
+    }
     if (divider.offsetParent === null) return false;   /* no split showing */
-    setSplit(editorPane.getBoundingClientRect().width +
-      dir * split.getBoundingClientRect().width * 0.05, true);
+    var w = editorPane.getBoundingClientRect().width;
+    /* ← at the least width folds the text away */
+    var least = Math.max(240, parseFloat(getComputedStyle(editorPane).minWidth) || 0);
+    if (dir < 0 && w <= least + 1) { fold(true); return true; }
+    setSplit(w + dir * split.getBoundingClientRect().width * 0.05, true);
     return true;
   }
 
@@ -2223,7 +2262,7 @@ function init(config) {
     if (b === fmtBtn && keys[0] !== 'mod+enter') keys.push('mod+enter');
     return { keys: keys, label: labelOf(b) };
   }).concat([
-    { keys: ['shift+alt+left', 'shift+alt+right'], label: 'Resize the split' },
+    { keys: ['shift+alt+left', 'shift+alt+right'], label: 'Resize the split; past the edge hides the text' },
     { keys: ['alt+z'], label: 'Wrap long values' },
     { keys: ['mod+shift+]'], label: 'Expand all' },
     { keys: ['mod+shift+['], label: 'Collapse all' },
