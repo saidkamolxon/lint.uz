@@ -2488,11 +2488,12 @@ function linkIn(value) {
 }
 
 /* a file name for a part of a document opened on its own: its key, or its
-   list's key and place ("users-3") */
+   list's key and place ("users[3]", "grid[0][1]") */
 function pathName(path) {
-  var last = path[path.length - 1];
-  var name = typeof last === 'number' && path.length > 1 ? path[path.length - 2] + '-' + last : String(last);
-  return name.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'part';
+  var i = path.length - 1, places = '';
+  while (i >= 0 && typeof path[i] === 'number') places = '[' + path[i--] + ']' + places;
+  var key = i >= 0 ? String(path[i]).replace(/[^\w.-]+/g, '_').slice(0, 60) : '';
+  return key + places || 'part';
 }
 
 /* ---------- JSON Lines: a log, or data? ----------
