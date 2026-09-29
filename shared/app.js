@@ -1642,24 +1642,32 @@ function Tree(opts) {
       b.addEventListener('click', function () { closeAllMenus(); run(); });
       ctxMenu.appendChild(b);
     }
-    if (self.query() && !stepMode) {
-      var chain = chains.get(row);
-      item('Show in full tree', function () { showInTree(chain); });
-      var sep = document.createElement('div');
-      sep.className = 'menu-sep';
-      ctxMenu.appendChild(sep);
+    function sep() {
+      var d = document.createElement('div');
+      d.className = 'menu-sep';
+      ctxMenu.appendChild(d);
     }
-    var node = row.parentElement;
-    if (isBranch(node)) {
-      item('Expand everything inside', function () { openAll(node); });
-      item('Collapse everything inside', function () { toggle(node, true, true); closeInside(node); });
-      var sep2 = document.createElement('div');
-      sep2.className = 'menu-sep';
-      ctxMenu.appendChild(sep2);
-    }
-    adapter.actions(entry).forEach(function (a) {
+    /* what the row holds comes first: its value, then its path (the first
+       action, which the status bar also shows), then where it can go */
+    var acts = adapter.actions(entry);
+    acts.slice(1).concat(acts.slice(0, 1)).forEach(function (a) {
       item(a.title, function () { copyText(a.get(), a.toastLabel || a.label); });
     });
+    var link = adapter.link && adapter.link(entry);
+    if (link) item('Open link in new tab', function () { window.open(link, '_blank', 'noopener'); });
+    var sub = adapter.subtree && adapter.subtree(entry);
+    if (sub) item(sub.title, function () { openIn(sub.text, sub.name, sub.tool); });
+    var node = row.parentElement;
+    var filtered = self.query() && !stepMode, branch = isBranch(node);
+    if ((filtered || branch) && ctxMenu.lastChild) sep();
+    if (filtered) {
+      var chain = chains.get(row);
+      item('Show in full tree', function () { showInTree(chain); });
+    }
+    if (branch) {
+      item('Expand everything inside', function () { openAll(node); });
+      item('Collapse everything inside', function () { toggle(node, true, true); closeInside(node); });
+    }
 
     closeAllMenus();
     ctxMenu.classList.add('open');
@@ -2469,6 +2477,24 @@ function openIn(text, name, to) {
   });
 }
 
+/* the text itself when it is a web address and nothing else, to open in a
+   tab; anything else (a javascript: URL included) is not a link */
+function linkIn(value) {
+  if (typeof value !== 'string') return null;
+  var v = value.trim();
+  if (!/^https?:\/\/\S+$/i.test(v)) return null;
+  try { new URL(v); } catch (e) { return null; }
+  return v;
+}
+
+/* a file name for a part of a document opened on its own: its key, or its
+   list's key and place ("users-3") */
+function pathName(path) {
+  var last = path[path.length - 1];
+  var name = typeof last === 'number' && path.length > 1 ? path[path.length - 2] + '-' + last : String(last);
+  return name.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'part';
+}
+
 /* ---------- JSON Lines: a log, or data? ----------
    One JSON value per line is two different things in practice: a structured
    log (pino, zap, structlog, Docker's json-file) or data (a fine-tuning set,
@@ -2532,6 +2558,8 @@ global.LintApp = {
   keyText: keyText,
   copyAndOffer: copyAndOffer,
   openIn: openIn,
+  linkIn: linkIn,
+  pathName: pathName,
   jsonlKind: jsonlKind,
   takeHandoff: takeHandoff,
   kbd: kbd,

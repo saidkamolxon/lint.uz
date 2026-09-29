@@ -327,16 +327,32 @@ var adapter = {
 
   actions: function (e) {
     return [
-      { label: 'path', title: 'Copy the path to this node', toastLabel: 'Path',
+      { label: 'path', title: 'Copy path', toastLabel: 'Path',
         get: function () { return pathString(e.path); } },
-      { label: 'yaml', title: 'Copy this node as YAML', toastLabel: 'YAML',
+      /* a scalar as its text, without quotes; a mapping or list as YAML */
+      { label: 'value', title: 'Copy value', toastLabel: 'Value',
         get: function () {
+          var t = typeOf(e.value);
+          if (t === 'date') return e.value.toISOString();
+          if (t !== 'object' && t !== 'array') return String(e.value);
           try { return jsyaml.dump(e.value, { indent: 2, lineWidth: -1, noRefs: true }); }
           catch (err) { return String(e.value); }
         } },
-      { label: 'json', title: 'Copy this node as JSON', toastLabel: 'JSON',
+      { label: 'json', title: 'Copy as JSON', toastLabel: 'JSON',
         get: function () { return JSON.stringify(e.value, null, 2); } }
     ];
+  },
+
+  link: function (e) { return LintApp.linkIn(e.value); },
+
+  /* a mapping or list inside the document, opened as a document of its own */
+  subtree: function (e) {
+    var t = typeOf(e.value);
+    if (!e.path.length || (t !== 'object' && t !== 'array')) return null;
+    var text;
+    try { text = jsyaml.dump(e.value, { indent: 2, lineWidth: -1, noRefs: true }); }
+    catch (err) { return null; }
+    return { title: 'Open in new YAML tab', tool: 'yaml', name: LintApp.pathName(e.path) + '.yaml', text: text };
   }
 };
 
