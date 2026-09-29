@@ -1449,8 +1449,10 @@ function Tree(opts) {
     if (cut < all.length) rest = { nodes: all.slice(cut), timer: setTimeout(openRest, MOVE_MS + 200) };
   }
   function openAll(node) { expand([node]); }
-  function closeInside(node) { change(Array.prototype.slice.call(node.querySelectorAll('.node.open')), false, true); }
-  function closeAll(node) { change([node].concat(Array.prototype.slice.call(node.querySelectorAll('.node.open'))), false, true); }
+  /* whatever of an Expand all is still to open under the node is dropped
+     too, even a branch not inside one that closes: it was never opened */
+  function closeInside(node) { if (rest) dropRest([node]); change(Array.prototype.slice.call(node.querySelectorAll('.node.open')), false, true); }
+  function closeAll(node) { if (rest) dropRest([node]); change([node].concat(Array.prototype.slice.call(node.querySelectorAll('.node.open'))), false, true); }
   function isBranch(node) {
     var e = info.get(node.querySelector(':scope > .row'));
     return !!e && adapter.childCount(e) > 0;
