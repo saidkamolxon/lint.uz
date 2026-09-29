@@ -53,10 +53,10 @@ function svg(paths, size) {
 
 var ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-  /* chevrons pointing apart and together — a plus and a minus read as
-     zoom, which the text size now is */
-  expand: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
-  collapse: '<path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/>',
+  /* two chevrons, one over the other: down to open everything, up to shut
+     it — a plus and a minus read as zoom, which the text size now is */
+  expand: '<path d="m7 6.5 5 5 5-5M7 12.5l5 5 5-5"/>',
+  collapse: '<path d="m7 11.5 5-5 5 5M7 17.5l5-5 5 5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   wrap: '<path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-4m0 0 2.5-2.5M12 18l2.5 2.5M3 18h5"/>',
   theme: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
