@@ -104,6 +104,25 @@ way a dropped file does, never in a URL and never through a server. If the
 browser blocks IndexedDB, the destination asks you to paste from the
 clipboard instead.
 
+### Opening from another site
+
+A site that shows a document can offer "Open in lint.one" (an API portal's
+JSON response, for instance). It opens `https://lint.one/json/#from=opener`
+with `window.open` (not `noopener`), waits for `{ lintone: 'ready' }` from
+that tab, and posts the document to it. The document goes from tab to tab
+inside the browser: never in a web address, so never in the browser's
+history, and never through a server. The tool listens only to the window
+that opened it, and only when the address asks for it.
+
+```js
+const tab = window.open('https://lint.one/json/#from=opener', '_blank');
+addEventListener('message', function onReady(e) {
+  if (e.source !== tab || e.data?.lintone !== 'ready') return;
+  removeEventListener('message', onReady);
+  tab.postMessage({ lintone: 'text', text: json, name: 'response.json' }, 'https://lint.one');
+});
+```
+
 ---
 
 ## Design system

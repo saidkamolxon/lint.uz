@@ -2567,6 +2567,34 @@ function takeHandoff(toolId, cb) {
     };
     req.onerror = function () {};
   } catch (e) {}
+  takeFromOpener(toolId, cb);
+}
+
+/* The fourth: from another site that shows a document and offers "Open in
+   lint.one" (a developer portal's JSON response, say). That site opens
+   /json/#from=opener with window.open, waits for { lintone: 'ready' } and
+   posts back { lintone: 'text', text, name } or { lintone: 'file', file }.
+   The document goes from one tab to the other inside the browser: never in
+   a web address (so never in the browser's history either) and never
+   through a server. Only the window that opened this tab is listened to,
+   and only when the address asked for it. The text lands as an opened file
+   would. */
+function takeFromOpener(toolId, cb) {
+  if (new URLSearchParams(location.hash.slice(1)).get('from') !== 'opener') return;
+  /* the marker has done its job; a reload should not wait for a sender */
+  history.replaceState(history.state, '', location.pathname + location.search);
+  if (!window.opener) return;
+  window.addEventListener('message', function (e) {
+    if (e.source !== window.opener) return;
+    var d = e.data;
+    if (!d || typeof d.lintone !== 'string') return;
+    if (d.lintone === 'text' && typeof d.text === 'string') {
+      var name = typeof d.name === 'string' ? d.name.replace(/[^\w.() -]+/g, '_').slice(0, 80) : '';
+      cb(new File([d.text], name || 'shared.' + toolId, { type: 'text/plain' }));
+    } else if (d.lintone === 'file' && d.file instanceof Blob) cb(d.file);
+  });
+  /* says only which tool is listening, so any origin may hear it */
+  window.opener.postMessage({ lintone: 'ready', tool: toolId }, '*');
 }
 
 /* Copy a converted document, then offer to open the tool that reads it —
