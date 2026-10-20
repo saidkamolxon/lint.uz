@@ -149,7 +149,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
     <article>
       <h1>Privacy</h1>
       <p class="lead">What lint.one and its browser extension keep, and what they never see.</p>
-      <p class="updated">Last updated 25 September 2026</p>
+      <p class="updated">Last updated 20 October 2026</p>
 
       <div class="promise">
         <p><strong>The files and text you open never leave your device.</strong></p>
@@ -165,6 +165,7 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
         <li><strong>IndexedDB</strong> holds a file you drop on the home page, or a document you convert for another tool, for the second it takes that tool to open, and it is deleted as the tool reads it.</li>
         <li><strong>An offline copy</strong> of the site's own pages, kept by the service worker, so lint.one works without a connection.</li>
       </ul>
+      <p>Another site can offer to open a document it shows you in lint.one. That site opens the lint.one tab and passes the document to it inside your browser, from one tab to the other. It is never put in a web address, so it stays out of your browser history, and it is never sent to any server, lint.one's included. The lint.one tab accepts a document only from the tab that opened it, and only when that tab asked to hand one over.</p>
 
       <h2>Counting requests for new formats</h2>
       <p>Visiting an address for a format lint.one doesn't read yet (<code>lint.one/toml</code>, say) shows a page where you can add yourself to the count of people who want it. Only if you do, the server stores the format, the time, and a one-way hash of your IP address mixed with that format and a server-side secret. The hash lets each person count once. It can't be turned back into an address, and nothing else about you is kept.</p>
